@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameRoom, Formation } from '../types/football';
-import { FORMATIONS_CONFIG } from '../constants/formations';
+import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from '../constants/formations';
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
 import { FastForward, Play, Bot, User } from 'lucide-react';
@@ -26,6 +26,8 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
 
   const selectedFormation = currentManager?.formation || '4-3-3';
   const formationConfig = FORMATIONS_CONFIG[selectedFormation] || FORMATIONS_CONFIG['4-3-3'];
+  const starterCounts = getFormationStarterCategoryCounts(selectedFormation);
+  const squadLimits = getFormationSquadCategoryLimits(selectedFormation);
   const botManager = room.managers.find((m) => m.isBot);
 
   return (
@@ -92,33 +94,20 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
               Auction Roster Rules: {selectedFormation}
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="text-slate-400 font-semibold text-[10px]">GK</div>
-                <div className="font-mono font-bold text-emerald-400 text-sm mt-0.5">
-                  {formationConfig.categoryRequirements.GK.min} - {formationConfig.categoryRequirements.GK.max}
+              {(['GK', 'DEF', 'MID', 'ATT'] as const).map((cat) => (
+                <div key={cat} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
+                  <div className="text-slate-400 font-semibold text-[10px]">{cat}</div>
+                  <div className="font-mono font-black text-emerald-400 text-sm mt-0.5">
+                    {starterCounts[cat]} STARTERS
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-0.5">
+                    Squad cap {squadLimits[cat]}
+                  </div>
                 </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="text-slate-400 font-semibold text-[10px]">DEF</div>
-                <div className="font-mono font-bold text-emerald-400 text-sm mt-0.5">
-                  {formationConfig.categoryRequirements.DEF.min} - {formationConfig.categoryRequirements.DEF.max}
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="text-slate-400 font-semibold text-[10px]">MID</div>
-                <div className="font-mono font-bold text-emerald-400 text-sm mt-0.5">
-                  {formationConfig.categoryRequirements.MID.min} - {formationConfig.categoryRequirements.MID.max}
-                </div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80">
-                <div className="text-slate-400 font-semibold text-[10px]">ATT</div>
-                <div className="font-mono font-bold text-emerald-400 text-sm mt-0.5">
-                  {formationConfig.categoryRequirements.ATT.min} - {formationConfig.categoryRequirements.ATT.max}
-                </div>
-              </div>
+              ))}
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Target roster is 18 players (11 starters + 7 bench). In the auction, bidding locks once your category reaches maximum.
+              Your formation locks the exact starting XI positions. The auction also reserves 7 bench slots, so you can bid for substitutes without breaking the formation. After the auction, the game auto-fills the best XI using OVR, attributes and position fit — and you can edit it.
             </p>
           </div>
         </div>
