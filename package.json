@@ -11,7 +11,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "start:prod": "NODE_ENV=production tsx server.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "build:full": "tsc --noEmit && vite build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
