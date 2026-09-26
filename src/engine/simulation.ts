@@ -1457,5 +1457,10 @@ export function simulateMatch(
     awayPenaltyScore,
     penaltyShootout,
     winnerManagerId: winnerManagerId || (homeScore > awayScore ? homeManager.id : awayScore > homeScore ? awayManager.id : undefined),
+    homeWinProbability,
+    drawProbability,
+    awayWinProbability,
+    homeStrength: Number(homeEffective.toFixed(2)),
+    awayStrength: Number(awayEffective.toFixed(2)),
   };
 }
