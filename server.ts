@@ -250,12 +250,6 @@ function removeManagerFromRoom(room: GameRoom, managerId: string) {
     room.auction.highestBidderName = null;
   }
   room.leagueTable = room.leagueTable.filter(row => row.managerId !== managerId);
-  if (room.currentMatchId) {
-    const currentFixture = room.fixtures.find(fixture => fixture.id === room.currentMatchId);
-    if (currentFixture && (currentFixture.homeManagerId === managerId || currentFixture.awayManagerId === managerId)) {
-      room.currentMatchId = undefined;
-    }
-  }
 }
 
 function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTableRow[] {
