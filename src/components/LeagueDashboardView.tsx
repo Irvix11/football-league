@@ -41,7 +41,11 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   );
 
   const [selectedFixtureId, setSelectedFixtureId] = useState<string>(
-    userFixture?.id || matchdayFixtures[0]?.id || ''
+    matchdayFixtures.find((f) => !f.played && (f.homeManagerId === managerId || f.awayManagerId === managerId))?.id ||
+    matchdayFixtures.find((f) => !f.played)?.id ||
+    userFixture?.id ||
+    matchdayFixtures[0]?.id ||
+    ''
   );
 
   // Mobile Tabs: 'match' | 'table'
@@ -69,9 +73,13 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
       const uFix = matchdayFixtures.find(
         (f) => f.homeManagerId === managerId || f.awayManagerId === managerId
       );
-      setSelectedFixtureId(uFix ? uFix.id : matchdayFixtures[0].id);
+      const next = matchdayFixtures.find((f) => !f.played && (f.homeManagerId === managerId || f.awayManagerId === managerId))
+        || matchdayFixtures.find((f) => !f.played)
+        || uFix
+        || matchdayFixtures[0];
+      if (next) setSelectedFixtureId(next.id);
     }
-  }, [currentMatchday, matchdayFixtures.length, managerId]);
+  }, [currentMatchday, matchdayFixtures.map((f) => `${f.id}:${f.played}`).join(','), managerId]);
 
   // Check if current matchday is completely played
   const isCurrentMatchdayPlayed = matchdayFixtures.length > 0 && matchdayFixtures.every((f) => f.played);
@@ -186,7 +194,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
               {isSimulating ? (
                 <>
                   <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  <span>SIMULATING MATCHDAY {currentMatchday}...</span>
+                  <span>STARTING LIVE MATCH...</span>
                 </>
               ) : (
                 <>
@@ -370,7 +378,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                   ) : (
                     <>
                       <Play className="w-5 h-5 fill-current" />
-                      <span>START MATCHDAY {currentMatchday}</span>
+                      <span>{matchdayFixtures.some((f) => f.played) ? 'START NEXT MATCH' : 'START MATCH'}</span>
                     </>
                   )}
                 </button>
