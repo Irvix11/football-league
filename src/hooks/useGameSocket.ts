@@ -356,6 +356,15 @@ export function useGameSocket() {
     send('PROPOSE_TRANSFER', { roomCode: room.code, offer });
   }, [room, send]);
 
+  const respondTransfer = useCallback((offerId: string, accept: boolean) => {
+    if (!room || !managerId) return;
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('RESPOND_TRANSFER', { roomCode: room.code, managerId, offerId, accept });
+    } else {
+      setErrorMessage('Connection lost. Reconnect before responding to a transfer.');
+    }
+  }, [room, managerId, send]);
+
   const rematch = useCallback(() => {
     if (!room) return;
     send('REMATCH', { roomCode: room.code });
@@ -402,6 +411,7 @@ export function useGameSocket() {
     proceedToNextMatchday,
     finishSeason,
     proposeTransfer,
+    respondTransfer,
     rematch,
     leaveLobby,
     savedSession: getSavedSession(),
