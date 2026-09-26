@@ -544,9 +544,9 @@ function finalizeAuctionItem(room: GameRoom) {
       if (manager.budget >= bAmount && bAmount >= player.startingPrice) {
         if (bAmount > highestBid) {
           highestBid = bAmount;
-          winningManagers = [mId];
+          winningManagers = [manager.id];
         } else if (bAmount === highestBid) {
-          winningManagers.push(mId);
+          winningManagers.push(manager.id);
         }
       }
     }
@@ -694,15 +694,14 @@ function calculateSeasonAwards(room: GameRoom): SeasonAwards {
       return br - ar || b.goals - a.goals || b.assists - a.assists;
     })[0] || topScorer;
 
-  const champion = room.knockoutStage?.championId
-    ? room.managers.find(m => m.id === room.knockoutStage?.championId)
-    : room.leagueTable[0];
+  const championId = room.knockoutStage?.championId || room.leagueTable[0]?.managerId;
+  const champion = championId ? room.managers.find(m => m.id === championId) : undefined;
 
-  const played = room.leagueTable.find(r => r.managerId === champion?.id)?.played || room.fixtures.filter(f =>
-    f.played && (f.homeManagerId === champion?.id || f.awayManagerId === champion?.id)
+  const played = room.leagueTable.find(r => r.managerId === championId)?.played || room.fixtures.filter(f =>
+    f.played && (f.homeManagerId === championId || f.awayManagerId === championId)
   ).length;
 
-  const won = room.leagueTable.find(r => r.managerId === champion?.id)?.won || 0;
+  const won = room.leagueTable.find(r => r.managerId === championId)?.won || 0;
 
   return {
     goldenBoot: {
@@ -900,15 +899,16 @@ function advanceKnockoutRound(room: GameRoom) {
   const nextRoundName = nextKnockoutRound(currentRound.roundName);
   if (!nextRoundName) return;
 
-  const nextFixtures = buildKnockoutFixtures(winners, nextRoundName, currentRound.matchday + 1);
-  stage.rounds.push({
+  const nextMatchday = (currentRound.fixtures[0]?.matchday ?? room.currentMatchday) + 1;
+  const nextFixtures = buildKnockoutFixtures(winners, nextRoundName, nextMatchday);
+    stage.rounds.push({
     roundName: nextRoundName,
     fixtures: nextFixtures,
     isComplete: nextFixtures.every(f => f.played),
   });
   stage.currentRound = nextRoundName;
   room.fixtures = nextFixtures;
-  room.currentMatchday = currentRound.matchday + 1;
+  room.currentMatchday = nextMatchday;
 }
 
 function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadPlayerEntry[], formation: Formation, tactics: any, roles: any) {
