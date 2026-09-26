@@ -1637,6 +1637,16 @@ wss.on('connection', (ws) => {
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
+            const validation = validateSquadFormation(manager.formation, manager.squad);
+            const unavailableStarter = manager.squad.some(
+              s => s.isStarting && (s.condition.state === 'SUSPENDED' || s.condition.state === 'INJURED')
+            );
+            if (!validation.isValid || manager.squad.length !== 18 || unavailableStarter) {
+              sendSocketError(ws, unavailableStarter
+                ? 'Your starting XI contains an unavailable player.'
+                : 'Complete a valid 18-player squad and formation before confirming.');
+              return;
+            }
             manager.confirmedTeam = true;
           }
 
