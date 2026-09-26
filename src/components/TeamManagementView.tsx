@@ -248,6 +248,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
         isStarting: true,
         startingSlotIndex: starterSlotIdx,
         benchIndex: undefined,
+        assignedPosition: formationConfig.slots.find((slot) => slot.index === starterSlotIdx)?.position ?? sub.assignedPosition ?? sub.player.position,
       };
 
       newSquad[benchEntryIdx] = {
@@ -255,6 +256,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
         isStarting: false,
         startingSlotIndex: undefined,
         benchIndex: benchIdx,
+        assignedPosition: starter.player.position,
       };
 
       onUpdateLineup(newSquad);
@@ -417,8 +419,22 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 <Shuffle className="w-4 h-4" />
                 AUTO-FILL BEST XI
               </button>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">TEAM OVR</div>
+                  <div className="text-xl font-mono font-black text-emerald-400">{currentManager.teamOverall}</div>
+                </div>
+                <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">STARTERS</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{starters.length}/11</div>
+                </div>
+                <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
+                </div>
+              </div>
               <p className="mt-2 text-[10px] text-slate-500">
-                Uses OVR + attributes + positional fit. You can still edit the XI manually.
+                AUTO-FILL uses OVR + attributes + positional fit. You can manually assign supported positions and swap players.
               </p>
             </div>
 
@@ -437,7 +453,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   );
                   const isSelected = selectedSlotIndex === slot.index;
                   const fit = starter
-                    ? calculatePositionFit(starter.player.position, starter.player.alternatePositions, slot.position)
+                    ? calculatePositionFit(starter.player.position, starter.player.alternatePositions, starter.assignedPosition || slot.position)
                     : 100;
 
                   return (
@@ -451,7 +467,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                     >
                       <PlayerPitchMarker
                         player={starter?.player}
-                        positionLabel={slot.position}
+                        positionLabel={(starter?.assignedPosition || slot.position)}
                         slotIndex={slot.index}
                         isSelected={isSelected}
                         isSubTarget={selectedBenchIndex !== null}
@@ -481,9 +497,24 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
               </PitchGraphic>
             </div>
 
-            <p className="text-[11px] text-slate-400 mt-2.5 text-center">
-              Tap any player marker to inspect details. Tap a starter and then a bench substitute to swap positions.
-            </p>
+            <div className="mt-3 w-full rounded-2xl bg-slate-900/80 border border-slate-800 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">STARTING XI OVR</span>
+                <span className="font-mono font-black text-emerald-400">TEAM OVR {currentManager.teamOverall}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                {starters.slice().sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).map((entry) => (
+                  <button key={entry.player.id} type="button" onClick={() => setInspectedPlayer({ entry, slotIndex: entry.startingSlotIndex, isStarter: true })} className="text-left rounded-lg bg-slate-950 border border-slate-800 px-2 py-1.5 hover:border-emerald-500/50">
+                    <div className="text-[10px] text-slate-300 truncate">{entry.player.name}</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[9px] font-mono text-slate-500">{entry.assignedPosition || entry.player.position}</span>
+                      <span className="text-[11px] font-mono font-black text-emerald-400">{entry.player.overall}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-2 text-center">Tap a player to change their playing position. Team OVR reflects the current XI and positional fit.</p>
+            </div>
           </div>
 
           {/* Right Column: Bench / Substitutes & Active Player Details (5 cols) */}
@@ -515,7 +546,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                     onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)}
                     className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-bold text-white"
                   >
-                    {ALL_POSITIONS.map((pos) => (
+                    {allowedPositionsForPlayer(inspectedPlayer.entry.player).map((pos) => (
                       <option key={pos} value={pos}>{pos}</option>
                     ))}
                   </select>
@@ -577,7 +608,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                           <div>
                             <div className="font-bold text-xs text-slate-100">{sub.player.name}</div>
                             <div className="text-[10px] text-slate-400 font-mono">
-                              {sub.player.position} · {sub.player.club}
+                              {sub.assignedPosition || sub.player.position} · {sub.player.club}
                             </div>
                           </div>
                         </div>
@@ -958,6 +989,16 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
             </button>
           </div>
           <PlayerCard player={inspectedPlayer.entry.player} size="md" />
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">PLAY AS</span>
+              <span className="font-mono font-black text-emerald-400">{inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}</span>
+            </div>
+            <select value={inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position} onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)} className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-bold text-white">
+              {allowedPositionsForPlayer(inspectedPlayer.entry.player).map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+            </select>
+            <div className="mt-2 text-[10px] text-slate-500">OVR {inspectedPlayer.entry.player.overall} · Primary {inspectedPlayer.entry.player.position} · Alt {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'}</div>
+          </div>
           <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">PLAY AS</span>
