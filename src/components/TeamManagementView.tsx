@@ -85,6 +85,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     slotIndex?: number;
     isStarter: boolean;
   } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const formationConfig = FORMATIONS_CONFIG[currentManager.formation] || FORMATIONS_CONFIG['4-3-3'];
   const validation = validateSquadFormation(currentManager.formation, currentManager.squad);
@@ -105,6 +106,12 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
 
   const handleFormationChange = (newFormation: Formation) => {
     const reassignedSquad = reassignStartersToFormation(currentManager.squad, newFormation);
+    const nextValidation = validateSquadFormation(newFormation, reassignedSquad);
+    if (!nextValidation.isValid) {
+      setActionError(nextValidation.errors.join(' '));
+      return;
+    }
+    setActionError(null);
     onUpdateLineup(reassignedSquad, newFormation);
   };
 
@@ -290,6 +297,12 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 })}
               </div>
             </div>
+
+            {actionError && (
+              <div className="mt-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] font-semibold">
+                {actionError}
+              </div>
+            )}
 
             {/* Interactive Football Pitch (Requirement 9: Position, Jersey #, OVR) */}
             <div className="w-full max-w-lg">
