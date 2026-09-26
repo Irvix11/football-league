@@ -17,53 +17,74 @@ interface TeamManagementViewProps {
  * Automatically maps starting players to the optimal slots in a new formation
  * based on position suitability and category requirements.
  */
-function reassignStartersToFormation(squad: SquadPlayerEntry[], newFormation: Formation): SquadPlayerEntry[] {
-  const config = FORMATIONS_CONFIG[newFormation] || FORMATIONS_CONFIG['4-3-3'];
-  const starters = squad.filter(s => s.isStarting);
-  const bench = squad.filter(s => !s.isStarting);
+function playerLineupScore(entry: SquadPlayerEntry, slot: { position: any; category: any }): number {
+  const player = entry.player;
+  const fit = calculatePositionFit(player.position, player.alternatePositions, slot.position);
+  const a = player.attributes;
+  const relevant = slot.category === 'GK'
+    ? (a.dri + a.def + a.phy) / 3
+    : slot.category === 'DEF'
+      ? a.def * 0.55 + a.pas * 0.20 + a.phy * 0.15 + a.pac * 0.10
+      : slot.category === 'MID'
+        ? a.pas * 0.35 + a.dri * 0.25 + a.def * 0.15 + a.sho * 0.15 + a.pac * 0.10
+        : a.sho * 0.40 + a.pac * 0.20 + a.dri * 0.25 + a.pas * 0.15;
+  return player.overall * 0.62 + fit * 0.28 + relevant * 0.10;
+}
 
-  if (starters.length !== 11) return squad;
+/**
+ * Automatically fills every formation slot with the best available player,
+ * considering OVR, attributes and positional fit. Remaining players become
+ * the seven substitutes. The user can then manually swap/edit the XI.
+ */
+function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): SquadPlayerEntry[] {
+  const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
+  const remaining = [...squad];
+  const starters: SquadPlayerEntry[] = [];
 
-  // Slot 0 is always the goalkeeper
-  const gk = starters.find(s => s.player.category === 'GK') || starters[0];
-  const outfielders = starters.filter(s => s.player.id !== gk.player.id);
-
-  const assignedStarters: SquadPlayerEntry[] = [];
-  assignedStarters.push({
-    ...gk,
-    isStarting: true,
-    startingSlotIndex: 0,
-    assignedPosition: config.slots[0].position,
+  const orderedSlots = [...config.slots].sort((a, b) => {
+    if (a.category === 'GK') return -1;
+    if (b.category === 'GK') return 1;
+    const specific = (position: string) => ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(position);
+    return Number(specific(b.position)) - Number(specific(a.position));
   });
 
-  // Assign remaining 10 outfielders to slots 1-10 maximizing position fit
-  const remainingOutfielders = [...outfielders];
-  for (let slotIdx = 1; slotIdx < config.slots.length; slotIdx++) {
-    const slot = config.slots[slotIdx];
-    let bestFit = -1;
-    let bestPlayerIdx = 0;
+  for (const slot of orderedSlots) {
+    const candidates = remaining.filter(entry => entry.player.category === slot.category);
+    const pool = candidates.length ? candidates : remaining;
+    const chosen = [...pool].sort(
+      (a, b) => playerLineupScore(b, slot) - playerLineupScore(a, slot) || b.player.overall - a.player.overall
+    )[0];
 
-    for (let pIdx = 0; pIdx < remainingOutfielders.length; pIdx++) {
-      const p = remainingOutfielders[pIdx];
-      const fit = calculatePositionFit(p.player.position, p.player.alternatePositions, slot.position);
-      if (fit > bestFit) {
-        bestFit = fit;
-        bestPlayerIdx = pIdx;
-      }
-    }
-
-    const chosen = remainingOutfielders.splice(bestPlayerIdx, 1)[0];
-    if (chosen) {
-      assignedStarters.push({
-        ...chosen,
-        isStarting: true,
-        startingSlotIndex: slotIdx,
-        assignedPosition: slot.position,
-      });
-    }
+    if (!chosen) continue;
+    remaining.splice(remaining.findIndex(entry => entry.player.id === chosen.player.id), 1);
+    starters.push({
+      ...chosen,
+      isStarting: true,
+      startingSlotIndex: slot.index,
+      benchIndex: undefined,
+      assignedPosition: slot.position,
+    });
   }
 
-  return [...assignedStarters, ...bench];
+  const bench = remaining
+    .sort((a, b) => b.player.overall - a.player.overall)
+    .slice(0, 7)
+    .map((entry, index) => ({
+      ...entry,
+      isStarting: false,
+      startingSlotIndex: undefined,
+      benchIndex: index,
+      assignedPosition: entry.player.position,
+    }));
+
+  return [
+    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
+    ...bench,
+  ];
+}
+
+function reassignStartersToFormation(squad: SquadPlayerEntry[], newFormation: Formation): SquadPlayerEntry[] {
+  return autoFillBestLineup(squad, newFormation);
 }
 
 export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
@@ -113,6 +134,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     }
     setActionError(null);
     onUpdateLineup(reassignedSquad, newFormation);
+  };
+
+  const handleAutoFill = () => {
+    const optimized = autoFillBestLineup(currentManager.squad, currentManager.formation);
+    const validation = validateSquadFormation(currentManager.formation, optimized);
+    if (!validation.isValid) {
+      setActionError(validation.errors.join(' '));
+      return;
+    }
+    setActionError(null);
+    onUpdateLineup(optimized, currentManager.formation);
   };
 
   const handleTacticalStyleChange = (style: TacticalStyle) => {
@@ -296,6 +328,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   );
                 })}
               </div>
+              <button
+                type="button"
+                onClick={handleAutoFill}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-950 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-400/60 transition-all font-display font-black text-xs uppercase tracking-wider active:scale-[0.98]"
+              >
+                <Shuffle className="w-4 h-4" />
+                AUTO-FILL BEST XI
+              </button>
+              <p className="mt-2 text-[10px] text-slate-500">
+                Uses OVR + attributes + positional fit. You can still edit the XI manually.
+              </p>
             </div>
 
             {actionError && (
