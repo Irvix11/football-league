@@ -21,7 +21,7 @@ import {
   KnockoutStageState
 } from './src/types/football';
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation } from './src/constants/formations';
-import { VERIFIED_FC_PLAYERS, getPlayersForLobby } from './src/data/players';
+import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players';
 import { simulateMatch } from './src/engine/simulation';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -661,7 +661,7 @@ function calculateSeasonAwards(room: GameRoom): SeasonAwards {
   }
 
   const all = Array.from(aggregates.values());
-  const playerData = (id: string) => VERIFIED_FC_PLAYERS.find(p => p.id === id);
+  const playerData = (id: string) => DEVELOPMENT_PLAYERS.find(p => p.id === id);
 
   const topScorer = [...all].sort((a, b) => b.goals - a.goals || b.sumRating - a.sumRating)[0] || {
     playerId: 'none', playerName: 'No scorer yet', teamName: '—', goals: 0, assists: 0, saves: 0, tackles: 0, passes: 0, sumRating: 0, matches: 0, cleanSheets: 0
@@ -1079,7 +1079,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     managers,
     auction: {
       currentPlayerIndex: 0,
-      totalPlayersInPool: VERIFIED_FC_PLAYERS.length,
+      totalPlayersInPool: DEVELOPMENT_PLAYERS.length,
       currentPlayer: null,
       currentBid: 0,
       highestBidderId: null,
@@ -1197,7 +1197,7 @@ wss.on('connection', (ws) => {
             managers,
             auction: {
               currentPlayerIndex: 0,
-              totalPlayersInPool: VERIFIED_FC_PLAYERS.length,
+              totalPlayersInPool: DEVELOPMENT_PLAYERS.length,
               currentPlayer: null,
               currentBid: 0,
               highestBidderId: null,
@@ -1931,7 +1931,7 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/players', (req, res) => {
-  res.json(VERIFIED_FC_PLAYERS);
+  res.json(DEVELOPMENT_PLAYERS);
 });
 
 // Dedicated Solo Game endpoint (instantly generates 18-player squads and navigates to Team Management)
