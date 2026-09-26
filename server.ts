@@ -1482,6 +1482,30 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        // --- KNOCKOUT MATCH ---
+        case 'RUN_KNOCKOUT_MATCH': {
+          const { roomCode, fixtureId } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'knockout') return;
+          const { room } = auth;
+          const stage = room.knockoutStage;
+          if (!stage) return;
+          const round = stage.rounds[stage.rounds.length - 1];
+          const fix = round.fixtures.find(f => f.id === fixtureId);
+          if (!fix || fix.played) return;
+
+          const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+          const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+          if (!homeMgr || !awayMgr) return;
+
+          const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+          Object.assign(fix, result);
+          room.fixtures = round.fixtures;
+          advanceKnockoutRound(room);
+          broadcastRoom(room.code);
+          break;
+        }
+
         // --- 14. SIMULATE MATCHDAY ---
         case 'RUN_MATCHDAY': {
           const { roomCode, matchday } = payload;
@@ -1720,6 +1744,33 @@ app.post('/api/room/confirm-team', (req, res) => {
   } catch (err: any) {
     console.error('Error confirming team:', err);
     res.status(500).json({ error: err.message || 'Failed to confirm team' });
+  }
+});
+
+app.post('/api/room/run-knockout-match', (req, res) => {
+  try {
+    const { roomCode, fixtureId } = req.body || {};
+    const room = rooms.get(roomCode);
+    if (!room || room.phase !== 'knockout' || !room.knockoutStage) {
+      return res.status(400).json({ error: 'Room is not in knockout phase' });
+    }
+    const round = room.knockoutStage.rounds[room.knockoutStage.rounds.length - 1];
+    const fix = round.fixtures.find(f => f.id === fixtureId);
+    if (!fix || fix.played) return res.status(400).json({ error: 'Fixture is unavailable' });
+
+    const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+    const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+    if (!homeMgr || !awayMgr) return res.status(404).json({ error: 'Teams not found' });
+
+    const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+    Object.assign(fix, result);
+    room.fixtures = round.fixtures;
+    advanceKnockoutRound(room);
+    broadcastRoom(room.code);
+    res.json({ success: true, room });
+  } catch (err: any) {
+    console.error('Error running knockout match:', err);
+    res.status(500).json({ error: err.message || 'Failed to run knockout match' });
   }
 });
 
