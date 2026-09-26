@@ -83,6 +83,19 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const starterCategoryCounts = getFormationStarterCategoryCounts(currentManager.formation);
   const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
+  // The auction itself is staged globally: GK -> DEF -> MID -> ATT for the
+  // starting XI, then the remaining seven bench spots.
+  const auctionStage = (['GK', 'DEF', 'MID', 'ATT'] as const).find((cat) =>
+    room.managers.some((manager) => {
+      const required = getFormationStarterCategoryCounts(manager.formation)[cat];
+      const count = manager.squad.filter((entry) => entry.player.category === cat).length;
+      return count < required;
+    })
+  ) || null;
+  const stageLabel = auctionStage
+    ? ({ GK: 'GOALKEEPERS', DEF: 'DEFENDERS', MID: 'MIDFIELDERS', ATT: 'ATTACKERS' } as const)[auctionStage]
+    : 'BENCH SPOTS';
+
   // Current category counts for user's squad
   const categoryCounts = {
     GK: currentManager.squad.filter((s) => s.player.category === 'GK').length,
@@ -121,12 +134,35 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   };
 
   // Map squad starters onto formation slots for the mini-pitch
-  const slotAssignments: (Player | null)[] = formationConfig.slots.map((slot, index) => {
-    const starter = currentManager.squad.find(
-      (s) => s.isStarting && (s.startingSlotIndex === index || s.assignedPosition === slot.position)
-    );
-    return starter ? starter.player : null;
-  });
+  // During the auction, show signed players immediately on the pitch as a
+  // visual preview. They remain editable and are not locked into the XI until
+  // the auction ends and Auto-Fill Best XI runs.
+  const slotAssignments: (Player | null)[] = (() => {
+    const assignments: (Player | null)[] = formationConfig.slots.map(() => null);
+    const used = new Set<string>();
+
+    currentManager.squad
+      .filter((entry) => entry.isStarting)
+      .forEach((entry) => {
+        const index = entry.startingSlotIndex ?? formationConfig.slots.findIndex(slot => slot.position === entry.assignedPosition);
+        if (index >= 0 && index < assignments.length) {
+          assignments[index] = entry.player;
+          used.add(entry.player.id);
+        }
+      });
+
+    for (const slot of formationConfig.slots) {
+      if (assignments[slot.index]) continue;
+      const candidate = currentManager.squad.find((entry) =>
+        !used.has(entry.player.id) && entry.player.category === slot.category
+      );
+      if (candidate) {
+        assignments[slot.index] = candidate.player;
+        used.add(candidate.player.id);
+      }
+    }
+    return assignments;
+  })();
 
   return (
     <div className="min-h-screen bg-[#040812] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto select-none">
@@ -407,6 +443,28 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             </span>
           </div>
 
+          {/* Auction stage banner */}
+          <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30 shadow-lg">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black">NOW AUCTIONING</div>
+                <div className="text-sm font-display font-black text-emerald-400">{stageLabel}</div>
+              </div>
+              {player && (
+                <div className="text-right min-w-0">
+                  <div className="text-[9px] uppercase text-slate-500 font-bold">CURRENT PLAYER</div>
+                  <div className="text-xs font-black text-white truncate max-w-[150px]">{player.name}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">{player.category} · OVR {player.overall}</div>
+                </div>
+              )}
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div className="h-full bg-emerald-400 transition-all duration-500" style={{
+                width: `${Math.min(100, Math.round((currentManager.squad.filter(s => s.player.category === (auctionStage || player?.category)).length / Math.max(1, starterCategoryCounts[auctionStage || player?.category])) * 100))}%`
+              }} />
+            </div>
+          </div>
+
           {/* Mini Pitch with authentic player markers */}
           <PitchGraphic aspectRatio="vertical" className="p-3 shadow-xl">
             {formationConfig.slots.map((slot, index) => {
@@ -446,6 +504,26 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Signed players are visible during the auction instead of appearing only after it ends. */}
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
+            </div>
+            {currentManager.squad.length === 0 ? (
+              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately.</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
+                {currentManager.squad.map((entry) => (
+                  <div key={entry.player.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-200 truncate">{entry.player.name}</span>
+                    <span className="text-[9px] font-mono text-amber-400 shrink-0">{entry.player.overall}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Category Quotas Indicator */}
