@@ -67,7 +67,7 @@ export default function App() {
       )}
 
       {/* Host-only kick control is available during the entire active game. */}
-      {room && managerId && isHost && room.phase !== 'lobby' && room.phase !== 'season_end' && (
+      {room && managerId && isHost && room.phase !== 'lobby' && (
         <>
           <button
             onClick={() => setShowKickPanel(true)}
