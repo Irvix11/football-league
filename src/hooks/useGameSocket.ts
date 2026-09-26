@@ -263,6 +263,13 @@ export function useGameSocket() {
     }
   }, [room, send]);
 
+  const completeKnockoutMatch = useCallback(async (fixtureId: string) => {
+    if (!room) return;
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('COMPLETE_KNOCKOUT_MATCH', { roomCode: room.code, fixtureId });
+    }
+  }, [room, send]);
+
   const runMatchday = useCallback(async (matchday: number) => {
     if (!room) return;
     setIsSimulating(true);
