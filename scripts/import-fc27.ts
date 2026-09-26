@@ -50,6 +50,11 @@ const num = (r: Row, ...names: string[]) => Number(get(r, ...names));
 const clean = (value: string) => value.trim();
 
 const positions = new Set(['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF']);
+const normalizePosition = (value: string) => {
+  const tokens = value.toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+  return tokens.find(token => positions.has(token)) ?? value.toUpperCase();
+};
+
 const category = (position: string) =>
   position === 'GK' ? 'GK' :
   ['CB','LB','RB','LWB','RWB'].includes(position) ? 'DEF' :
@@ -62,7 +67,8 @@ for (const row of parseCsv(await readInput(input))) {
   const overall = num(row, 'overall', 'overall_rating', 'OVR', 'Overall');
   if (!Number.isFinite(overall) || overall < threshold) continue;
 
-  const position = clean(get(row, 'position', 'POS', 'Position'));
+  const rawPosition = clean(get(row, 'position', 'POS', 'Position'));
+  const position = normalizePosition(rawPosition);
   const name = clean(get(row, 'name', 'short_name', 'PLAYER', 'Player'));
   const id = clean(get(row, 'id', 'player_id', 'PLAYER_ID', 'Player ID')) ||
     `fc27-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
@@ -95,7 +101,8 @@ for (const row of parseCsv(await readInput(input))) {
 
   const alternatePositions = get(row, 'alternate_positions', 'alternatePositions', 'ALT_POS', 'Alt Positions')
     .split(/[|;/ ]+/)
-    .filter(position => positions.has(position) && position !== clean(get(row, 'position', 'POS', 'Position')));
+    .map(position => normalizePosition(position))
+    .filter(position => positions.has(position) && position !== normalizePosition(rawPosition));
 
   const marketValue = num(row, 'market_value_m', 'marketValue', 'value_m', 'Value');
   const startingPrice = num(row, 'starting_price_m', 'startingPrice', 'auction_start_m');
