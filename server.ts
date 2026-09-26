@@ -1538,7 +1538,7 @@ app.post('/api/room/finish-season', (req, res) => {
 
 // Serve frontend in dev via Vite middlewares, or static dist in production
 async function startServer() {
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
