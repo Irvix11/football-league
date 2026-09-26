@@ -370,7 +370,6 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             setCurrentEventIndex(nextIndex);
             setFullTimeOverlay(true);
             setIsPlaying(false);
-            if (onMatchComplete) onMatchComplete(fixture.id);
             return;
           }
 
@@ -383,7 +382,6 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           // Reached end of events
           setIsPlaying(false);
           setFullTimeOverlay(true);
-          if (onMatchComplete) onMatchComplete(fixture.id);
         }
       }
 
