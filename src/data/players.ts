@@ -1,9 +1,9 @@
 import { Player, PlayerPool, Era } from '../types/football';
 
 /**
- * Authentic EA SPORTS FC ratings dataset.
- * Source: Official EA Sports FC Ratings Database (ea.com/games/ea-sports-fc/ratings)
- * Verified against real attributes, clubs, nationalities, and positions.
+ * Curated development player dataset.
+ * IMPORTANT: this is not a complete FC 27 database. Production imports should use an
+ * authorized/officially obtained FC 27 dataset rather than invented or scraped values.
  */
 export const VERIFIED_FC_PLAYERS: Player[] = [
   // --- GOALKEEPERS ---
@@ -1102,12 +1102,12 @@ export const VERIFIED_FC_PLAYERS: Player[] = [
     id: 'fc-icon-08',
     name: 'Lionel Messi',
     club: 'Inter Miami',
-    league: 'World Cup',
+    league: 'MLS',
     nationality: 'Argentina',
-    position: 'RW',
+    position: 'CAM',
     category: 'ATT',
-    overall: 88,
-    attributes: { pac: 79, sho: 87, pas: 90, dri: 92, def: 33, phy: 64 },
+    overall: 89,
+    attributes: { pac: 76, sho: 87, pas: 89, dri: 90, def: 33, phy: 63 },
     age: 37,
     preferredFoot: 'Left',
     alternatePositions: ['CF', 'CAM'],
@@ -1121,12 +1121,12 @@ export const VERIFIED_FC_PLAYERS: Player[] = [
     id: 'fc-icon-09',
     name: 'Cristiano Ronaldo',
     club: 'Al Nassr',
-    league: 'World Cup',
+    league: 'ROSHN Saudi League',
     nationality: 'Portugal',
     position: 'ST',
     category: 'ATT',
-    overall: 86,
-    attributes: { pac: 77, sho: 88, pas: 75, dri: 80, def: 34, phy: 74 },
+    overall: 84,
+    attributes: { pac: 67, sho: 88, pas: 75, dri: 78, def: 33, phy: 75 },
     age: 40,
     preferredFoot: 'Right',
     alternatePositions: ['LW'],
