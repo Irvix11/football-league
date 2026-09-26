@@ -786,9 +786,12 @@ function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
 }
 
 function knockoutRoundForTeamCount(teamCount: number): 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final' {
-  if (teamCount >= 16) return 'Round of 16';
-  if (teamCount >= 8) return 'Quarter-Final';
-  if (teamCount >= 4) return 'Semi-Final';
+  // Pick the smallest standard bracket that can contain every manager.
+  // This gives 2 teams a Final, 3-4 a Semi-Final, 5-8 a Quarter-Final,
+  // and 9-16 a Round of 16, with byes for non-power-of-two fields.
+  if (teamCount >= 9) return 'Round of 16';
+  if (teamCount >= 5) return 'Quarter-Final';
+  if (teamCount >= 3) return 'Semi-Final';
   return 'Final';
 }
 
