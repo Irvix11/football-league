@@ -557,6 +557,41 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       </div>
 
       {/* ========================================================================= */}
+      {/* 1B. MATCH MODEL INDICATORS */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">HOME WIN</div>
+          <div className="text-lg font-mono font-black text-emerald-400">{fixture.homeWinProbability ?? 33}%</div>
+          <div className="h-1 rounded-full bg-slate-800 overflow-hidden mt-1">
+            <div className="h-full bg-emerald-400" style={{ width: `${fixture.homeWinProbability ?? 33}%` }} />
+          </div>
+        </div>
+        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-center">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">MOMENTUM</div>
+          <div className="text-lg font-mono font-black text-amber-400">{Math.abs(currentEvent?.momentum || 0)}%</div>
+          <div className="text-[9px] font-mono text-slate-500 truncate">
+            {(currentEvent?.momentum || 0) >= 0 ? fixture.homeManagerName : fixture.awayManagerName}
+          </div>
+        </div>
+        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-right">
+          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">AWAY WIN</div>
+          <div className="text-lg font-mono font-black text-sky-400">{fixture.awayWinProbability ?? 33}%</div>
+          <div className="h-1 rounded-full bg-slate-800 overflow-hidden mt-1">
+            <div className="h-full bg-sky-400" style={{ width: `${fixture.awayWinProbability ?? 33}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {currentEvent?.chanceQuality !== undefined && ['shot', 'shot_saved', 'goal', 'shot_missed'].includes(currentEvent.type) && (
+        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <span className="text-[9px] uppercase tracking-wider text-amber-400 font-black">CHANCE QUALITY</span>
+          <div className="flex-1 h-1.5 rounded-full bg-slate-900 overflow-hidden">
+            <div className="h-full bg-amber-400 transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, currentEvent.chanceQuality))}%` }} />
+          </div>
+          <span className="font-mono font-black text-xs text-amber-300">{currentEvent.chanceQuality}%</span>
+        </div>
+      )}
+
       {/* 2. THE 2D LIVE FOOTBALL PITCH (Broadcast Arena)                           */}
       {/* ========================================================================= */}
       <div 
