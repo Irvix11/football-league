@@ -15,7 +15,9 @@ import {
   LeagueTableRow, 
   TransferOffer, 
   SeasonAwards,
-  TeamRoles
+  TeamRoles,
+  KnockoutRound,
+  KnockoutStageState
 } from './src/types/football';
 import { FORMATIONS_CONFIG, calculateTeamOverall } from './src/constants/formations';
 import { VERIFIED_FC_PLAYERS, getPlayersForLobby } from './src/data/players';
@@ -702,6 +704,131 @@ function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
   };
 }
 
+function knockoutRoundForTeamCount(teamCount: number): 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final' {
+  if (teamCount >= 16) return 'Round of 16';
+  if (teamCount >= 8) return 'Quarter-Final';
+  if (teamCount >= 4) return 'Semi-Final';
+  return 'Final';
+}
+
+function nextKnockoutRound(round: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final') {
+  if (round === 'Round of 16') return 'Quarter-Final';
+  if (round === 'Quarter-Final') return 'Semi-Final';
+  if (round === 'Semi-Final') return 'Final';
+  return null;
+}
+
+function buildKnockoutFixtures(managers: Manager[], roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final', matchday: number): Fixture[] {
+  const seeded = [...managers].sort((a, b) => b.teamOverall - a.teamOverall || a.name.localeCompare(b.name));
+  const bracketSize = roundName === 'Round of 16' ? 16 : roundName === 'Quarter-Final' ? 8 : roundName === 'Semi-Final' ? 4 : 2;
+  const slots: (Manager | null)[] = Array(bracketSize).fill(null);
+  seeded.forEach((manager, index) => {
+    if (index < bracketSize) slots[index] = manager;
+  });
+
+  const fixtures: Fixture[] = [];
+  for (let i = 0; i < bracketSize / 2; i++) {
+    const home = slots[i];
+    const away = slots[bracketSize - 1 - i];
+    if (!home && !away) continue;
+
+    const id = `ko-${matchday}-${i + 1}-${crypto.randomUUID()}`;
+    if (home && away) {
+      fixtures.push({
+        id,
+        matchday,
+        homeManagerId: home.id,
+        homeManagerName: home.name,
+        awayManagerId: away.id,
+        awayManagerName: away.name,
+        played: false,
+        isKnockout: true,
+        roundName,
+      });
+    } else {
+      const winner = home || away!;
+      fixtures.push({
+        id,
+        matchday,
+        homeManagerId: winner.id,
+        homeManagerName: winner.name,
+        awayManagerId: winner.id,
+        awayManagerName: winner.name,
+        played: true,
+        homeScore: 0,
+        awayScore: 0,
+        isKnockout: true,
+        roundName,
+        winnerManagerId: winner.id,
+      });
+    }
+  }
+  return fixtures;
+}
+
+function initializeKnockout(room: GameRoom) {
+  const firstRound = knockoutRoundForTeamCount(room.managers.length);
+  const fixtures = buildKnockoutFixtures(room.managers, firstRound, 1);
+  const round: KnockoutRound = {
+    roundName: firstRound,
+    fixtures,
+    isComplete: fixtures.every(f => f.played),
+  };
+
+  room.fixtures = fixtures;
+  room.currentMatchday = 1;
+  room.totalMatchdays = 1;
+  room.leagueTable = calculateInitialTable(room.managers);
+  room.knockoutStage = {
+    currentRound: firstRound,
+    rounds: [round],
+  };
+  room.phase = 'knockout';
+}
+
+function advanceKnockoutRound(room: GameRoom) {
+  const stage = room.knockoutStage;
+  if (!stage) return;
+
+  const currentRound = stage.rounds[stage.rounds.length - 1];
+  currentRound.isComplete = currentRound.fixtures.every(f => f.played);
+  if (!currentRound.isComplete) return;
+
+  const winners = currentRound.fixtures
+    .map(f => f.winnerManagerId)
+    .filter(Boolean)
+    .map(id => room.managers.find(m => m.id === id))
+    .filter(Boolean) as Manager[];
+
+  if (winners.length <= 1) {
+    const champion = winners[0];
+    stage.championId = champion?.id;
+    stage.championName = champion?.name;
+    room.leagueTable = calculateInitialTable(room.managers);
+    if (champion) {
+      room.leagueTable = room.leagueTable.map(row =>
+        row.managerId === champion.id ? { ...row, points: 1 } : row
+      ).sort((a, b) => b.points - a.points);
+    }
+    room.phase = 'season_end';
+    room.awards = calculateSeasonAwards(room);
+    return;
+  }
+
+  const nextRoundName = nextKnockoutRound(currentRound.roundName);
+  if (!nextRoundName) return;
+
+  const nextFixtures = buildKnockoutFixtures(winners, nextRoundName, currentRound.matchday + 1);
+  stage.rounds.push({
+    roundName: nextRoundName,
+    fixtures: nextFixtures,
+    isComplete: nextFixtures.every(f => f.played),
+  });
+  stage.currentRound = nextRoundName;
+  room.fixtures = nextFixtures;
+  room.currentMatchday = currentRound.matchday + 1;
+}
+
 // Authoritative Solo Play setup engine
 function createSoloGameRoom(managerName: string, soloFormation?: Formation): { roomCode: string; managerId: string; room: GameRoom } {
   const roomCode = generateLobbyCode();
@@ -1339,13 +1466,16 @@ wss.on('connection', (ws) => {
           // Check if all confirmed
           const allConfirmed = room.managers.every(m => m.confirmedTeam);
           if (allConfirmed) {
-            // Generate League Fixtures and Move to League Phase!
-            room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
-            room.currentMatchday = 1;
-            const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
-            room.totalMatchdays = maxMd;
-            room.leagueTable = calculateInitialTable(room.managers);
-            room.phase = 'league';
+            if (room.settings.competitionFormat === 'Knockout') {
+              initializeKnockout(room);
+            } else {
+              room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
+              room.currentMatchday = 1;
+              const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
+              room.totalMatchdays = maxMd;
+              room.leagueTable = calculateInitialTable(room.managers);
+              room.phase = 'league';
+            }
           }
 
           broadcastRoom(room.code);
@@ -1571,14 +1701,18 @@ app.post('/api/room/confirm-team', (req, res) => {
 
     const allConfirmed = room.managers.every(m => m.confirmedTeam);
     if (allConfirmed) {
-      if (!room.fixtures || room.fixtures.length === 0) {
-        room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
-        room.currentMatchday = 1;
-        const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
-        room.totalMatchdays = maxMd;
-        room.leagueTable = calculateInitialTable(room.managers);
+      if (room.settings.competitionFormat === 'Knockout') {
+        initializeKnockout(room);
+      } else {
+        if (!room.fixtures || room.fixtures.length === 0) {
+          room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
+          room.currentMatchday = 1;
+          const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
+          room.totalMatchdays = maxMd;
+          room.leagueTable = calculateInitialTable(room.managers);
+        }
+        room.phase = 'league';
       }
-      room.phase = 'league';
     }
 
     broadcastRoom(room.code);
