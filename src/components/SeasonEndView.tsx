@@ -18,7 +18,10 @@ export const SeasonEndView: React.FC<SeasonEndViewProps> = ({
   onNewLobby,
 }) => {
   const champion = room.leagueTable[0];
-  const isChampion = champion?.managerId === managerId;
+  const knockoutChampionId = room.knockoutStage?.championId;
+  const knockoutChampionName = room.knockoutStage?.championName;
+  const isKnockout = room.settings.competitionFormat === 'Knockout';
+  const isChampion = isKnockout ? knockoutChampionId === managerId : champion?.managerId === managerId;
   const awards = room.awards;
 
   useEffect(() => {
@@ -57,13 +60,15 @@ export const SeasonEndView: React.FC<SeasonEndViewProps> = ({
           <Trophy className="w-12 h-12" />
         </div>
         <div className="text-xs uppercase tracking-widest font-black text-amber-400 mb-1">
-          {isChampion ? 'CONGRATULATIONS CHAMPION!' : 'OFFICIAL SEASON CHAMPION'}
+          {isChampion ? 'CONGRATULATIONS CHAMPION!' : isKnockout ? 'OFFICIAL KNOCKOUT CHAMPION' : 'OFFICIAL SEASON CHAMPION'}
         </div>
         <h1 className="font-display font-black text-4xl sm:text-5xl md:text-6xl text-white uppercase tracking-tight">
-          {champion?.managerName || 'Champion'}
+          {knockoutChampionName || champion?.managerName || 'Champion'}
         </h1>
         <p className="text-xs text-slate-400 mt-2 font-mono">
-          Final Points: <span className="text-amber-400 font-bold">{champion?.points} PTS</span> · Won {champion?.won} of {champion?.played} Matches
+          {isKnockout
+            ? 'Knockout champion decided through the final bracket.'
+            : <>Final Points: <span className="text-amber-400 font-bold">{champion?.points} PTS</span> · Won {champion?.won} of {champion?.played} Matches</>}
         </p>
       </div>
 
@@ -163,7 +168,7 @@ export const SeasonEndView: React.FC<SeasonEndViewProps> = ({
         <div className="lg:col-span-5 space-y-3.5">
           <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4">
             <h3 className="font-display font-black text-xs uppercase tracking-wider text-slate-200">
-              Final Standings
+              {isKnockout ? 'Competition Result' : 'Final Standings'}
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs whitespace-nowrap">
