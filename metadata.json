@@ -1,0 +1,6 @@
+{
+  "name": "Football Auction League",
+  "description": "A tactical football auction, squad building, team management, and 2D live league simulation game.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
