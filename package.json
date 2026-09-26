@@ -11,8 +11,10 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "start:prod": "NODE_ENV=production tsx server.ts",
-    "smoke": "tsx scripts/smoke.ts",\n    "import:fc27": "tsx scripts/import-fc27.ts",
-    "build:full": "tsc --noEmit && vite build"
+    "smoke": "tsx scripts/smoke.ts",
+    "import:fc27": "tsx scripts/import-fc27.ts",
+    "import:fc27:remote": "tsx scripts/import-fc27.ts https://raw.githubusercontent.com/Akif-b-Atif/Football-wordle/5e3007e561acd76d12475dc0619d0d605f1f9a8c/data/players.csv 79",
+    "build:full": "npm run import:fc27:remote && tsc --noEmit && vite build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
