@@ -1,4 +1,4 @@
-import { VERIFIED_FC_PLAYERS } from '../src/data/players';
+import { DEVELOPMENT_PLAYERS } from '../src/data/players';
 import { FORMATIONS_CONFIG, calculateTeamOverall } from '../src/constants/formations';
 import { simulateMatch } from '../src/engine/simulation';
 import { Manager, SquadPlayerEntry } from '../src/types/football';
@@ -19,7 +19,7 @@ function buildManager(id: string, name: string): Manager {
   const squad: SquadPlayerEntry[] = [];
 
   for (const slot of config.slots) {
-    const player = VERIFIED_FC_PLAYERS.find(
+    const player = DEVELOPMENT_PLAYERS.find(
       p => !used.has(p.id) && p.category === slot.category
     );
     if (!player) throw new Error(`Smoke test could not find player for ${slot.category}`);
@@ -33,7 +33,7 @@ function buildManager(id: string, name: string): Manager {
     });
   }
 
-  for (const player of VERIFIED_FC_PLAYERS) {
+  for (const player of DEVELOPMENT_PLAYERS) {
     if (squad.length >= 18) break;
     if (used.has(player.id)) continue;
     used.add(player.id);
