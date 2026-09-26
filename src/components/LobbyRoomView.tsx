@@ -363,7 +363,9 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
                     <option value="La Liga">La Liga</option>
                     <option value="Bundesliga">Bundesliga</option>
                     <option value="Serie A">Serie A</option>
+                    <option value="Brasileirão">Brasileirão</option>
                     <option value="Champions League">Champions League</option>
+                    <option value="World Cup">World Cup</option>
                   </select>
                 </div>
 
