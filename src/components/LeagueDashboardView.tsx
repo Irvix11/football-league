@@ -313,7 +313,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                       {activeFixture.homeManagerName}
                     </div>
                     <div className="text-xs text-slate-400 font-mono mt-0.5">
-                      OVR: {homeManager?.teamOverall || 84} · {homeManager?.formation || '4-3-3'}
+                      OVR: {homeManager?.teamOverall ?? 0} · {homeManager?.formation || '4-3-3'}
                     </div>
                   </div>
 
@@ -331,13 +331,29 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                       {activeFixture.awayManagerName}
                     </div>
                     <div className="text-xs text-slate-400 font-mono mt-0.5">
-                      OVR: {awayManager?.teamOverall || 83} · {awayManager?.formation || '4-4-2'}
+                      OVR: {awayManager?.teamOverall ?? 0} · {awayManager?.formation || '4-4-2'}
                     </div>
                   </div>
                 </div>
 
+                <div className="grid grid-cols-3 gap-2 w-full max-w-lg">
+                  {[
+                    { label: activeFixture.homeManagerName, value: activeFixture.homeWinProbability ?? 50 },
+                    { label: 'DRAW', value: activeFixture.drawProbability ?? 20 },
+                    { label: activeFixture.awayManagerName, value: activeFixture.awayWinProbability ?? 30 },
+                  ].map((item) => (
+                    <div key={item.label} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-center">
+                      <div className="text-[9px] uppercase tracking-wider text-slate-500 truncate">{item.label}</div>
+                      <div className="font-mono font-black text-sm text-emerald-400 mt-1">{Number(item.value).toFixed(1)}%</div>
+                      <div className="mt-1 h-1 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-emerald-400 transition-all" style={{ width: `${Math.max(0, Math.min(100, Number(item.value)))}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 max-w-md">
-                  Click <strong>START MATCHDAY</strong> to simulate and watch the 2D broadcast animation with authentic ball trajectories, goals, saves, and commentary.
+                  Match probabilities are derived from team attributes, formation, tactics and home advantage; the live engine then applies seeded match-event variance.
                 </div>
 
                 {/* Big Action Button */}
