@@ -461,7 +461,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                   className={`p-2 rounded-xl border ${
                     isMax
                       ? 'bg-rose-950/20 border-rose-900/60 text-rose-300'
-                      : count >= req.min
+                      : count >= starterReq
                       ? 'bg-slate-950 border-emerald-900/40 text-emerald-400'
                       : 'bg-slate-950 border-slate-800 text-slate-300'
                   }`}
