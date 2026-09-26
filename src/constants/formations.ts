@@ -358,8 +358,8 @@ export function calculatePositionalRatings(formation: Formation, squad: SquadPla
 
     const fit = calculatePositionFit(
       starter.player.position, 
-      starter.player.alternatePositions, 
-      slot?.position || starter.player.position
+      starter.player.alternatePositions,
+      starter.assignedPosition || slot?.position || starter.player.position
     );
 
     // Condition penalty (Injured / Suspended / Tired)
