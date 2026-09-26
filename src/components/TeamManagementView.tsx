@@ -194,7 +194,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   };
 
   const handleAutoFill = () => {
-    const optimized = autoFillBestLineup(currentManager.squad, currentManager.formation);
+    const optimized = normalizeBenchForFormation(autoFillBestLineup(currentManager.squad, currentManager.formation), currentManager.formation);
     const validation = validateSquadFormation(currentManager.formation, optimized);
     if (!validation.isValid) {
       setActionError(validation.errors.join(' '));
