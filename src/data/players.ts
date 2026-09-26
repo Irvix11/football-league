@@ -1,4 +1,5 @@
-import { Player, PlayerPool, Era } from '../types/football';\nimport { FC27_IMPORTED_PLAYERS } from './fc27.generated';
+import { Player, PlayerPool, Era } from '../types/football';
+import { FC27_IMPORTED_PLAYERS } from './fc27.generated';
 
 /**
  * Curated development player dataset.
@@ -1142,7 +1143,8 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  * Filter players by pool and era.
  */
 export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
-  const source = FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS;\n  let list = [...source];
+  const source = FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS;
+  let list = [...source];
 
   if (era === 'Current') {
     list = list.filter(p => !p.id.startsWith('fc-icon') || p.id === 'fc-icon-08' || p.id === 'fc-icon-09');
