@@ -71,10 +71,7 @@ export default function App() {
       {!room || !managerId ? (
         <MainMenu
           onCreateLobby={(name, settings) => {
-            createLobby(name, false);
-            if (settings) {
-              setTimeout(() => updateSettings(settings), 300);
-            }
+            createLobby(name, false, undefined, settings);
           }}
           onJoinLobby={(code, name) => joinLobby(code, name)}
           onSoloPlay={(name, formation) => startSoloGame(name, formation)}
