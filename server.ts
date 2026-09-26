@@ -127,7 +127,7 @@ function createBotManager(nameIndex = 0, initialBudget = 500): Manager {
   const botName = BOT_NAMES[nameIndex % BOT_NAMES.length] || `Tactical Bot ${nameIndex + 1}`;
 
   return {
-    id: `bot-${Date.now()}-${nameIndex}`,
+    id: newId(`bot-${nameIndex}`),
     name: botName,
     isHost: false,
     isBot: true,
@@ -852,7 +852,7 @@ wss.on('connection', (ws) => {
           }
 
           const roomCode = generateLobbyCode();
-          const hostId = `mgr-${Date.now()}`;
+          const hostId = newId('mgr');
 
           const hostManager: Manager = {
             id: hostId,
