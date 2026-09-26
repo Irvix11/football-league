@@ -361,12 +361,15 @@ export function useGameSocket() {
   }, [room, send]);
 
   const leaveLobby = useCallback(() => {
+    if (room && managerId && socketRef.current?.readyState === WebSocket.OPEN) {
+      send('LEAVE_ROOM', { roomCode: room.code, managerId });
+    }
     saveSession(null);
     managerIdRef.current = null;
     setRoom(null);
     setManagerId(null);
     setSecretBidSubmitted(null);
-  }, [saveSession]);
+  }, [room, managerId, send, saveSession]);
 
   const currentManager = room?.managers.find(m => m.id === managerId) || null;
 
