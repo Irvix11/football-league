@@ -1103,6 +1103,77 @@ export function simulateMatch(
       momentum,
     });
 
+    // Simulate actual extra-time chances in two 15-minute periods.
+    const runExtraTimePeriod = (startMinute: number) => {
+      for (let minute = startMinute; minute < startMinute + 15 && homeScore === awayScore; minute += 6) {
+        const isEtHome = rand() < 0.5;
+        const etAtk = isEtHome ? homePower : awayPower;
+        const etDef = isEtHome ? awayPower : homePower;
+        const etAttackers = isEtHome ? homeAtts : awayAtts;
+        const etDefenderGK = isEtHome ? awayGK : homeGK;
+        const shooter = pick(etAttackers.length ? etAttackers : (isEtHome ? homeStarters : awayStarters));
+        const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
+        const gkQuality = etDefenderGK.player.attributes.dri || etDefenderGK.player.overall;
+        let etGoalProbability = 0.16 + (shooterQuality - gkQuality) * 0.009 + (etAtk.attack - etDef.defense) * 0.003;
+        etGoalProbability *= 0.92;
+        if ((isEtHome ? homeTactics : awayTactics).mentality === 'Aggressive') etGoalProbability *= 1.07;
+        etGoalProbability = Math.max(0.06, Math.min(0.48, etGoalProbability));
+
+        const etX = isEtHome ? 97.5 : 2.5;
+        const etY = 35 + rand() * 30;
+        const isGoal = rand() < etGoalProbability;
+        const etSec = Math.floor(rand() * 59);
+
+        if (isGoal) {
+          if (isEtHome) homeScore++; else awayScore++;
+          const stat = playerStatsMap.get(shooter.player.id);
+          if (stat) {
+            stat.goals++;
+            stat.shots++;
+            stat.rating += 1.2;
+          }
+          pushEvent({
+            minute,
+            second: etSec,
+            type: 'goal',
+            team: isEtHome ? 'home' : 'away',
+            playerId: shooter.player.id,
+            playerName: shooter.player.name,
+            playerNumber: 9,
+            commentary: `⚽ EXTRA-TIME GOAL! ${shooter.player.name} finds the breakthrough! (${homeScore} - ${awayScore})`,
+            ballCoordinates: { x: etX, y: etY },
+            ballStartCoordinates: { x: 50, y: 50 },
+            playerCoordinates: generate22PlayerCoordinates(
+              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeTactics, awayTactics, etX, etY, isEtHome ? 'home' : 'away', shooter.player.id, etDefenderGK.player.id, 'celebrating'
+            ),
+            momentum: isEtHome ? Math.min(100, momentum + 22) : Math.max(-100, momentum - 22),
+          });
+        } else {
+          const stat = playerStatsMap.get(shooter.player.id);
+          if (stat) stat.shots++;
+          pushEvent({
+            minute,
+            second: etSec,
+            type: 'shot_missed',
+            team: isEtHome ? 'home' : 'away',
+            playerId: shooter.player.id,
+            playerName: shooter.player.name,
+            commentary: `${shooter.player.name} fires in extra time, but the chance goes wide.`,
+            ballCoordinates: { x: etX, y: etY },
+            ballStartCoordinates: { x: 50, y: 50 },
+            playerCoordinates: generate22PlayerCoordinates(
+              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeTactics, awayTactics, etX, etY, isEtHome ? 'home' : 'away', shooter.player.id, etDefenderGK.player.id, 'shooting'
+            ),
+            momentum,
+          });
+        }
+      }
+    };
+
+    runExtraTimePeriod(96);
+
     // Extra Time Halftime (105:00)
     currentTotalSeconds = 6300; // 105:00
     pushEvent({
@@ -1122,6 +1193,8 @@ export function simulateMatch(
       momentum,
     });
 
+    runExtraTimePeriod(108);
+
     // Extra Time Full-Time (120:00)
     currentTotalSeconds = 7200; // 120:00
     pushEvent({
@@ -1131,7 +1204,9 @@ export function simulateMatch(
       team: 'home',
       playerId: homeKicker.player.id,
       playerName: homeKicker.player.name,
-      commentary: `120 minutes played! Deadlock remains unbroken (${homeScore} - ${awayScore}). PENALTY SHOOTOUT DECIDER!`,
+      commentary: homeScore === awayScore
+        ? `120 minutes played! Deadlock remains unbroken (${homeScore} - ${awayScore}). PENALTY SHOOTOUT DECIDER!`
+        : `120 minutes played! Extra time decides it: ${homeScore} - ${awayScore}.`,
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
@@ -1141,9 +1216,10 @@ export function simulateMatch(
       momentum,
     });
 
-    // PENALTY SHOOTOUT SIMULATION (Sequential 5 rounds + sudden death)
-    wentToPenalties = true;
-    penaltyShootout = [];
+    // PENALTY SHOOTOUT SIMULATION (Sequential 5 rounds + sudden death) only if ET is still level.
+    if (homeScore === awayScore) {
+      wentToPenalties = true;
+      penaltyShootout = [];
     let hPens = 0;
     let aPens = 0;
 
@@ -1302,6 +1378,12 @@ export function simulateMatch(
     homePenaltyScore = hPens;
     awayPenaltyScore = aPens;
     winnerManagerId = hPens > aPens ? homeManager.id : awayManager.id;
+  }
+
+    }
+
+  if (wentToExtraTime && !wentToPenalties && homeScore !== awayScore) {
+    winnerManagerId = homeScore > awayScore ? homeManager.id : awayManager.id;
   }
 
   // Final Whistle at 90:00 (or after shootout)
