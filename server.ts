@@ -433,8 +433,9 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
     const chosen = shuffled
       .filter(p => !usedIds.has(p.id))
       .filter(p => {
-        const count = [...starters, ...bench].filter(s => s.player.category === p.category).length;
-        return count < limits[p.category];
+        const category = p.category as PositionCategory;
+        const count = [...starters, ...bench].filter(s => s.player.category === category).length;
+        return count < limits[category];
       })
       .sort((a, b) => b.overall - a.overall)[0];
     if (!chosen) break;
