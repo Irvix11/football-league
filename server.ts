@@ -487,6 +487,36 @@ function fillAuctionSquadTo18(room: GameRoom) {
   }
 }
 
+// Auction is staged around the starting XI requirements:
+// 1) every manager gets the required GK count,
+// 2) then the required DEF count,
+// 3) then MID,
+// 4) then ATT,
+// 5) only after every manager has a complete XI do we auction the seven bench spots.
+function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
+  const ordered: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
+  for (const category of ordered) {
+    const target = getFormationStarterCategoryCounts(room.managers[0]?.formation || '4-3-3')[category];
+    const needsCategory = room.managers.some(manager => {
+      const required = getFormationStarterCategoryCounts(manager.formation)[category];
+      const count = manager.squad.filter(entry => entry.player.category === category).length;
+      return count < required;
+    });
+    if (needsCategory) return category;
+  }
+
+  // Starting XI is complete for everyone. Fill the seven bench spots afterwards.
+  const benchNeeds = room.managers.some(manager => {
+    const limits = getFormationSquadCategoryLimits(manager.formation);
+    return manager.squad.length < 18 &&
+      (['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]).some(category =>
+        manager.squad.filter(entry => entry.player.category === category).length < limits[category]
+      );
+  });
+
+  return benchNeeds ? null : null;
+}
+
 // Centralized Auction Engine
 function advanceAuction(room: GameRoom) {
   if (room.phase !== 'auction') return;
@@ -518,7 +548,23 @@ function advanceAuction(room: GameRoom) {
     return;
   }
 
-  const nextPlayer = unowned[Math.floor(Math.random() * unowned.length)];
+  // Stage the auction so every manager completes the same positional block
+  // before the next block begins. This prevents someone from collecting
+  // attackers while another manager still has no goalkeeper.
+  const starterStage = getAuctionCategoryForStage(room);
+  const eligibleByStage = starterStage
+    ? unowned.filter(p => p.category === starterStage)
+    : unowned.filter(p => (['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]).some(category => {
+        const hasRoom = room.managers.some(manager => {
+          const limits = getFormationSquadCategoryLimits(manager.formation);
+          const count = manager.squad.filter(entry => entry.player.category === category).length;
+          return count < limits[category];
+        });
+        return hasRoom && p.category === category;
+      }));
+
+  const auctionCandidates = eligibleByStage.length ? eligibleByStage : unowned;
+  const nextPlayer = auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)];
   const isQuick = room.settings.auctionMode === 'Quick';
   const duration = isQuick ? 8 : (room.settings.auctionMode === 'Blind' ? 15 : 12);
 
