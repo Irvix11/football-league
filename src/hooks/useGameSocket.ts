@@ -19,6 +19,12 @@ export function useGameSocket() {
   const [secretBidSubmitted, setSecretBidSubmitted] = useState<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const managerIdRef = useRef<string | null>(null);
+  const intentionalCloseRef = useRef(false);
+
+  useEffect(() => {
+    managerIdRef.current = managerId;
+  }, [managerId]);
 
   // Load saved session
   const getSavedSession = useCallback((): SavedSession | null => {
@@ -46,6 +52,7 @@ export function useGameSocket() {
       return;
     }
 
+    intentionalCloseRef.current = false;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
     const ws = new WebSocket(wsUrl);
@@ -54,9 +61,8 @@ export function useGameSocket() {
       setIsConnected(true);
       setErrorMessage(null);
 
-      // Attempt reconnection if saved session exists
       const saved = getSavedSession();
-      if (saved && !managerId) {
+      if (saved && !managerIdRef.current) {
         ws.send(JSON.stringify({
           type: 'JOIN_LOBBY',
           payload: {
@@ -71,13 +77,14 @@ export function useGameSocket() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const { type, room: newRoom, roomCode, managerId: assignedId, message, amount } = data;
+        const { type, room: newRoom, managerId: assignedId, message, amount } = data;
 
         switch (type) {
           case 'LOBBY_CREATED':
-          case 'LOBBY_JOINED':
+          case 'LOBBY_JOINED': {
             setRoom(newRoom);
             setManagerId(assignedId);
+            managerIdRef.current = assignedId;
             setSecretBidSubmitted(null);
             const myManager = newRoom.managers.find((m: any) => m.id === assignedId);
             if (myManager) {
@@ -88,6 +95,7 @@ export function useGameSocket() {
               });
             }
             break;
+          }
 
           case 'ROOM_UPDATE':
             setRoom(newRoom);
@@ -110,24 +118,32 @@ export function useGameSocket() {
 
     ws.onclose = () => {
       setIsConnected(false);
-      reconnectTimeoutRef.current = setTimeout(() => {
-        connect();
-      }, 2500);
+      socketRef.current = null;
+      if (!intentionalCloseRef.current) {
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connect();
+        }, 2000);
+      }
     };
 
     ws.onerror = (err) => {
       console.warn('WebSocket encountered error:', err);
-      ws.close();
+      // onclose performs the reconnect; avoid recursively closing/reconnecting here.
     };
 
     socketRef.current = ws;
-  }, [getSavedSession, managerId, saveSession]);
+  }, [getSavedSession, saveSession]);
 
   useEffect(() => {
     connect();
     return () => {
+      intentionalCloseRef.current = true;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (socketRef.current) socketRef.current.close();
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
     };
   }, [connect]);
 
@@ -249,7 +265,7 @@ export function useGameSocket() {
   const updateLineup = useCallback((squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => {
     if (!room || !managerId) return;
 
-    // 1. Instant optimistic state update
+    // Optimistic update keeps formation/tactics controls instant on mobile.
     setRoom((prev) => {
       if (!prev) return prev;
       return {
@@ -260,60 +276,54 @@ export function useGameSocket() {
           const nextSquad = squad || m.squad;
           const nextTactics = tactics || m.tactics;
           const nextRoles = roles || m.roles;
-          const nextOvr = calculateTeamOverall(nextFormation, nextSquad);
           return {
             ...m,
             formation: nextFormation,
             squad: nextSquad,
             tactics: nextTactics,
             roles: nextRoles,
-            teamOverall: nextOvr,
+            teamOverall: calculateTeamOverall(nextFormation, nextSquad),
           };
         }),
       };
     });
 
-    // 2. WebSocket sync
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      send('UPDATE_LINEUP', { roomCode: room.code, managerId, squad, formation, tactics, roles });
-    }
-
-    // 3. Reliable REST sync
-    fetch('/api/room/update-lineup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomCode: room.code, managerId, squad, formation, tactics, roles }),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.room) {
-          setRoom(data.room);
-        }
+    const payload = { roomCode: room.code, managerId, squad, formation, tactics, roles };
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('UPDATE_LINEUP', payload);
+    } else {
+      fetch('/api/room/update-lineup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       })
-      .catch((err) => console.warn('REST lineup update error:', err));
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => data?.room && setRoom(data.room))
+        .catch(() => {});
+    }
   }, [room, managerId, send]);
 
   const confirmTeam = useCallback(async () => {
     if (!room || !managerId) return;
     sound.playWhistle();
+    const payload = { roomCode: room.code, managerId };
 
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      send('CONFIRM_TEAM', { roomCode: room.code, managerId });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('CONFIRM_TEAM', payload);
+      return;
     }
 
     try {
       const res = await fetch('/api/room/confirm-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: room.code, managerId }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         const data = await res.json();
         if (data.room) setRoom(data.room);
       }
-    } catch (err) {
-      // Socket handles update
-    }
+    } catch {}
   }, [room, managerId, send]);
 
   const runMatchday = useCallback(async (matchday: number) => {
@@ -321,26 +331,25 @@ export function useGameSocket() {
     setIsSimulating(true);
     setSimulationError(null);
     sound.playWhistle();
+    const payload = { roomCode: room.code, matchday };
 
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      send('RUN_MATCHDAY', { roomCode: room.code, matchday });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('RUN_MATCHDAY', payload);
+      // The authoritative room update will clear the simulation state below.
+      window.setTimeout(() => setIsSimulating(false), 350);
+      return;
     }
 
     try {
       const res = await fetch('/api/room/run-matchday', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: room.code, matchday }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to simulate matchday');
-      }
-      if (data.room) {
-        setRoom(data.room);
-      }
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to simulate matchday');
+      if (data.room) setRoom(data.room);
     } catch (err: any) {
-      console.error('Simulation error:', err);
       setSimulationError(err.message || 'Error simulating matchday. Please try again.');
     } finally {
       setIsSimulating(false);
@@ -350,42 +359,46 @@ export function useGameSocket() {
   const proceedToNextMatchday = useCallback(async (nextMatchday: number) => {
     if (!room) return;
     setSimulationError(null);
+    const payload = { roomCode: room.code, nextMatchday };
 
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      send('NEXT_MATCHDAY', { roomCode: room.code, nextMatchday });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('NEXT_MATCHDAY', payload);
+      return;
     }
 
     try {
       const res = await fetch('/api/room/next-matchday', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: room.code, nextMatchday }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.room) setRoom(data.room);
     } catch (err: any) {
-      console.error('Error proceeding to next matchday:', err);
+      setSimulationError(err.message || 'Error proceeding to next matchday.');
     }
   }, [room, send]);
 
   const finishSeason = useCallback(async () => {
     if (!room) return;
     setSimulationError(null);
+    const payload = { roomCode: room.code };
 
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      send('FINISH_SEASON', { roomCode: room.code });
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('FINISH_SEASON', payload);
+      return;
     }
 
     try {
       const res = await fetch('/api/room/finish-season', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomCode: room.code }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.room) setRoom(data.room);
     } catch (err: any) {
-      console.error('Error finishing season:', err);
+      setSimulationError(err.message || 'Error finishing season.');
     }
   }, [room, send]);
 
@@ -412,6 +425,7 @@ export function useGameSocket() {
 
   const leaveLobby = useCallback(() => {
     saveSession(null);
+    managerIdRef.current = null;
     setRoom(null);
     setManagerId(null);
     setSecretBidSubmitted(null);
