@@ -558,125 +558,156 @@ function finalizeAuctionItem(room: GameRoom) {
 
 // Calculate season awards from recorded fixture stats
 function calculateSeasonAwards(room: GameRoom): SeasonAwards {
-  const goalMap = new Map<string, { player: any; teamName: string; goals: number }>();
-  const assistMap = new Map<string, { player: any; teamName: string; assists: number }>();
-  const gkMap = new Map<string, { player: any; teamName: string; cleanSheets: number; saves: number }>();
-  const ratingMap = new Map<string, { player: any; teamName: string; sumRating: number; matches: number; goals: number; assists: number; tackles: number; passes: number }>();
+  type Aggregate = {
+    playerId: string;
+    playerName: string;
+    teamName: string;
+    goals: number;
+    assists: number;
+    saves: number;
+    tackles: number;
+    passes: number;
+    sumRating: number;
+    matches: number;
+    cleanSheets: number;
+  };
+
+  const aggregates = new Map<string, Aggregate>();
 
   for (const fix of room.fixtures) {
     if (!fix.played || !fix.playerStats) continue;
 
     for (const stat of fix.playerStats) {
-      const manager = room.managers.find(m => m.id === (stat.team === 'home' ? fix.homeManagerId : fix.awayManagerId));
-      const teamName = manager?.name || 'FC';
+      const managerId = stat.team === 'home' ? fix.homeManagerId : fix.awayManagerId;
+      const manager = room.managers.find(m => m.id === managerId);
+      const aggregate = aggregates.get(stat.playerId) || {
+        playerId: stat.playerId,
+        playerName: stat.playerName,
+        teamName: manager?.name || 'FC',
+        goals: 0,
+        assists: 0,
+        saves: 0,
+        tackles: 0,
+        passes: 0,
+        sumRating: 0,
+        matches: 0,
+        cleanSheets: 0,
+      };
 
-      // Goals
-      if (stat.goals > 0) {
-        const cur = goalMap.get(stat.playerId) || { player: stat, teamName, goals: 0 };
-        cur.goals += stat.goals;
-        goalMap.set(stat.playerId, cur);
-      }
+      aggregate.goals += stat.goals;
+      aggregate.assists += stat.assists;
+      aggregate.saves += stat.saves;
+      aggregate.tackles += stat.tackles;
+      aggregate.passes += stat.passes;
+      aggregate.sumRating += stat.rating;
+      aggregate.matches += 1;
 
-      // Assists
-      if (stat.assists > 0) {
-        const cur = assistMap.get(stat.playerId) || { player: stat, teamName, assists: 0 };
-        cur.assists += stat.assists;
-        assistMap.set(stat.playerId, cur);
-      }
+      if (stat.team === 'home' && (fix.awayScore ?? 0) === 0) aggregate.cleanSheets += 1;
+      if (stat.team === 'away' && (fix.homeScore ?? 0) === 0) aggregate.cleanSheets += 1;
 
-      // Ratings & General
-      const r = ratingMap.get(stat.playerId) || { player: stat, teamName, sumRating: 0, matches: 0, goals: 0, assists: 0, tackles: 0, passes: 0 };
-      r.sumRating += stat.rating;
-      r.matches++;
-      r.goals += stat.goals;
-      r.assists += stat.assists;
-      r.tackles += stat.tackles;
-      r.passes += stat.passes;
-      ratingMap.set(stat.playerId, r);
+      aggregates.set(stat.playerId, aggregate);
     }
   }
 
-  // Fallbacks
-  const topScorer = Array.from(goalMap.values()).sort((a, b) => b.goals - a.goals)[0] || {
-    player: { playerId: 'fc-att-01', playerName: 'Top Scorer' },
-    teamName: 'Champion FC',
-    goals: 4,
-  };
+  const all = Array.from(aggregates.values());
+  const playerData = (id: string) => VERIFIED_FC_PLAYERS.find(p => p.id === id);
 
-  const topAssist = Array.from(assistMap.values()).sort((a, b) => b.assists - a.assists)[0] || {
-    player: { playerId: 'fc-mid-03', playerName: 'Top Creator' },
-    teamName: 'Champion FC',
-    assists: 3,
+  const topScorer = [...all].sort((a, b) => b.goals - a.goals || b.sumRating - a.sumRating)[0] || {
+    playerId: 'none', playerName: 'No scorer yet', teamName: '—', goals: 0, assists: 0, saves: 0, tackles: 0, passes: 0, sumRating: 0, matches: 0, cleanSheets: 0
   };
+  const topAssist = [...all].sort((a, b) => b.assists - a.assists || b.sumRating - a.sumRating)[0] || topScorer;
+  const topRated = [...all].sort((a, b) =>
+    (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches))
+  )[0] || topScorer;
 
-  const topRated = Array.from(ratingMap.values()).sort((a, b) => (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches)))[0] || {
-    player: { playerId: 'fc-att-01', playerName: 'MVP' },
-    teamName: 'Champion FC',
-    sumRating: 8.5,
-    matches: 1,
-    goals: 3,
-    assists: 1,
-    tackles: 2,
-    passes: 45,
-  };
+  const bestGK = [...all]
+    .filter(a => playerData(a.playerId)?.category === 'GK')
+    .sort((a, b) => b.cleanSheets - a.cleanSheets || b.saves - a.saves || b.sumRating - a.sumRating)[0] || topScorer;
 
-  const champ = room.leagueTable[0] || { managerId: room.hostId, managerName: 'Champion', points: 15, played: 5, won: 5 };
+  const bestDefender = [...all]
+    .filter(a => playerData(a.playerId)?.category === 'DEF')
+    .sort((a, b) => (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches)) || b.tackles - a.tackles)[0] || topScorer;
+
+  const bestMidfielder = [...all]
+    .filter(a => playerData(a.playerId)?.category === 'MID')
+    .sort((a, b) => (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches)) || b.passes - a.passes)[0] || topScorer;
+
+  const bestYoung = [...all]
+    .filter(a => {
+      const p = playerData(a.playerId);
+      return p && p.age <= 21;
+    })
+    .sort((a, b) => {
+      const ar = a.sumRating / Math.max(1, a.matches);
+      const br = b.sumRating / Math.max(1, b.matches);
+      return br - ar || b.goals - a.goals || b.assists - a.assists;
+    })[0] || topScorer;
+
+  const champion = room.knockoutStage?.championId
+    ? room.managers.find(m => m.id === room.knockoutStage?.championId)
+    : room.leagueTable[0];
+
+  const played = room.leagueTable.find(r => r.managerId === champion?.id)?.played || room.fixtures.filter(f =>
+    f.played && (f.homeManagerId === champion?.id || f.awayManagerId === champion?.id)
+  ).length;
+
+  const won = room.leagueTable.find(r => r.managerId === champion?.id)?.won || 0;
 
   return {
     goldenBoot: {
-      playerId: topScorer.player.playerId,
-      playerName: topScorer.player.playerName,
+      playerId: topScorer.playerId,
+      playerName: topScorer.playerName,
       teamName: topScorer.teamName,
       goals: topScorer.goals,
     },
     topAssists: {
-      playerId: topAssist.player.playerId,
-      playerName: topAssist.player.playerName,
+      playerId: topAssist.playerId,
+      playerName: topAssist.playerName,
       teamName: topAssist.teamName,
       assists: topAssist.assists,
     },
     bestGK: {
-      playerId: 'fc-gk-01',
-      playerName: 'Thibaut Courtois',
-      teamName: champ.managerName,
-      cleanSheets: 2,
-      saves: 8,
+      playerId: bestGK.playerId,
+      playerName: bestGK.playerName,
+      teamName: bestGK.teamName,
+      cleanSheets: bestGK.cleanSheets,
+      saves: bestGK.saves,
     },
     playerOfTheSeason: {
-      playerId: topRated.player.playerId,
-      playerName: topRated.player.playerName,
+      playerId: topRated.playerId,
+      playerName: topRated.playerName,
       teamName: topRated.teamName,
       avgRating: Number((topRated.sumRating / Math.max(1, topRated.matches)).toFixed(2)),
       goals: topRated.goals,
       assists: topRated.assists,
     },
     bestDefender: {
-      playerId: 'fc-def-01',
-      playerName: 'Virgil van Dijk',
-      teamName: champ.managerName,
-      avgRating: 7.9,
-      tackles: 14,
+      playerId: bestDefender.playerId,
+      playerName: bestDefender.playerName,
+      teamName: bestDefender.teamName,
+      avgRating: Number((bestDefender.sumRating / Math.max(1, bestDefender.matches)).toFixed(2)),
+      tackles: bestDefender.tackles,
     },
     bestMidfielder: {
-      playerId: 'fc-mid-01',
-      playerName: 'Rodri',
-      teamName: champ.managerName,
-      avgRating: 8.1,
-      passes: 180,
+      playerId: bestMidfielder.playerId,
+      playerName: bestMidfielder.playerName,
+      teamName: bestMidfielder.teamName,
+      avgRating: Number((bestMidfielder.sumRating / Math.max(1, bestMidfielder.matches)).toFixed(2)),
+      passes: bestMidfielder.passes,
     },
     bestYoungPlayer: {
-      playerId: 'fc-att-08',
-      playerName: 'Lamine Yamal',
-      teamName: champ.managerName,
-      age: 17,
-      goals: 2,
-      assists: 2,
+      playerId: bestYoung.playerId,
+      playerName: bestYoung.playerName,
+      teamName: bestYoung.teamName,
+      age: playerData(bestYoung.playerId)?.age || 0,
+      goals: bestYoung.goals,
+      assists: bestYoung.assists,
     },
     managerOfTheSeason: {
-      managerId: champ.managerId,
-      managerName: champ.managerName,
-      points: champ.points,
-      winRate: Math.round(((champ.won || 1) / Math.max(1, champ.played || 1)) * 100),
+      managerId: champion?.id || room.hostId,
+      managerName: champion?.name || 'Champion',
+      points: room.leagueTable.find(r => r.managerId === champion?.id)?.points || (champion ? 1 : 0),
+      winRate: Math.round((won / Math.max(1, played)) * 100),
     },
   };
 }
