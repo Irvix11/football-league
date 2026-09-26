@@ -359,6 +359,57 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
   return [...starters, ...bench];
 }
 
+function fillAuctionSquadTo18(room: GameRoom) {
+  const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
+  const globallyOwned = new Set<string>();
+  for (const manager of room.managers) {
+    for (const entry of manager.squad) globallyOwned.add(entry.player.id);
+  }
+
+  for (const manager of room.managers) {
+    const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+    while (manager.squad.length < 18) {
+      const counts: Record<PositionCategory, number> = {
+        GK: manager.squad.filter(s => s.player.category === 'GK').length,
+        DEF: manager.squad.filter(s => s.player.category === 'DEF').length,
+        MID: manager.squad.filter(s => s.player.category === 'MID').length,
+        ATT: manager.squad.filter(s => s.player.category === 'ATT').length,
+      };
+
+      const candidates = pool.filter(p =>
+        !globallyOwned.has(p.id) &&
+        counts[p.category] < config.categoryRequirements[p.category].max
+      );
+      if (!candidates.length) break;
+
+      const needed = candidates.filter(p => {
+        const req = config.categoryRequirements[p.category];
+        return counts[p.category] < req.min;
+      });
+      const chosen = (needed.length ? needed : candidates)[0];
+      globallyOwned.add(chosen.id);
+
+      manager.squad.push({
+        player: chosen,
+        isStarting: manager.squad.length < 11,
+        startingSlotIndex: manager.squad.length < 11 ? manager.squad.length : undefined,
+        benchIndex: manager.squad.length >= 11 ? manager.squad.length - 11 : undefined,
+        assignedPosition: chosen.position,
+        condition: {
+          state: 'FIT',
+          fatigue: 0,
+          injuryMatchesLeft: 0,
+          yellowCards: 0,
+          redCards: 0,
+          suspensionMatchesLeft: 0,
+        },
+      });
+    }
+    manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
+    manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
+  }
+}
+
 // Centralized Auction Engine
 function advanceAuction(room: GameRoom) {
   if (room.phase !== 'auction') return;
@@ -375,7 +426,6 @@ function advanceAuction(room: GameRoom) {
   // Check if all managers have full squads (18 players each)
   const allFull = room.managers.every(m => m.squad.length >= 18);
   if (allFull) {
-    // Auction Completed! Move to Team Management phase
     room.phase = 'team_management';
     broadcastRoom(room.code);
     return;
@@ -383,7 +433,7 @@ function advanceAuction(room: GameRoom) {
 
   const unowned = pool.filter(p => !ownedIds.has(p.id));
   if (unowned.length === 0) {
-    // No more players in pool, proceed to team management
+    fillAuctionSquadTo18(room);
     room.phase = 'team_management';
     broadcastRoom(room.code);
     return;
