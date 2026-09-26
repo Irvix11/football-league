@@ -1389,13 +1389,52 @@ wss.on('connection', (ws) => {
         case 'KICK_PLAYER': {
           const { roomCode, targetManagerId } = payload;
           const auth = authorizeSocket(ws, roomCode);
-          if (!auth || auth.room.phase !== 'lobby') return;
+          if (!auth) return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId) || targetManagerId === room.hostId) {
             sendSocketError(ws, 'Only the host can kick another manager.');
             return;
           }
-          room.managers = room.managers.filter(m => m.id !== targetManagerId);
+          const target = room.managers.find(m => m.id === targetManagerId);
+          if (!target || target.isHost) {
+            sendSocketError(ws, 'That manager cannot be kicked.');
+            return;
+          }
+
+          // Host removal is allowed during every game phase. Clean the target out of
+          // active auction/fixtures so the remaining room never references a kicked ID.
+          if (room.auction?.highestBidderId === targetManagerId) {
+            room.auction.highestBidderId = null;
+            room.auction.highestBidderName = null;
+            room.auction.currentBid = room.auction.currentPlayer?.startingPrice || 0;
+          }
+
+          if (room.phase === 'knockout' && room.knockoutStage) {
+            for (const round of room.knockoutStage.rounds) {
+              for (const fixture of round.fixtures) {
+                if (fixture.played) continue;
+                if (fixture.homeManagerId === targetManagerId && fixture.awayManagerId !== targetManagerId) {
+                  fixture.played = true;
+                  fixture.homeScore = 0;
+                  fixture.awayScore = 3;
+                  fixture.winnerManagerId = fixture.awayManagerId;
+                } else if (fixture.awayManagerId === targetManagerId && fixture.homeManagerId !== targetManagerId) {
+                  fixture.played = true;
+                  fixture.homeScore = 3;
+                  fixture.awayScore = 0;
+                  fixture.winnerManagerId = fixture.homeManagerId;
+                }
+              }
+              round.isComplete = round.fixtures.every(f => f.played);
+            }
+          } else {
+            room.fixtures = room.fixtures.filter(f =>
+              f.played || (f.homeManagerId !== targetManagerId && f.awayManagerId !== targetManagerId)
+            );
+          }
+
+          removeManagerFromRoom(room, targetManagerId);
+
           const sockets = roomSockets.get(room.code);
           if (sockets) {
             for (const client of [...sockets]) {
@@ -1403,11 +1442,14 @@ wss.on('connection', (ws) => {
               if (info?.managerId === targetManagerId) {
                 sockets.delete(client);
                 socketToRoom.delete(client);
-                if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ type: 'ERROR', message: 'You were removed from the lobby by the host.' }));
-                client.close();
+                if (client.readyState === WebSocket.OPEN) {
+                  client.send(JSON.stringify({ type: 'KICKED', message: 'You were removed from the game by the host.' }));
+                  client.close();
+                }
               }
             }
           }
+
           room.leagueTable = calculateInitialTable(room.managers);
           broadcastRoom(room.code);
           break;
