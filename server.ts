@@ -1873,6 +1873,26 @@ wss.on('connection', (ws) => {
           const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
           Object.assign(fix, result);
           room.fixtures = round.fixtures;
+          // IMPORTANT: keep the room in the knockout phase while the client
+          // plays the authoritative event timeline in LiveMatchEngine.
+          // The bracket/season advances only after COMPLETE_KNOCKOUT_MATCH.
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // Advance the bracket only after the 2D live match has reached full-time.
+        case 'COMPLETE_KNOCKOUT_MATCH': {
+          const { roomCode, fixtureId } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'knockout') return;
+          const { room } = auth;
+          const stage = room.knockoutStage;
+          if (!stage) return;
+          const round = stage.rounds[stage.rounds.length - 1];
+          const fix = round.fixtures.find(f => f.id === fixtureId);
+          if (!fix || !fix.played) return;
+
+          // Idempotent: multiple viewers may reach full-time.
           advanceKnockoutRound(room);
           broadcastRoom(room.code);
           break;
