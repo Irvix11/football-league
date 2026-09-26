@@ -7,6 +7,7 @@ interface KnockoutDashboardViewProps {
   room: GameRoom;
   managerId: string;
   onRunMatch: (fixtureId: string) => void;
+  onMatchComplete?: (fixtureId: string) => void;
   isSimulating?: boolean;
   simulationError?: string | null;
 }
@@ -15,6 +16,7 @@ export const KnockoutDashboardView: React.FC<KnockoutDashboardViewProps> = ({
   room,
   managerId,
   onRunMatch,
+  onMatchComplete,
   isSimulating = false,
   simulationError = null,
 }) => {
@@ -112,7 +114,11 @@ export const KnockoutDashboardView: React.FC<KnockoutDashboardViewProps> = ({
 
         <main className="lg:col-span-8 space-y-4">
           {selectedFixture?.played ? (
-            <LiveMatchEngine fixture={selectedFixture} userTeamId={managerId} />
+            <LiveMatchEngine
+              fixture={selectedFixture}
+              userTeamId={managerId}
+              onMatchComplete={onMatchComplete}
+            />
           ) : selectedFixture ? (
             <div className="p-8 sm:p-12 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl text-center">
               <Clock3 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
