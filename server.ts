@@ -19,10 +19,10 @@ import {
   PositionCategory,
   KnockoutRound,
   KnockoutStageState
-} from './src/types/football';
-import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations';
-import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players';
-import { simulateMatch } from './src/engine/simulation';
+} from './src/types/football.js';
+import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
+import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
+import { simulateMatch } from './src/engine/simulation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
