@@ -6,6 +6,7 @@ import { FormationSelectView } from './components/FormationSelectView';
 import { LiveAuctionView } from './components/LiveAuctionView';
 import { TeamManagementView } from './components/TeamManagementView';
 import { LeagueDashboardView } from './components/LeagueDashboardView';
+import { KnockoutDashboardView } from './components/KnockoutDashboardView';
 import { SeasonEndView } from './components/SeasonEndView';
 import { Volume2, VolumeX, AlertCircle } from 'lucide-react';
 import { sound } from './utils/audio';
@@ -31,6 +32,7 @@ export default function App() {
     updateLineup,
     confirmTeam,
     runMatchday,
+    runKnockoutMatch,
     proceedToNextMatchday,
     finishSeason,
     isSimulating,
@@ -119,6 +121,14 @@ export default function App() {
           onProceedNextMatchday={proceedToNextMatchday}
           onFinishSeason={finishSeason}
           onProposeTransfer={proposeTransfer}
+          isSimulating={isSimulating}
+          simulationError={simulationError}
+        />
+      ) : room.phase === 'knockout' ? (
+        <KnockoutDashboardView
+          room={room}
+          managerId={managerId}
+          onRunMatch={runKnockoutMatch}
           isSimulating={isSimulating}
           simulationError={simulationError}
         />
