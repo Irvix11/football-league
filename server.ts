@@ -997,6 +997,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     formation: botFormation,
     tactics: {
       style: 'Balanced',
+      mentality: 'Balanced',
       defensiveLine: 55,
       pressingIntensity: 65,
       attackWidth: 60,
