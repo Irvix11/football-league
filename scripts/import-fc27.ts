@@ -5,12 +5,19 @@ type Row = Record<string, string>;
 
 const input = process.argv[2] ?? 'data/fc27-authorized.csv';
 const threshold = Number(process.argv[3] ?? 79);
+const remoteInput = /^https?:\/\//i.test(input);
 
 if (!Number.isFinite(threshold) || threshold < 0 || threshold > 99) {
   throw new Error('Usage: npm run import:fc27 -- <csv> [minimumOverall]');
 }
-if (!fs.existsSync(input)) {
-  throw new Error(`Missing ${input}. Provide an authorized/licensed FC27 CSV export. This importer does not scrape EA.`);
+async function readInput(source: string): Promise<string> {
+  if (!/^https?:\/\//i.test(source)) {
+    if (!fs.existsSync(source)) throw new Error(`Missing ${source}. Provide an authorized/licensed FC27 CSV export.`);
+    return fs.readFileSync(source, 'utf8');
+  }
+  const response = await fetch(source);
+  if (!response.ok) throw new Error(`Unable to download FC27 snapshot: HTTP ${response.status}`);
+  return await response.text();
 }
 
 function parseCsv(text: string): Row[] {
@@ -51,7 +58,7 @@ const category = (position: string) =>
 const players: string[] = [];
 const ids = new Set<string>();
 
-for (const row of parseCsv(fs.readFileSync(input, 'utf8'))) {
+for (const row of parseCsv(await readInput(input))) {
   const overall = num(row, 'overall', 'overall_rating', 'OVR', 'Overall');
   if (!Number.isFinite(overall) || overall < threshold) continue;
 
@@ -106,9 +113,9 @@ for (const row of parseCsv(fs.readFileSync(input, 'utf8'))) {
     preferredFoot: get(row, 'preferred_foot', 'preferredFoot', 'Foot') === 'Left' ? 'Left' : 'Right',
     alternatePositions: [...new Set(alternatePositions)],
     marketValue: Number.isFinite(marketValue) ? marketValue : 0,
-    startingPrice: Number.isFinite(startingPrice) ? startingPrice : 0,
-    valueSource: clean(get(row, 'market_value_source', 'valueSource')) || 'Authorized FC27 import',
-    valueVersion: clean(get(row, 'market_value_version', 'valueVersion')) || 'FC27',
+    startingPrice: Number.isFinite(startingPrice) ? startingPrice : Math.max(1, Math.round((overall - 70) * 1.5)),
+    valueSource: clean(get(row, 'market_value_source', 'valueSource')) || (remoteInput ? 'FC27 public ratings snapshot; auction value derived from OVR' : 'Authorized FC27 import'),
+    valueVersion: clean(get(row, 'market_value_version', 'valueVersion')) || 'FC27-2026-09',
     updatedAt: clean(get(row, 'updated_at', 'updatedAt')) || new Date().toISOString(),
   };
 
