@@ -156,10 +156,11 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
           {room.settings.transfersEnabled && (
             <button
               onClick={() => setShowTransferModal(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-xs font-bold text-slate-200 transition-colors cursor-pointer active:scale-95"
+              disabled={currentMatchday % 5 !== 0}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-slate-200 transition-colors cursor-pointer active:scale-95"
             >
               <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400" />
-              <span>TRANSFERS</span>
+              <span>TRANSFERS {currentMatchday % 5 === 0 ? 'OPEN' : `(MD ${Math.ceil(currentMatchday / 5) * 5})`}</span>
             </button>
           )}
 
