@@ -20,7 +20,7 @@ import {
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football';
-import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation } from './src/constants/formations';
+import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players';
 import { simulateMatch } from './src/engine/simulation';
 
@@ -304,74 +304,151 @@ function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTab
 }
 
 // Automatic 18-player squad generator for Skip Auction or Bot Setup
+function createFitCondition(): SquadPlayerEntry['condition'] {
+  return {
+    state: 'FIT',
+    fatigue: 0,
+    injuryMatchesLeft: 0,
+    yellowCards: 0,
+    redCards: 0,
+    suspensionMatchesLeft: 0,
+  };
+}
+
+function playerSlotScore(player: any, slot: any): number {
+  const fit = calculatePositionFit(player.position, player.alternatePositions || [], slot.position);
+  const attributes = player.attributes || {};
+  const relevant = slot.category === 'GK'
+    ? (attributes.dri + attributes.def + attributes.phy) / 3
+    : slot.category === 'DEF'
+      ? (attributes.def * 0.55 + attributes.pas * 0.20 + attributes.phy * 0.15 + attributes.pac * 0.10)
+      : slot.category === 'MID'
+        ? (attributes.pas * 0.35 + attributes.dri * 0.25 + attributes.def * 0.15 + attributes.sho * 0.15 + attributes.pac * 0.10)
+        : (attributes.sho * 0.40 + attributes.pac * 0.20 + attributes.dri * 0.25 + attributes.pas * 0.15);
+  return player.overall * 0.62 + fit * 0.28 + relevant * 0.10;
+}
+
+function autoFillManagerLineup(manager: Manager) {
+  const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+  const allPlayers = manager.squad.map(entry => entry.player);
+  if (allPlayers.length < 11) return;
+
+  const remaining = [...allPlayers];
+  const starters: SquadPlayerEntry[] = [];
+
+  // Fill exact formation slots with the highest-scoring available player for each slot.
+  // GK first, then the most position-specific slots before flexible ones.
+  const orderedSlots = [...config.slots].sort((a, b) => {
+    if (a.category === 'GK') return -1;
+    if (b.category === 'GK') return 1;
+    const aSpecific = a.position === 'CB' || a.position === 'LB' || a.position === 'RB' || a.position === 'LWB' || a.position === 'RWB';
+    const bSpecific = b.position === 'CB' || b.position === 'LB' || b.position === 'RB' || b.position === 'LWB' || b.position === 'RWB';
+    return Number(bSpecific) - Number(aSpecific);
+  });
+
+  for (const slot of orderedSlots) {
+    const candidates = remaining.filter(p => p.category === slot.category);
+    const pool = candidates.length ? candidates : remaining;
+    const chosen = [...pool].sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot) || b.overall - a.overall)[0];
+    if (!chosen) continue;
+    remaining.splice(remaining.findIndex(p => p.id === chosen.id), 1);
+    starters.push({
+      player: chosen,
+      isStarting: true,
+      startingSlotIndex: slot.index,
+      benchIndex: undefined,
+      assignedPosition: slot.position,
+      condition: manager.squad.find(s => s.player.id === chosen.id)?.condition || createFitCondition(),
+    });
+  }
+
+  const starterIds = new Set(starters.map(s => s.player.id));
+  const benchPlayers = allPlayers
+    .filter(p => !starterIds.has(p.id))
+    .sort((a, b) => b.overall - a.overall || b.attributes.pac - a.attributes.pac)
+    .slice(0, 7);
+
+  const bench = benchPlayers.map((player, index) => ({
+    player,
+    isStarting: false,
+    startingSlotIndex: undefined,
+    benchIndex: index,
+    assignedPosition: player.position,
+    condition: manager.squad.find(s => s.player.id === player.id)?.condition || createFitCondition(),
+  }));
+
+  manager.squad = [...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)), ...bench];
+  manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
+  manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
+}
+
 function generateValidSquad(formation: Formation, availablePool: any[]): SquadPlayerEntry[] {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
+  const limits = getFormationSquadCategoryLimits(formation);
   const shuffled = [...availablePool].sort(() => Math.random() - 0.5);
-
-  const gks = shuffled.filter(p => p.category === 'GK');
-  const defs = shuffled.filter(p => p.category === 'DEF');
-  const mids = shuffled.filter(p => p.category === 'MID');
-  const atts = shuffled.filter(p => p.category === 'ATT');
-
-  const starters: SquadPlayerEntry[] = [];
-  const bench: SquadPlayerEntry[] = [];
-
-  // Pick starters matching formation slots
   const usedIds = new Set<string>();
+  const starters: SquadPlayerEntry[] = [];
 
-  for (let slotIndex = 0; slotIndex < 11; slotIndex++) {
-    const slot = config.slots[slotIndex];
-    let pool = slot.category === 'GK' ? gks : slot.category === 'DEF' ? defs : slot.category === 'MID' ? mids : atts;
-    let chosen = pool.find(p => !usedIds.has(p.id) && (p.position === slot.position || p.alternatePositions?.includes(slot.position)));
-    if (!chosen) chosen = pool.find(p => !usedIds.has(p.id));
-    if (!chosen) chosen = shuffled.find(p => !usedIds.has(p.id));
-
-    if (chosen) {
-      usedIds.add(chosen.id);
-      starters.push({
-        player: chosen,
-        isStarting: true,
-        startingSlotIndex: slotIndex,
-        assignedPosition: slot.position,
-        condition: {
-          state: 'FIT',
-          fatigue: 0,
-          injuryMatchesLeft: 0,
-          yellowCards: 0,
-          redCards: 0,
-          suspensionMatchesLeft: 0,
-        },
-      });
-    }
+  // Build the XI by formation slots, prioritising positional fit and then stats/OVR.
+  for (const slot of config.slots) {
+    const candidates = shuffled
+      .filter(p => !usedIds.has(p.id) && p.category === slot.category)
+      .sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot) || b.overall - a.overall);
+    const chosen = candidates[0] || shuffled.find(p => !usedIds.has(p.id));
+    if (!chosen) continue;
+    usedIds.add(chosen.id);
+    starters.push({
+      player: chosen,
+      isStarting: true,
+      startingSlotIndex: slot.index,
+      assignedPosition: slot.position,
+      condition: createFitCondition(),
+    });
   }
 
-  // Pick 7 bench players (1 GK, 2 DEF, 2 MID, 2 ATT)
-  const benchCats = ['GK', 'DEF', 'DEF', 'MID', 'MID', 'ATT', 'ATT'];
-  let bIdx = 0;
-  for (const cat of benchCats) {
-    let pool = cat === 'GK' ? gks : cat === 'DEF' ? defs : cat === 'MID' ? mids : atts;
-    let chosen = pool.find(p => !usedIds.has(p.id));
-    if (!chosen) chosen = shuffled.find(p => !usedIds.has(p.id));
-    if (chosen) {
-      usedIds.add(chosen.id);
+  // Seven bench spots, respecting formation-aware squad caps.
+  const bench: SquadPlayerEntry[] = [];
+  for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
+    const target = Math.min(limits[cat], config.slots.filter(s => s.category === cat).length + ({ GK: 1, DEF: 2, MID: 2, ATT: 2 } as Record<PositionCategory, number>)[cat]);
+    const existing = starters.filter(s => s.player.category === cat).length;
+    const needed = Math.max(0, target - existing);
+    for (const player of shuffled
+      .filter(p => !usedIds.has(p.id) && p.category === cat)
+      .sort((a, b) => b.overall - a.overall)
+      .slice(0, needed)) {
+      usedIds.add(player.id);
       bench.push({
-        player: chosen,
+        player,
         isStarting: false,
-        benchIndex: bIdx++,
-        assignedPosition: chosen.position,
-        condition: {
-          state: 'FIT',
-          fatigue: 0,
-          injuryMatchesLeft: 0,
-          yellowCards: 0,
-          redCards: 0,
-          suspensionMatchesLeft: 0,
-        },
+        benchIndex: bench.length,
+        assignedPosition: player.position,
+        condition: createFitCondition(),
       });
     }
   }
 
-  return [...starters, ...bench];
+  // If a sparse player pool prevents the exact category allocation, fill remaining slots
+  // from the best available players without duplicating ownership.
+  while (starters.length + bench.length < 18) {
+    const chosen = shuffled
+      .filter(p => !usedIds.has(p.id))
+      .filter(p => {
+        const count = [...starters, ...bench].filter(s => s.player.category === p.category).length;
+        return count < limits[p.category];
+      })
+      .sort((a, b) => b.overall - a.overall)[0];
+    if (!chosen) break;
+    usedIds.add(chosen.id);
+    bench.push({
+      player: chosen,
+      isStarting: false,
+      benchIndex: bench.length,
+      assignedPosition: chosen.position,
+      condition: createFitCondition(),
+    });
+  }
+
+  return [...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)), ...bench.slice(0, 7)];
 }
 
 function fillAuctionSquadTo18(room: GameRoom) {
@@ -382,7 +459,7 @@ function fillAuctionSquadTo18(room: GameRoom) {
   }
 
   for (const manager of room.managers) {
-    const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+    const limits = getFormationSquadCategoryLimits(manager.formation);
     while (manager.squad.length < 18) {
       const counts: Record<PositionCategory, number> = {
         GK: manager.squad.filter(s => s.player.category === 'GK').length,
@@ -390,38 +467,22 @@ function fillAuctionSquadTo18(room: GameRoom) {
         MID: manager.squad.filter(s => s.player.category === 'MID').length,
         ATT: manager.squad.filter(s => s.player.category === 'ATT').length,
       };
-
-      const candidates = pool.filter(p =>
-        !globallyOwned.has(p.id) &&
-        counts[p.category] < config.categoryRequirements[p.category].max
-      );
+      const candidates = pool
+        .filter(p => !globallyOwned.has(p.id) && counts[p.category] < limits[p.category])
+        .sort((a, b) => b.overall - a.overall);
       if (!candidates.length) break;
-
-      const needed = candidates.filter(p => {
-        const req = config.categoryRequirements[p.category];
-        return counts[p.category] < req.min;
-      });
-      const chosen = (needed.length ? needed : candidates)[0];
+      const chosen = candidates[0];
       globallyOwned.add(chosen.id);
-
       manager.squad.push({
         player: chosen,
-        isStarting: manager.squad.length < 11,
-        startingSlotIndex: manager.squad.length < 11 ? manager.squad.length : undefined,
-        benchIndex: manager.squad.length >= 11 ? manager.squad.length - 11 : undefined,
+        isStarting: false,
+        startingSlotIndex: undefined,
+        benchIndex: manager.squad.length - 11,
         assignedPosition: chosen.position,
-        condition: {
-          state: 'FIT',
-          fatigue: 0,
-          injuryMatchesLeft: 0,
-          yellowCards: 0,
-          redCards: 0,
-          suspensionMatchesLeft: 0,
-        },
+        condition: createFitCondition(),
       });
     }
-    manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
-    manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
+    autoFillManagerLineup(manager);
   }
 }
 
@@ -441,6 +502,7 @@ function advanceAuction(room: GameRoom) {
   // Check if all managers have full squads (18 players each)
   const allFull = room.managers.every(m => m.squad.length >= 18);
   if (allFull) {
+    room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
     broadcastRoom(room.code);
     return;
@@ -449,6 +511,7 @@ function advanceAuction(room: GameRoom) {
   const unowned = pool.filter(p => !ownedIds.has(p.id));
   if (unowned.length === 0) {
     fillAuctionSquadTo18(room);
+    room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
     broadcastRoom(room.code);
     return;
@@ -517,9 +580,9 @@ function simulateBotBids(room: GameRoom) {
     if (bot.budget < minNextBid) continue;
 
     // Check position category limit for bot's formation
-    const config = FORMATIONS_CONFIG[bot.formation] || FORMATIONS_CONFIG['4-3-3'];
+    const limits = getFormationSquadCategoryLimits(bot.formation);
     const currentInCat = bot.squad.filter(s => s.player.category === currentPl.category).length;
-    const maxInCat = config.categoryRequirements[currentPl.category].max;
+    const maxInCat = limits[currentPl.category];
     if (currentInCat >= maxInCat) continue;
 
     // Bot decision roll based on player overall vs price
@@ -578,12 +641,11 @@ function finalizeAuctionItem(room: GameRoom) {
     const winner = room.managers.find(m => m.id === winnerId);
     if (winner && winner.budget >= finalPrice) {
       winner.budget -= finalPrice;
-      const isStarter = winner.squad.length < 11;
       winner.squad.push({
         player,
-        isStarting: isStarter,
-        startingSlotIndex: isStarter ? winner.squad.length : undefined,
-        benchIndex: !isStarter ? winner.squad.length - 11 : undefined,
+        isStarting: false,
+        startingSlotIndex: undefined,
+        benchIndex: winner.squad.length,
         assignedPosition: player.position,
         condition: {
           state: 'FIT',
@@ -617,6 +679,9 @@ function finalizeAuctionItem(room: GameRoom) {
 
   // Transition to next player after 3.5 seconds
   setTimeout(() => {
+    if (room.managers.every(m => m.squad.length >= 18)) {
+      room.managers.forEach(autoFillManagerLineup);
+    }
     advanceAuction(room);
   }, 3500);
 }
@@ -1554,6 +1619,7 @@ wss.on('connection', (ws) => {
             bot.confirmedTeam = true;
           }
 
+          room.managers.forEach(autoFillManagerLineup);
           room.phase = 'team_management';
           broadcastRoom(room.code);
           break;
@@ -1593,9 +1659,9 @@ wss.on('connection', (ws) => {
           // Check category maximum for manager's formation
           const currentPl = room.auction.currentPlayer;
           if (currentPl) {
-            const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+            const limits = getFormationSquadCategoryLimits(manager.formation);
             const inCat = manager.squad.filter(s => s.player.category === currentPl.category).length;
-            if (inCat >= config.categoryRequirements[currentPl.category].max) {
+            if (inCat >= limits[currentPl.category]) {
               ws.send(JSON.stringify({ type: 'ERROR', message: `Maximum ${currentPl.category} limit reached for ${manager.formation}.` }));
               return;
             }
@@ -1634,9 +1700,9 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Insufficient budget for secret bid.');
             return;
           }
-          const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+          const limits = getFormationSquadCategoryLimits(manager.formation);
           const inCat = manager.squad.filter(s => s.player.category === currentPl.category).length;
-          if (inCat >= config.categoryRequirements[currentPl.category].max) {
+          if (inCat >= limits[currentPl.category]) {
             sendSocketError(ws, `Maximum ${currentPl.category} limit reached for ${manager.formation}.`);
             return;
           }
