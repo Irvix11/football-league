@@ -563,6 +563,25 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
               </button>
             </div>
 
+            {room.transferOffers.filter(o => o.toManagerId === managerId && o.status === 'pending').length > 0 && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                <div className="text-[10px] uppercase tracking-wider font-black text-amber-400">Incoming Offers</div>
+                {room.transferOffers.filter(o => o.toManagerId === managerId && o.status === 'pending').map((offer) => (
+                  <div key={offer.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                    <div className="text-xs text-slate-200 font-semibold">
+                      {offer.fromManagerName} offers <span className="text-emerald-400">{offer.offeredPlayerName}</span>
+                      {offer.offeredCash > 0 && <span className="text-amber-300"> + £{offer.offeredCash}M</span>}
+                      {' '}for <span className="text-sky-300">{offer.requestedPlayerName}</span>.
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <button type="button" onClick={() => onRespondTransfer(offer.id, true)} className="py-2 rounded-lg bg-emerald-400 text-slate-950 text-[11px] font-black uppercase">Accept</button>
+                      <button type="button" onClick={() => onRespondTransfer(offer.id, false)} className="py-2 rounded-lg bg-slate-800 text-slate-200 text-[11px] font-black uppercase">Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <form onSubmit={handleSendTransfer} className="space-y-4 text-left">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
