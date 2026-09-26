@@ -558,10 +558,17 @@ export function simulateMatch(
 
   // Helper to add event
   const pushEvent = (event: Omit<MatchEvent, 'id' | 'currentScore'>) => {
+    const actor = event.playerCoordinates?.find(p => p.id === event.playerId);
+    const isChance = ['shot', 'shot_saved', 'shot_missed', 'shot_blocked', 'goal'].includes(event.type);
+    const inferredChance = isChance
+      ? Number(Math.max(5, Math.min(100, (actor?.overall || 70) * 0.72 + Math.abs(event.momentum || 0) * 0.08)).toFixed(1))
+      : undefined;
+
     events.push({
       ...event,
       id: `ev-${events.length + 1}-${event.minute}-${event.second || 0}`,
       currentScore: { home: homeScore, away: awayScore },
+      chanceQuality: event.chanceQuality ?? inferredChance,
     });
   };
 
