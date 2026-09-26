@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { GameRoom, Formation, TacticalStyle, TacticalMentality, SquadPlayerEntry, TeamTactics, TeamRoles, Player } from '../types/football';
-import { FORMATIONS_CONFIG, validateSquadFormation, calculatePositionFit } from '../constants/formations';
+import { GameRoom, Formation, TacticalStyle, TacticalMentality, SquadPlayerEntry, TeamTactics, TeamRoles, Player, Position } from '../types/football';
+import { FORMATIONS_CONFIG, validateSquadFormation, calculatePositionFit, getPositionCategory } from '../constants/formations';
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerCard } from './PlayerCard';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
@@ -83,8 +83,65 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
   ];
 }
 
+const ALL_POSITIONS: Position[] = [
+  'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
+];
+
+function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF' | 'MID' | 'ATT'): Position {
+  const candidates = ALL_POSITIONS.filter((p) => getPositionCategory(p) === category);
+  return [...candidates].sort(
+    (a, b) =>
+      calculatePositionFit(entry.player.position, entry.player.alternatePositions, b) -
+      calculatePositionFit(entry.player.position, entry.player.alternatePositions, a)
+  )[0] || entry.player.position;
+}
+
+function normalizeBenchForFormation(squad: SquadPlayerEntry[], formation: Formation): SquadPlayerEntry[] {
+  const limits = {
+    ...FORMATIONS_CONFIG[formation],
+  };
+  const target = {
+    GK: 0, DEF: 0, MID: 0, ATT: 0,
+  } as Record<'GK' | 'DEF' | 'MID' | 'ATT', number>;
+
+  // Start with the exact XI assignments.
+  for (const entry of squad.filter((e) => e.isStarting)) {
+    const position = entry.assignedPosition || entry.player.position;
+    target[getPositionCategory(position)] += 1;
+  }
+
+  const squadLimits = ((): Record<'GK' | 'DEF' | 'MID' | 'ATT', number> => {
+    const slots = limits.slots;
+    const counts = { GK: 0, DEF: 0, MID: 0, ATT: 0 } as Record<'GK' | 'DEF' | 'MID' | 'ATT', number>;
+    for (const slot of slots) counts[slot.category] += 1;
+    return { GK: counts.GK + 1, DEF: counts.DEF + 2, MID: counts.MID + 2, ATT: counts.ATT + 2 };
+  })();
+
+  const bench = squad.filter((e) => !e.isStarting).map((entry) => ({ ...entry }));
+  for (const entry of bench) {
+    const current = getPositionCategory(entry.assignedPosition || entry.player.position);
+    if (target[current] < squadLimits[current]) {
+      target[current] += 1;
+      continue;
+    }
+    const available = (['GK','DEF','MID','ATT'] as const).filter((cat) => target[cat] < squadLimits[cat]);
+    if (available.length) {
+      const best = [...available].sort(
+        (a,b) => calculatePositionFit(entry.player.position, entry.player.alternatePositions, bestPositionForCategory(entry,b))
+                - calculatePositionFit(entry.player.position, entry.player.alternatePositions, bestPositionForCategory(entry,a))
+      )[0];
+      entry.assignedPosition = bestPositionForCategory(entry, best);
+      target[best] += 1;
+    }
+  }
+
+  return [...squad.filter((e) => e.isStarting), ...bench.map((entry,index) => ({
+    ...entry, benchIndex: index,
+  }))];
+}
+
 function reassignStartersToFormation(squad: SquadPlayerEntry[], newFormation: Formation): SquadPlayerEntry[] {
-  return autoFillBestLineup(squad, newFormation);
+  return normalizeBenchForFormation(autoFillBestLineup(squad, newFormation), newFormation);
 }
 
 export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
@@ -206,6 +263,30 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     setSelectedSlotIndex(null);
     setSelectedBenchIndex(null);
     setInspectedPlayer(null);
+  };
+
+  const handlePositionChange = (playerId: string, position: Position) => {
+    const entry = currentManager.squad.find((s) => s.player.id === playerId);
+    if (!entry) return;
+
+    // Do not silently turn a GK into an outfield player or vice versa.
+    const currentCategory = getPositionCategory(entry.assignedPosition || entry.player.position);
+    const nextCategory = getPositionCategory(position);
+    if ((currentCategory === 'GK') !== (nextCategory === 'GK')) {
+      setActionError('Goalkeepers can only be assigned to GK.');
+      return;
+    }
+
+    const updated = currentManager.squad.map((s) =>
+      s.player.id === playerId ? { ...s, assignedPosition: position } : s
+    );
+    const checked = validateSquadFormation(currentManager.formation, updated);
+    if (!checked.isValid) {
+      setActionError(checked.errors.join(' '));
+      return;
+    }
+    setActionError(null);
+    onUpdateLineup(updated);
   };
 
   const confirmedCount = room.managers.filter((m) => m.confirmedTeam || m.isBot).length;
@@ -422,6 +503,26 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   </button>
                 </div>
                 <PlayerCard player={inspectedPlayer.entry.player} size="sm" />
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">PLAY AS</span>
+                    <span className="font-mono font-black text-emerald-400">
+                      {inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}
+                    </span>
+                  </div>
+                  <select
+                    value={inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}
+                    onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)}
+                    className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-bold text-white"
+                  >
+                    {ALL_POSITIONS.map((pos) => (
+                      <option key={pos} value={pos}>{pos}</option>
+                    ))}
+                  </select>
+                  <div className="mt-2 text-[10px] text-slate-500">
+                    Primary: {inspectedPlayer.entry.player.position} · Alternate: {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'} · OVR: {inspectedPlayer.entry.player.overall}
+                  </div>
+                </div>
               </div>
             )}
 
