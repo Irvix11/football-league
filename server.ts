@@ -1708,7 +1708,20 @@ wss.on('connection', (ws) => {
           const { room } = auth;
 
           const targetMatchday = Number(matchday || room.currentMatchday);
+          if (!Number.isInteger(targetMatchday) || targetMatchday < 1 || targetMatchday > room.totalMatchdays) {
+            sendSocketError(ws, 'Invalid matchday.');
+            return;
+          }
+          if (targetMatchday !== room.currentMatchday) {
+            sendSocketError(ws, 'Simulate the current matchday before advancing.');
+            return;
+          }
+
           const currentFixtures = room.fixtures.filter(f => f.matchday === targetMatchday && !f.played);
+          if (!currentFixtures.length) {
+            sendSocketError(ws, 'This matchday is already complete.');
+            return;
+          }
 
           for (const fix of currentFixtures) {
             const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
@@ -1735,7 +1748,13 @@ wss.on('connection', (ws) => {
           if (!auth || auth.room.phase !== 'league') return;
           const { room } = auth;
 
-          room.currentMatchday = Math.min(room.totalMatchdays, Number(nextMatchday || room.currentMatchday + 1));
+          const requestedNext = Number(nextMatchday || room.currentMatchday + 1);
+          const currentPlayed = room.fixtures.filter(f => f.matchday === room.currentMatchday).every(f => f.played);
+          if (!currentPlayed) {
+            sendSocketError(ws, 'Finish the current matchday before proceeding.');
+            return;
+          }
+          room.currentMatchday = Math.min(room.totalMatchdays, Math.max(room.currentMatchday, requestedNext));
           broadcastRoom(room.code);
           break;
         }
@@ -1751,6 +1770,12 @@ wss.on('connection', (ws) => {
             return;
           }
 
+          const seasonComplete = room.currentMatchday >= room.totalMatchdays &&
+            room.fixtures.filter(f => f.matchday === room.totalMatchdays).every(f => f.played);
+          if (!seasonComplete) {
+            sendSocketError(ws, 'Complete every matchday before viewing season awards.');
+            return;
+          }
           room.phase = 'season_end';
           room.awards = calculateSeasonAwards(room);
           broadcastRoom(room.code);
