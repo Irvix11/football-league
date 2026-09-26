@@ -1,4 +1,4 @@
-import { Formation, Position, PositionCategory, SquadPlayerEntry } from '../types/football';
+import { Formation, Position, PositionCategory, SquadPlayerEntry } from '../types/football.js';
 
 export interface FormationSlot {
   index: number;
