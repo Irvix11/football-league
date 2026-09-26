@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Formation, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType } from '../types/football';
+import { Formation, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
 import { FORMATIONS_CONFIG } from '../constants/formations';
 import { Trophy, Users, Shield, Zap, Sparkles, Play, ArrowRight, Activity } from 'lucide-react';
 
@@ -38,6 +38,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [auctionMode, setAuctionMode] = useState<AuctionMode>('Classic');
   const [transfersEnabled, setTransfersEnabled] = useState(true);
   const [leagueType, setLeagueType] = useState<LeagueType>('Round Robin');
+  const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>('League');
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +52,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       auctionMode,
       transfersEnabled,
       leagueType,
+      competitionFormat,
     });
   };
 
@@ -398,6 +400,28 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     <option value="Round Robin">Round Robin (1x)</option>
                     <option value="Double Round Robin">Double Round Robin (2x)</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Competition Format */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Competition
+                  </label>
+                  <select
+                    value={competitionFormat}
+                    onChange={(e) => setCompetitionFormat(e.target.value as CompetitionFormat)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
+                  >
+                    <option value="League">League Season</option>
+                    <option value="Knockout">Knockout Cup</option>
+                  </select>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-400 flex items-center">
+                  {competitionFormat === 'Knockout'
+                    ? 'Bracket: Round of 16 → Quarter-Final → Semi-Final → Final, with extra time and penalties.'
+                    : 'Round-robin standings with matchdays and a final league table.'}
                 </div>
               </div>
 
