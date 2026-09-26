@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { GameRoom } from '../types/football';
 import confetti from 'canvas-confetti';
 import { Trophy, Award, Flame, Star, Shield, RotateCcw, Home } from 'lucide-react';
