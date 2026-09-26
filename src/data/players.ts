@@ -1,5 +1,5 @@
-import { Player, PlayerPool, Era } from '../types/football';
-import { FC27_IMPORTED_PLAYERS } from './fc27.generated';
+import { Player, PlayerPool, Era } from '../types/football.js';
+import { FC27_IMPORTED_PLAYERS } from './fc27.generated.js';
 
 /**
  * Curated development player dataset.
