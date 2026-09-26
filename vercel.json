@@ -6,7 +6,6 @@
   "framework": "vite",
   "functions": {
     "api/ws.ts": {
-      "runtime": "nodejs22.x",
       "maxDuration": 300,
       "includeFiles": "{server.ts,src/**}"
     }
