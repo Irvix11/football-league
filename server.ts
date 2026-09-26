@@ -20,7 +20,7 @@ import {
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football';
-import { FORMATIONS_CONFIG, calculateTeamOverall } from './src/constants/formations';
+import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation } from './src/constants/formations';
 import { VERIFIED_FC_PLAYERS, getPlayersForLobby } from './src/data/players';
 import { simulateMatch } from './src/engine/simulation';
 
@@ -911,6 +911,53 @@ function advanceKnockoutRound(room: GameRoom) {
   room.currentMatchday = currentRound.matchday + 1;
 }
 
+function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadPlayerEntry[], formation: Formation, tactics: any, roles: any) {
+  if (!Array.isArray(incomingSquad) || incomingSquad.length !== manager.squad.length) return null;
+
+  const existingById = new Map(manager.squad.map(entry => [entry.player.id, entry]));
+  const incomingIds = incomingSquad.map(entry => entry?.player?.id);
+  if (new Set(incomingIds).size !== existingById.size || incomingIds.some(id => !existingById.has(id))) {
+    return null;
+  }
+
+  const sanitizedSquad = incomingSquad.map(entry => {
+    const existing = existingById.get(entry.player.id)!;
+    return {
+      ...existing,
+      isStarting: Boolean(entry.isStarting),
+      startingSlotIndex: entry.isStarting ? entry.startingSlotIndex : undefined,
+      benchIndex: entry.isStarting ? undefined : entry.benchIndex,
+      assignedPosition: entry.assignedPosition || existing.assignedPosition,
+      // Conditions are server-authoritative and cannot be cleared by the client.
+      condition: existing.condition,
+    };
+  });
+
+  if (!validateSquadFormation(formation, sanitizedSquad).isValid) return null;
+
+  const allowedStyles = new Set(['Balanced', 'Possession', 'High Press', 'Counter Attack', 'Low Block', 'Long Ball', 'Aggressive']);
+  const allowedMentalities = new Set(['Balanced', 'Defensive', 'Aggressive']);
+  const nextTactics = tactics ? {
+    style: allowedStyles.has(tactics.style) ? tactics.style : manager.tactics.style,
+    mentality: allowedMentalities.has(tactics.mentality) ? tactics.mentality : manager.tactics.mentality || 'Balanced',
+    defensiveLine: Math.max(1, Math.min(100, Number(tactics.defensiveLine ?? manager.tactics.defensiveLine))),
+    pressingIntensity: Math.max(1, Math.min(100, Number(tactics.pressingIntensity ?? manager.tactics.pressingIntensity))),
+    attackWidth: Math.max(1, Math.min(100, Number(tactics.attackWidth ?? manager.tactics.attackWidth))),
+    tempo: Math.max(1, Math.min(100, Number(tactics.tempo ?? manager.tactics.tempo))),
+    risk: Math.max(1, Math.min(100, Number(tactics.risk ?? manager.tactics.risk))),
+  } : manager.tactics;
+
+  const ownedIds = new Set(manager.squad.map(s => s.player.id));
+  const nextRoles = roles ? {
+    captainId: ownedIds.has(roles.captainId) ? roles.captainId : manager.roles.captainId,
+    penaltyTakerId: ownedIds.has(roles.penaltyTakerId) ? roles.penaltyTakerId : manager.roles.penaltyTakerId,
+    freeKickTakerId: ownedIds.has(roles.freeKickTakerId) ? roles.freeKickTakerId : manager.roles.freeKickTakerId,
+    cornerTakerId: ownedIds.has(roles.cornerTakerId) ? roles.cornerTakerId : manager.roles.cornerTakerId,
+  } : manager.roles;
+
+  return { squad: sanitizedSquad, tactics: nextTactics, roles: nextRoles };
+}
+
 function executeTransferOffer(room: GameRoom, offer: TransferOffer): boolean {
   const sender = room.managers.find(m => m.id === offer.fromManagerId);
   const target = room.managers.find(m => m.id === offer.toManagerId);
@@ -1556,10 +1603,24 @@ wss.on('connection', (ws) => {
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
-            if (squad) manager.squad = squad;
-            if (formation) manager.formation = formation;
-            if (tactics) manager.tactics = tactics;
-            if (roles) manager.roles = roles;
+            const nextFormation = formation || manager.formation;
+            const sanitized = squad
+              ? validateAndSanitizeLineupUpdate(manager, squad, nextFormation, tactics, roles)
+              : {
+                  squad: manager.squad,
+                  tactics: tactics || manager.tactics,
+                  roles: roles || manager.roles,
+                };
+
+            if (!sanitized) {
+              sendSocketError(ws, 'Invalid lineup. You can only rearrange players you already own and must keep a valid formation.');
+              return;
+            }
+
+            manager.squad = sanitized.squad;
+            manager.formation = nextFormation;
+            manager.tactics = sanitized.tactics;
+            manager.roles = sanitized.roles;
             manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
             broadcastRoom(room.code);
           }
