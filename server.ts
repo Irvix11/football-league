@@ -16,6 +16,7 @@ import {
   TransferOffer, 
   SeasonAwards,
   TeamRoles,
+  PositionCategory,
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football';
