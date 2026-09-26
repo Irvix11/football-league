@@ -495,8 +495,9 @@ function fillAuctionSquadTo18(room: GameRoom) {
 // 5) only after every manager has a complete XI do we auction the seven bench spots.
 function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
   const ordered: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
+
+  // Phase 1: complete the exact starting-XI quota for everyone.
   for (const category of ordered) {
-    const target = getFormationStarterCategoryCounts(room.managers[0]?.formation || '4-3-3')[category];
     const needsCategory = room.managers.some(manager => {
       const required = getFormationStarterCategoryCounts(manager.formation)[category];
       const count = manager.squad.filter(entry => entry.player.category === category).length;
@@ -505,18 +506,19 @@ function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
     if (needsCategory) return category;
   }
 
-  // Starting XI is complete for everyone. Fill the seven bench spots afterwards.
-  const benchNeeds = room.managers.some(manager => {
-    const limits = getFormationSquadCategoryLimits(manager.formation);
-    return manager.squad.length < 18 &&
-      (['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]).some(category =>
-        manager.squad.filter(entry => entry.player.category === category).length < limits[category]
-      );
-  });
+  // Phase 2: once every XI is complete, fill the seven bench spots
+  // in the same strict GK -> DEF -> MID -> ATT order.
+  for (const category of ordered) {
+    const needsBenchCategory = room.managers.some(manager => {
+      const limit = getFormationSquadCategoryLimits(manager.formation)[category];
+      const count = manager.squad.filter(entry => entry.player.category === category).length;
+      return count < limit;
+    });
+    if (needsBenchCategory) return category;
+  }
 
-  return benchNeeds ? null : null;
+  return null;
 }
-
 // Centralized Auction Engine
 function advanceAuction(room: GameRoom) {
   if (room.phase !== 'auction') return;
