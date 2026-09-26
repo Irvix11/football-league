@@ -67,7 +67,7 @@ for (const row of parseCsv(await readInput(input))) {
   const overall = num(row, 'overall', 'overall_rating', 'OVR', 'Overall');
   if (!Number.isFinite(overall) || overall < threshold) continue;
 
-  const rawPosition = clean(get(row, 'position', 'POS', 'Position'));
+  const rawPosition = clean(get(row, 'position', 'primary_position', 'POS', 'Position'));
   const position = normalizePosition(rawPosition);
   const name = clean(get(row, 'name', 'short_name', 'PLAYER', 'Player'));
   const id = clean(get(row, 'id', 'player_id', 'PLAYER_ID', 'Player ID')) ||
@@ -109,9 +109,9 @@ for (const row of parseCsv(await readInput(input))) {
 
   const player = {
     id, name,
-    club: clean(get(row, 'club', 'TEAM', 'Team')),
-    league: clean(get(row, 'league', 'League')),
-    nationality: clean(get(row, 'nationality', 'NAT', 'Nation')),
+    club: clean(get(row, 'club', 'club_name', 'TEAM', 'Team')),
+    league: clean(get(row, 'league', 'league_name', 'League')),
+    nationality: clean(get(row, 'nationality', 'nationality_name', 'NAT', 'Nation')),
     position,
     category: category(position),
     overall,
