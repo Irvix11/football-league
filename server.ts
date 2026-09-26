@@ -1189,7 +1189,11 @@ wss.on('connection', (ws) => {
             auctionMode: requestedSettings?.auctionMode || 'Classic',
             transfersEnabled: requestedSettings?.transfersEnabled !== false,
             leagueType: requestedSettings?.leagueType || 'Round Robin',
-            competitionFormat: requestedSettings?.competitionFormat === 'Knockout' ? 'Knockout' : 'League',
+            competitionFormat: requestedSettings?.competitionFormat === 'Knockout'
+              ? 'Knockout'
+              : requestedSettings?.competitionFormat === 'Champions Cup'
+              ? 'Champions Cup'
+              : 'League',
           };
 
           const room: GameRoom = {
