@@ -528,6 +528,14 @@ export function simulateMatch(
   const awayEffective = awayOvr * 0.30 + awayPower.overall * 0.70;
   const diff = (homeEffective + homeAdvantage) - awayEffective;
   let momentum = Number((diff * 3).toFixed(1));
+  const homeWeight = Math.exp(Math.max(-8, Math.min(8, (homeEffective + homeAdvantage) / 12)));
+  const awayWeight = Math.exp(Math.max(-8, Math.min(8, awayEffective / 12)));
+  const rawDraw = Math.max(0.16, Math.min(0.34, 0.28 - Math.abs(diff) * 0.002));
+  const nonDraw = 1 - rawDraw;
+  const totalWeight = homeWeight + awayWeight;
+  const homeWinProbability = Number((nonDraw * (homeWeight / totalWeight) * 100).toFixed(1));
+  const awayWinProbability = Number((nonDraw * (awayWeight / totalWeight) * 100).toFixed(1));
+  const drawProbability = Number((100 - homeWinProbability - awayWinProbability).toFixed(1));
 
   // Helper getters for players
   const getPlayersByCat = (starters: SquadPlayerEntry[], cat: 'GK' | 'DEF' | 'MID' | 'ATT') =>
@@ -1033,6 +1041,7 @@ export function simulateMatch(
               homeStarters, awayStarters, homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, goalNetX, goalNetY, currentPossession, shooter.player.id, defGK.player.id, 'celebrating'
             ),
+            chanceQuality: Number((goalProbability * 100).toFixed(1)),
             momentum: isHome ? Math.min(100, momentum + 30) : Math.max(-100, momentum - 30),
           });
 
