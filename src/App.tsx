@@ -33,6 +33,7 @@ export default function App() {
     confirmTeam,
     runMatchday,
     runKnockoutMatch,
+    completeKnockoutMatch,
     proceedToNextMatchday,
     finishSeason,
     isSimulating,
@@ -191,6 +192,7 @@ export default function App() {
           room={room}
           managerId={managerId}
           onRunMatch={runKnockoutMatch}
+          onMatchComplete={completeKnockoutMatch}
           isSimulating={isSimulating}
           simulationError={simulationError}
         />
