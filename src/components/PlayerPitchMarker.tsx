@@ -173,6 +173,15 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
         </span>
       </div>
 
+      <div className="mt-1 max-w-[92px] text-center">
+        <div className="truncate text-[9px] sm:text-[10px] font-black text-white drop-shadow-md">
+          {player.name}
+        </div>
+        <div className="text-[8px] text-slate-400 font-mono">
+          {player.club}
+        </div>
+      </div>
+
       {/* Position Fit indicator if fit is provided */}
       {typeof fitPercentage === 'number' && fitPercentage < 80 && (
         <span className="absolute -bottom-3 text-[8px] font-mono font-bold text-amber-400 bg-slate-950/90 px-1 rounded border border-slate-800">
