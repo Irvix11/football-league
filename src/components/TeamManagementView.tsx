@@ -958,6 +958,24 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
             </button>
           </div>
           <PlayerCard player={inspectedPlayer.entry.player} size="md" />
+          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">PLAY AS</span>
+              <span className="font-mono font-black text-emerald-400">
+                {inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}
+              </span>
+            </div>
+            <select
+              value={inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}
+              onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)}
+              className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2.5 text-sm font-bold text-white"
+            >
+              {ALL_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+            </select>
+            <div className="mt-2 text-[10px] text-slate-500">
+              OVR {inspectedPlayer.entry.player.overall} · Primary {inspectedPlayer.entry.player.position} · Alt {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'}
+            </div>
+          </div>
         </div>
       )}
 
