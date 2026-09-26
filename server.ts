@@ -2112,4 +2112,6 @@ export default server;
 
 // Vercel's zero-config Node server runtime uses this root server.ts directly.
 // The listener is also required for local development.
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
