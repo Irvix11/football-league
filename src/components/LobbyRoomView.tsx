@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GameRoom, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType } from '../types/football';
+import { GameRoom, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
 import { Crown, Bot, CheckCircle2, Clock, Copy, Check, Settings, UserX, Play, LogOut, ShieldAlert, User } from 'lucide-react';
 
 interface LobbyRoomViewProps {
@@ -35,6 +35,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
   const [auctionMode, setAuctionMode] = useState<AuctionMode>(room.settings.auctionMode);
   const [transfersEnabled, setTransfersEnabled] = useState(room.settings.transfersEnabled);
   const [leagueType, setLeagueType] = useState<LeagueType>(room.settings.leagueType);
+  const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>(room.settings.competitionFormat || 'League');
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(room.code);
@@ -52,6 +53,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
       auctionMode,
       transfersEnabled,
       leagueType,
+      competitionFormat,
     });
     setShowEditSettings(false);
   };
