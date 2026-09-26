@@ -901,6 +901,7 @@ wss.on('connection', (ws) => {
             auctionMode: requestedSettings?.auctionMode || 'Classic',
             transfersEnabled: requestedSettings?.transfersEnabled !== false,
             leagueType: requestedSettings?.leagueType || 'Round Robin',
+            competitionFormat: requestedSettings?.competitionFormat === 'Knockout' ? 'Knockout' : 'League',
           };
 
           const room: GameRoom = {
