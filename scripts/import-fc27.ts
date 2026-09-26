@@ -71,7 +71,7 @@ for (const row of parseCsv(fs.readFileSync(input, 'utf8'))) {
         pas: num(row, 'goalkeeping_kicking', 'KIC', 'kicking'),
         dri: num(row, 'goalkeeping_reflexes', 'REF', 'reflexes'),
         def: num(row, 'goalkeeping_speed', 'SPD', 'speed'),
-        phy: num(row, 'goalkeeping_positioning', 'POS', 'positioning'),
+        phy: num(row, 'goalkeeping_positioning', 'positioning'),
       }
     : {
         pac: num(row, 'pace', 'PAC'),
