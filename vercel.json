@@ -8,10 +8,7 @@
     "api/ws.ts": {
       "runtime": "nodejs24.x",
       "maxDuration": 300,
-      "includeFiles": [
-        "server.ts",
-        "src/**"
-      ]
+      "includeFiles": "{server.ts,src/**}"
     }
   }
 }
