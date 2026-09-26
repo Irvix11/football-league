@@ -345,7 +345,28 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
                       £{b}M
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setStartingBudget(Math.max(100, Math.min(5000, startingBudget)))}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                      ![200, 300, 500, 750, 1000].includes(startingBudget)
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    CUSTOM
+                  </button>
                 </div>
+                <input
+                  type="number"
+                  min="100"
+                  max="5000"
+                  step="50"
+                  value={startingBudget}
+                  onChange={(e) => setStartingBudget(Math.max(100, Math.min(5000, Number(e.target.value) || 100)))}
+                  className="mt-2 w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs font-mono outline-none"
+                  placeholder="Custom budget (£M)"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
