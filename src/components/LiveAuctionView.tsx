@@ -104,6 +104,25 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     ATT: currentManager.squad.filter((s) => s.player.category === 'ATT').length,
   };
 
+  const auctionOrder = ['GK', 'DEF', 'MID', 'ATT'] as const;
+  const activeCategory = player?.category || null;
+  const activeCategoryIndex = activeCategory ? auctionOrder.indexOf(activeCategory) : -1;
+  const categoryLabel = activeCategory === 'GK'
+    ? 'GOALKEEPERS'
+    : activeCategory === 'DEF'
+      ? 'DEFENDERS'
+      : activeCategory === 'MID'
+        ? 'MIDFIELDERS'
+        : activeCategory === 'ATT'
+          ? 'ATTACKERS'
+          : 'AUCTION';
+  const activeReadyManagers = activeCategory
+    ? room.managers.filter((m) => {
+        const required = getFormationStarterCategoryCounts(m.formation)[activeCategory];
+        return m.squad.filter((s) => s.player.category === activeCategory).length >= required;
+      }).length
+    : 0;
+
   const isCategoryFull = player
     ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
     : false;
@@ -465,6 +484,29 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             </div>
           </div>
 
+          {/* Current auction lot — kept beside the pitch so mobile users can always see who is being auctioned */}
+          {player && (
+            <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30 shadow-lg">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black">NOW AUCTIONING</div>
+                  <div className="text-base font-display font-black text-white truncate">{player.name}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    {player.position} · {player.overall} OVR · {player.club}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">CURRENT</div>
+                  <div className="font-mono font-black text-emerald-400">£{auction.currentBid}M</div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[9px] uppercase tracking-wider font-black">
+                <span className="text-emerald-400">{categoryLabel}</span>
+                <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} ready</span>
+              </div>
+            </div>
+          )}
+
           {/* Mini Pitch with authentic player markers */}
           <PitchGraphic aspectRatio="vertical" className="p-3 shadow-xl">
             {formationConfig.slots.map((slot, index) => {
@@ -488,6 +530,29 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
               );
             })}
           </PitchGraphic>
+
+          {/* Live auction order */}
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider font-black text-slate-300">Auction order</span>
+              <span className="text-[9px] text-slate-500 font-mono">GK → DEF → MID → ATT</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {auctionOrder.map((cat) => {
+                const done = room.managers.every((m) => {
+                  const target = getFormationStarterCategoryCounts(m.formation)[cat];
+                  return m.squad.filter((s) => s.player.category === cat).length >= target;
+                });
+                const active = cat === activeCategory;
+                return (
+                  <div key={cat} className={`rounded-lg px-1 py-2 text-center border ${active ? 'bg-emerald-500/15 border-emerald-500/50' : done ? 'bg-slate-900 border-slate-700' : 'bg-slate-950 border-slate-800'}`}>
+                    <div className={`text-[9px] font-black ${active ? 'text-emerald-400' : 'text-slate-400'}`}>{cat}</div>
+                    <div className="text-[8px] text-slate-600 mt-0.5">{active ? 'LIVE' : done ? 'DONE' : 'WAIT'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Formation-aware auction quota indicator */}
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
