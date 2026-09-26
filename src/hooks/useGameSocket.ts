@@ -53,7 +53,7 @@ export function useGameSocket() {
 
     intentionalCloseRef.current = false;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -159,36 +159,8 @@ export function useGameSocket() {
   const startSoloGame = useCallback(async (managerName: string, formation: Formation = '4-3-3') => {
     try {
       setErrorMessage(null);
-      // Fast REST creation to ensure instant, reliable setup
-      const res = await fetch('/api/solo-game', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ managerName: managerName.trim(), formation }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.room && data.managerId) {
-          setRoom(data.room);
-          setManagerId(data.managerId);
-          saveSession({
-            roomCode: data.roomCode,
-            managerId: data.managerId,
-            managerName: managerName.trim(),
-          });
-
-          // Join socket if open
-          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            socketRef.current.send(JSON.stringify({
-              type: 'JOIN_LOBBY',
-              payload: { roomCode: data.roomCode, managerName: managerName.trim(), reconnectId: data.managerId }
-            }));
-          }
-          return;
-        }
-      }
-
-      // Fallback via WebSocket
+      // Create the solo room through the same WebSocket Function that owns
+      // the room state. This avoids split in-memory state between Vercel Functions.
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         socketRef.current.send(JSON.stringify({
           type: 'START_SOLO_GAME',
