@@ -1344,13 +1344,22 @@ wss.on('connection', (ws) => {
           }
 
           const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
+          const human = room.managers.find(m => !m.isBot);
+          const bot = room.managers.find(m => m.isBot);
 
-          for (const manager of room.managers) {
-            manager.squad = generateValidSquad(manager.formation, pool);
-            manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
-            if (manager.isBot) {
-              manager.confirmedTeam = true;
-            }
+          if (human) {
+            human.squad = generateValidSquad(human.formation, pool);
+            human.teamOverall = calculateTeamOverall(human.formation, human.squad);
+            human.roles = setupManagerRoles(human.squad.filter(s => s.isStarting));
+          }
+
+          if (bot) {
+            const ownedByHuman = new Set((human?.squad || []).map(s => s.player.id));
+            const botPool = pool.filter(p => !ownedByHuman.has(p.id));
+            bot.squad = generateValidSquad(bot.formation, botPool.length >= 18 ? botPool : pool);
+            bot.teamOverall = calculateTeamOverall(bot.formation, bot.squad);
+            bot.roles = setupManagerRoles(bot.squad.filter(s => s.isStarting));
+            bot.confirmedTeam = true;
           }
 
           room.phase = 'team_management';
