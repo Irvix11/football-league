@@ -133,7 +133,7 @@ const output = path.resolve('src/data/fc27.generated.ts');
 fs.writeFileSync(output, `import type { Player } from '../types/football';
 
 export const FC27_IMPORTED_PLAYERS: Player[] = [
-  ${players.join(',\\n  ')}
+  ${players.join(',\n  ')}
 ];
 `);
 
