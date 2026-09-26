@@ -565,8 +565,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-slate-300 space-y-1">
                 <div className="font-bold text-emerald-400">Solo Play Highlights:</div>
                 <div>· Smart AI Opponent with custom squad & tactics</div>
-                <div>· Instant 18-player squads generated for both teams</div>
-                <div>· Direct access to Live Matchdays & Tactical HQ</div>
+                <div>· Choose START AUCTION or SKIP AUCTION explicitly</div>
+                <div>· Live 2D match engine with tactical AI</div>
               </div>
 
               {validationError && (
