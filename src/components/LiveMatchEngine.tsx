@@ -439,7 +439,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const endSecs = (lastEv.minute || 90) * 60 + (lastEv.second || 0);
       setDisplaySeconds(endSecs);
       if (soundEnabled) sound.playWhistle();
-      if (onMatchComplete) onMatchComplete(fixture.id);
+      // Keep the match engine mounted at full-time. The CONTINUE button
+      // below is the single action that advances the server-side competition.
     }
   };
 
