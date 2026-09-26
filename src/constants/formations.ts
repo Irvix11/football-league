@@ -24,6 +24,34 @@ export interface FormationConfig {
   slots: FormationSlot[];
 }
 
+
+// The formation controls the exact 11-player starting XI. The seven substitutes are
+// distributed as 1 GK + 2 DEF + 2 MID + 2 ATT so the 18-player auction squad remains
+// balanced while still respecting the chosen formation's starting slots.
+export const BENCH_CATEGORY_ALLOCATION: Record<PositionCategory, number> = {
+  GK: 1,
+  DEF: 2,
+  MID: 2,
+  ATT: 2,
+};
+
+export function getFormationStarterCategoryCounts(formation: Formation): Record<PositionCategory, number> {
+  const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
+  const counts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
+  for (const slot of config.slots) counts[slot.category] += 1;
+  return counts;
+}
+
+export function getFormationSquadCategoryLimits(formation: Formation): Record<PositionCategory, number> {
+  const starters = getFormationStarterCategoryCounts(formation);
+  return {
+    GK: starters.GK + BENCH_CATEGORY_ALLOCATION.GK,
+    DEF: starters.DEF + BENCH_CATEGORY_ALLOCATION.DEF,
+    MID: starters.MID + BENCH_CATEGORY_ALLOCATION.MID,
+    ATT: starters.ATT + BENCH_CATEGORY_ALLOCATION.ATT,
+  };
+}
+
 export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
   '4-3-3': {
     id: '4-3-3',
@@ -261,27 +289,36 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   const errors: string[] = [];
   const missingPositions: string[] = [];
 
-  // Check 11 starters
+  // A completed team is always 11 starters + 7 substitutes.
   if (starters.length !== 11) {
     errors.push(`Need exactly 11 starters (currently ${starters.length})`);
   }
-
+  if (substitutes.length !== 7) {
+    errors.push(`Need exactly 7 substitutes (currently ${substitutes.length})`);
+  }
   if (squad.length > 18) {
     errors.push(`Squad cannot exceed 18 players (currently ${squad.length})`);
   }
 
-  // Check required positions and category maximums in formation
+  // Formation slots are exact for the starting XI. Extra players are bench players
+  // and are limited by the fixed 7-player bench allocation above.
+  const starterRequirements = getFormationStarterCategoryCounts(formation);
+  const squadLimits = getFormationSquadCategoryLimits(formation);
   for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
-    const requiredMin = config.categoryRequirements[cat].min;
+    const requiredStarters = starterRequirements[cat];
     const currentStarters = starterCategoryCounts[cat] || 0;
     const totalCategory = categoryCounts[cat] || 0;
-    if (totalCategory > config.categoryRequirements[cat].max) {
-      errors.push(`Too many ${cat} players for ${formation} (maximum ${config.categoryRequirements[cat].max})`);
+    if (totalCategory > squadLimits[cat]) {
+      errors.push(`Too many ${cat} players for ${formation} (maximum ${squadLimits[cat]} in the 18-player squad)`);
     }
-    if (currentStarters < requiredMin) {
-      const diff = requiredMin - currentStarters;
-      missingPositions.push(`${diff} ${cat}`);
-      errors.push(`Missing ${diff} starting ${cat}`);
+    if (currentStarters !== requiredStarters) {
+      const diff = requiredStarters - currentStarters;
+      if (diff > 0) {
+        missingPositions.push(`${diff} ${cat}`);
+        errors.push(`Missing ${diff} starting ${cat}`);
+      } else {
+        errors.push(`Too many starting ${cat} players for ${formation} (need exactly ${requiredStarters})`);
+      }
     }
   }
 
