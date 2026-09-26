@@ -1600,6 +1600,7 @@ wss.on('connection', (ws) => {
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth) return;
           const { room } = auth;
+          if (!['team_management', 'league', 'knockout'].includes(room.phase)) return;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
