@@ -238,6 +238,26 @@ function calculateInitialTable(managers: Manager[]): LeagueTableRow[] {
   }));
 }
 
+function removeManagerFromRoom(room: GameRoom, managerId: string) {
+  room.managers = room.managers.filter(manager => manager.id !== managerId);
+  const secretBids = blindSecretBids.get(room.code);
+  if (secretBids) {
+    delete secretBids[managerId];
+    if (Object.keys(secretBids).length === 0) blindSecretBids.delete(room.code);
+  }
+  if (room.auction?.highestBidderId === managerId) {
+    room.auction.highestBidderId = null;
+    room.auction.highestBidderName = null;
+  }
+  room.leagueTable = room.leagueTable.filter(row => row.managerId !== managerId);
+  if (room.currentMatchId) {
+    const currentFixture = room.fixtures.find(fixture => fixture.id === room.currentMatchId);
+    if (currentFixture && (currentFixture.homeManagerId === managerId || currentFixture.awayManagerId === managerId)) {
+      room.currentMatchId = undefined;
+    }
+  }
+}
+
 function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTableRow[] {
   if (!fixture.played || fixture.homeScore === undefined || fixture.awayScore === undefined) return table;
 
