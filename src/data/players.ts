@@ -1,4 +1,4 @@
-import { Player, PlayerPool, Era } from '../types/football';
+import { Player, PlayerPool, Era } from '../types/football';\nimport { FC27_IMPORTED_PLAYERS } from './fc27.generated';
 
 /**
  * Curated development player dataset.
@@ -1142,7 +1142,7 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  * Filter players by pool and era.
  */
 export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
-  let list = [...DEVELOPMENT_PLAYERS];
+  const source = FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS;\n  let list = [...source];
 
   if (era === 'Current') {
     list = list.filter(p => !p.id.startsWith('fc-icon') || p.id === 'fc-icon-08' || p.id === 'fc-icon-09');
@@ -1163,7 +1163,7 @@ export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
   // If filtered pool is too small to build full 18-man squads, backfill with top Global players
   if (list.length < 36) {
     const existingIds = new Set(list.map(p => p.id));
-    const globalFill = DEVELOPMENT_PLAYERS.filter(p => !existingIds.has(p.id));
+    const globalFill = source.filter(p => !existingIds.has(p.id));
     list = [...list, ...globalFill];
   }
 
