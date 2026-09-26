@@ -182,6 +182,17 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
         </div>
       </div>
 
+      {/* Player name + position/OVR are always visible on the squad pitch. */}
+      <div className="mt-1 max-w-[88px] rounded-md bg-slate-950/90 border border-slate-800/90 px-1.5 py-0.5 text-center shadow-md">
+        <div className="text-[8px] sm:text-[9px] font-black text-slate-100 truncate leading-tight">
+          {player.name}
+        </div>
+        <div className="flex items-center justify-center gap-1 text-[7px] sm:text-[8px] font-mono font-bold">
+          <span className="text-slate-500">{positionLabel}</span>
+          <span className="text-emerald-400">{player.overall} OVR</span>
+        </div>
+      </div>
+
       {/* Position Fit indicator if fit is provided */}
       {typeof fitPercentage === 'number' && fitPercentage < 80 && (
         <span className="absolute -bottom-3 text-[8px] font-mono font-bold text-amber-400 bg-slate-950/90 px-1 rounded border border-slate-800">
