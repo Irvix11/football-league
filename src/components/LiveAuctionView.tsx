@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameRoom, Player } from '../types/football';
-import { FORMATIONS_CONFIG } from '../constants/formations';
+import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from '../constants/formations';
 import { PlayerCard } from './PlayerCard';
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
@@ -80,6 +80,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   if (!currentManager) return null;
 
   const formationConfig = FORMATIONS_CONFIG[currentManager.formation] || FORMATIONS_CONFIG['4-3-3'];
+  const starterCategoryCounts = getFormationStarterCategoryCounts(currentManager.formation);
+  const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
   // Current category counts for user's squad
   const categoryCounts = {
@@ -90,7 +92,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   };
 
   const isCategoryFull = player
-    ? categoryCounts[player.category] >= formationConfig.categoryRequirements[player.category].max
+    ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
     : false;
 
   const minNextBid = auction.highestBidderId ? auction.currentBid + 1 : auction.currentBid;
@@ -429,12 +431,30 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             })}
           </PitchGraphic>
 
+          {/* Formation-aware auction quota indicator */}
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[10px] text-slate-400">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-black uppercase tracking-wider text-slate-300">Formation {currentManager.formation}</span>
+              <span className="font-mono text-emerald-400">XI targets are exact</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['GK', 'DEF', 'MID', 'ATT'] as const).map((cat) => (
+                <div key={cat} className="text-center">
+                  <div className="text-slate-500">{cat}</div>
+                  <div className="font-mono font-black text-slate-200">{starterCategoryCounts[cat]}</div>
+                  <div className="text-[9px] text-slate-600">XI · {squadCategoryLimits[cat]} squad</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Category Quotas Indicator */}
           <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
             {(['GK', 'DEF', 'MID', 'ATT'] as const).map((cat) => {
-              const req = formationConfig.categoryRequirements[cat];
+              const starterReq = starterCategoryCounts[cat];
+              const squadMax = squadCategoryLimits[cat];
               const count = categoryCounts[cat];
-              const isMax = count >= req.max;
+              const isMax = count >= squadMax;
               return (
                 <div
                   key={cat}
@@ -448,7 +468,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                 >
                   <div className="text-[10px] text-slate-400 font-semibold">{cat}</div>
                   <div className="font-mono font-bold text-xs mt-0.5">
-                    {count}/{req.max}
+                    {count}/{squadMax}
                   </div>
                 </div>
               );
