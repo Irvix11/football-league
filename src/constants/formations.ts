@@ -266,10 +266,18 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
     errors.push(`Need exactly 11 starters (currently ${starters.length})`);
   }
 
-  // Check required positions in formation
+  if (squad.length > 18) {
+    errors.push(`Squad cannot exceed 18 players (currently ${squad.length})`);
+  }
+
+  // Check required positions and category maximums in formation
   for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
     const requiredMin = config.categoryRequirements[cat].min;
     const currentStarters = starterCategoryCounts[cat] || 0;
+    const totalCategory = categoryCounts[cat] || 0;
+    if (totalCategory > config.categoryRequirements[cat].max) {
+      errors.push(`Too many ${cat} players for ${formation} (maximum ${config.categoryRequirements[cat].max})`);
+    }
     if (currentStarters < requiredMin) {
       const diff = requiredMin - currentStarters;
       missingPositions.push(`${diff} ${cat}`);
