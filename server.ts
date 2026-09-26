@@ -860,8 +860,8 @@ wss.on('connection', (ws) => {
             isHost: true,
             isBot: false,
             isReady: true,
-            budget: settings.startingBudget,
-            initialBudget: settings.startingBudget,
+            budget: Math.max(100, Math.min(5000, Number.isFinite(Number(requestedSettings?.startingBudget)) ? Number(requestedSettings.startingBudget) : 500)),
+            initialBudget: Math.max(100, Math.min(5000, Number.isFinite(Number(requestedSettings?.startingBudget)) ? Number(requestedSettings.startingBudget) : 500)),
             formation: soloFormation || '4-3-3',
             tactics: {
               style: 'Balanced',
