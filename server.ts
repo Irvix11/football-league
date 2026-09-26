@@ -1621,6 +1621,24 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        // --- LEAVE ROOM ---
+        case 'LEAVE_ROOM': {
+          const { roomCode, managerId } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room, session } = auth;
+          const sockets = roomSockets.get(room.code);
+          if (sockets) sockets.delete(ws);
+          socketToRoom.delete(ws);
+
+          if (session.managerId !== room.hostId && room.phase === 'lobby') {
+            room.managers = room.managers.filter(m => m.id !== session.managerId);
+            room.leagueTable = calculateInitialTable(room.managers);
+            broadcastRoom(room.code);
+          }
+          break;
+        }
+
         // --- 16. REMATCH / RESET ---
         case 'REMATCH': {
           const { roomCode } = payload;
