@@ -234,6 +234,7 @@ export interface MatchEvent {
   playerCoordinates?: LivePlayerPosition[];
   momentum: number; // -100 (away dominance) to +100 (home dominance)
   currentScore?: { home: number; away: number };
+  chanceQuality?: number; // 0-100 game-model chance quality
 }
 
 export interface TeamMatchStats {
@@ -303,6 +304,11 @@ export interface Fixture {
   awayPenaltyScore?: number;
   penaltyShootout?: PenaltyKickResult[];
   winnerManagerId?: string;
+  homeWinProbability?: number;
+  drawProbability?: number;
+  awayWinProbability?: number;
+  homeStrength?: number;
+  awayStrength?: number;
 }
 
 export interface KnockoutRound {
