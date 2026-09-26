@@ -383,6 +383,35 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                    League Type
+                  </label>
+                  <select
+                    value={leagueType}
+                    onChange={(e) => setLeagueType(e.target.value as LeagueType)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
+                  >
+                    <option value="Round Robin">Round Robin</option>
+                    <option value="Double Round Robin">Double Round Robin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Competition
+                  </label>
+                  <select
+                    value={competitionFormat}
+                    onChange={(e) => setCompetitionFormat(e.target.value as CompetitionFormat)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
+                  >
+                    <option value="League">League Season</option>
+                    <option value="Knockout">Knockout Cup</option>
+                  </select>
+                </div>
+              </div>
+
               <button
                 type="submit"
                 className="w-full py-3.5 mt-4 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95"
