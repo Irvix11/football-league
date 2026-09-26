@@ -2110,4 +2110,8 @@ async function startServer() {
 // Vercel Node runtime captures this server and upgrades WebSocket connections.
 export default server;
 
-startServer();
+// Vercel imports this module from /api/ws.ts. The Function runtime owns the
+// HTTP server lifecycle there, so only start a listener outside Vercel.
+if (!process.env.VERCEL) {
+  startServer();
+}
