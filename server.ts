@@ -832,7 +832,7 @@ wss.on('connection', (ws) => {
         // --- 1. CREATE LOBBY & SOLO GAME ---
         case 'START_SOLO_GAME':
         case 'CREATE_LOBBY': {
-          const { managerName, isSolo, soloFormation } = payload;
+          const { managerName, isSolo, soloFormation, settings: requestedSettings } = payload;
 
           if (type === 'START_SOLO_GAME' || isSolo) {
             const result = createSoloGameRoom(managerName || 'Solo Manager', soloFormation);
@@ -860,8 +860,8 @@ wss.on('connection', (ws) => {
             isHost: true,
             isBot: false,
             isReady: true,
-            budget: 500,
-            initialBudget: 500,
+            budget: settings.startingBudget,
+            initialBudget: settings.startingBudget,
             formation: soloFormation || '4-3-3',
             tactics: {
               style: 'Balanced',
@@ -891,14 +891,16 @@ wss.on('connection', (ws) => {
             managers.push(botManager);
           }
 
+          const requestedMaxManagers = Number(requestedSettings?.maxManagers ?? 8);
+          const requestedBudget = Number(requestedSettings?.startingBudget ?? 500);
           const settings: LobbySettings = {
-            maxManagers: isSolo ? 2 : 8,
-            startingBudget: 500,
-            playerPool: 'Global',
-            era: 'Current',
-            auctionMode: 'Classic',
-            transfersEnabled: true,
-            leagueType: 'Round Robin',
+            maxManagers: Math.max(2, Math.min(16, Number.isFinite(requestedMaxManagers) ? requestedMaxManagers : 8)),
+            startingBudget: Math.max(100, Math.min(5000, Number.isFinite(requestedBudget) ? requestedBudget : 500)),
+            playerPool: requestedSettings?.playerPool || 'Global',
+            era: requestedSettings?.era || 'Current',
+            auctionMode: requestedSettings?.auctionMode || 'Classic',
+            transfersEnabled: requestedSettings?.transfersEnabled !== false,
+            leagueType: requestedSettings?.leagueType || 'Round Robin',
           };
 
           const room: GameRoom = {
