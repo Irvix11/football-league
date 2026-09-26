@@ -312,17 +312,13 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
     errors.push(`Squad cannot exceed 18 players (currently ${squad.length})`);
   }
 
-  // Formation slots are exact for the starting XI. Extra players are bench players
-  // and are limited by the fixed 7-player bench allocation above.
+  // Formation slots are exact for the starting XI. The seven bench places are
+  // flexible, so a manager is not blocked merely because their bench contains
+  // more players from one category. Auction rules handle acquisition limits.
   const starterRequirements = getFormationStarterCategoryCounts(formation);
-  const squadLimits = getFormationSquadCategoryLimits(formation);
   for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
     const requiredStarters = starterRequirements[cat];
     const currentStarters = starterCategoryCounts[cat] || 0;
-    const totalCategory = categoryCounts[cat] || 0;
-    if (totalCategory > squadLimits[cat]) {
-      errors.push(`Too many ${cat} players for ${formation} (maximum ${squadLimits[cat]} in the 18-player squad)`);
-    }
     if (currentStarters !== requiredStarters) {
       const diff = requiredStarters - currentStarters;
       if (diff > 0) {
