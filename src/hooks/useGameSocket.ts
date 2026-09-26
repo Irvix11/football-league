@@ -99,6 +99,7 @@ export function useGameSocket() {
 
           case 'ROOM_UPDATE':
             setRoom(newRoom);
+            setIsSimulating(false);
             break;
 
           case 'BLIND_BID_CONFIRMED':
