@@ -216,6 +216,14 @@ export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
   },
 };
 
+export function getEntryAssignedPosition(entry: SquadPlayerEntry): Position {
+  return entry.assignedPosition || entry.player.position;
+}
+
+export function getEntryAssignedCategory(entry: SquadPlayerEntry): PositionCategory {
+  return getPositionCategory(getEntryAssignedPosition(entry));
+}
+
 export function getPositionCategory(pos: Position): PositionCategory {
   if (pos === 'GK') return 'GK';
   if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'DEF';
@@ -279,7 +287,11 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   const starterCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
 
   for (const entry of squad) {
-    const cat = entry.player.category;
+    // Squad limits follow the position the manager has assigned the player to,
+    // not the player's primary database category. This allows legitimate
+    // positional switches (including alternate positions and tactical
+    // out-of-position use) without making formation changes impossible.
+    const cat = getEntryAssignedCategory(entry);
     categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
     if (entry.isStarting) {
       starterCategoryCounts[cat] = (starterCategoryCounts[cat] || 0) + 1;
@@ -363,7 +375,7 @@ export function calculatePositionalRatings(formation: Formation, squad: SquadPla
     }
 
     const effectiveRating = starter.player.overall * (0.6 + 0.4 * (fit / 100)) * conditionMultiplier;
-    const cat = starter.player.category;
+    const cat = slot?.category || getEntryAssignedCategory(starter);
     categoryScores[cat].push(effectiveRating);
   }
 
