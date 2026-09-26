@@ -121,7 +121,7 @@ export default function App() {
         </>
       )}
 
-      {/* Global Audio Toggle (Floating in bottom-right corner) */
+      {/* Global Audio Toggle (Floating in bottom-right corner) */}
       <button
         onClick={toggleSound}
         title={soundEnabled ? 'Mute Audio' : 'Enable Audio'}
