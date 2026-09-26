@@ -241,7 +241,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-slate-400">League Format</span>
-                <span className="font-semibold text-slate-200">{room.settings.leagueType}</span>
+                <span className="font-semibold text-slate-200">{room.settings.competitionFormat === 'Knockout' ? 'Knockout Cup' : room.settings.leagueType}</span>
               </div>
             </div>
           </div>
