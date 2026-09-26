@@ -326,6 +326,30 @@ export function useGameSocket() {
     } catch {}
   }, [room, managerId, send]);
 
+  const runKnockoutMatch = useCallback(async (fixtureId: string) => {
+    if (!room) return;
+    setSimulationError(null);
+    const payload = { roomCode: room.code, fixtureId };
+
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('RUN_KNOCKOUT_MATCH', payload);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/room/run-knockout-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to run knockout match');
+      if (data.room) setRoom(data.room);
+    } catch (err: any) {
+      setSimulationError(err.message || 'Error running knockout match.');
+    }
+  }, [room, send]);
+
   const runMatchday = useCallback(async (matchday: number) => {
     if (!room) return;
     setIsSimulating(true);
@@ -457,6 +481,7 @@ export function useGameSocket() {
     updateLineup,
     confirmTeam,
     runMatchday,
+    runKnockoutMatch,
     proceedToNextMatchday,
     finishSeason,
     proposeTransfer,
