@@ -203,12 +203,12 @@ export function useGameSocket() {
     }
   }, [saveSession]);
 
-  const createLobby = useCallback((managerName: string, isSolo = false, soloFormation?: Formation) => {
+  const createLobby = useCallback((managerName: string, isSolo = false, soloFormation?: Formation, settings?: Partial<LobbySettings>) => {
     if (isSolo) {
       startSoloGame(managerName, soloFormation || '4-3-3');
       return;
     }
-    send('CREATE_LOBBY', { managerName, isSolo: false });
+    send('CREATE_LOBBY', { managerName, isSolo: false, settings });
   }, [send, startSoloGame]);
 
   const joinLobby = useCallback((roomCode: string, managerName: string) => {
