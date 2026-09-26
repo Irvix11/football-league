@@ -3,6 +3,7 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { 
   GameRoom, 
   Manager, 
@@ -34,6 +35,30 @@ const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
 
+function sendSocketError(ws: WebSocket, message: string) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'ERROR', message }));
+  }
+}
+
+function authorizeSocket(ws: WebSocket, roomCode: string, managerId?: string) {
+  const session = socketToRoom.get(ws);
+  const normalizedCode = String(roomCode || '').toUpperCase();
+  if (!session || session.roomCode !== normalizedCode) return null;
+  if (managerId && session.managerId !== managerId) return null;
+  const room = rooms.get(normalizedCode);
+  if (!room) return null;
+  return { room, session };
+}
+
+function isRoomHost(room: GameRoom, managerId: string) {
+  return room.hostId === managerId;
+}
+
+function newId(prefix: string) {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
 // Secret bids for blind auction: roomCode -> Record<managerId, number>
 const blindSecretBids = new Map<string, Record<string, number>>();
 
@@ -59,6 +84,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
     }
   }
 
+  room.updatedAt = Date.now();
   const payload = JSON.stringify({
     type: 'ROOM_UPDATE',
     room: sanitizedRoom,
@@ -74,10 +100,13 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
 function generateLobbyCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return rooms.has(code) ? generateLobbyCode() : code;
+  do {
+    code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(crypto.randomInt(0, chars.length));
+    }
+  } while (rooms.has(code));
+  return code;
 }
 
 // Bot Names
@@ -456,9 +485,10 @@ function finalizeAuctionItem(room: GameRoom) {
     let highestBid = 0;
     let winningManagers: string[] = [];
 
-    for (const [mId, bAmount] of Object.entries(bids)) {
-      const manager = room.managers.find(m => m.id === mId);
-      if (manager && manager.budget >= bAmount && bAmount >= player.startingPrice) {
+    for (const manager of room.managers) {
+      const bAmount = bids[manager.id];
+      if (bAmount === undefined) continue;
+      if (manager.budget >= bAmount && bAmount >= player.startingPrice) {
         if (bAmount > highestBid) {
           highestBid = bAmount;
           winningManagers = [mId];
@@ -675,8 +705,8 @@ function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
 // Authoritative Solo Play setup engine
 function createSoloGameRoom(managerName: string, soloFormation?: Formation): { roomCode: string; managerId: string; room: GameRoom } {
   const roomCode = generateLobbyCode();
-  const hostId = `mgr-${Date.now()}`;
-  const botId = `bot-${Date.now()}-0`;
+  const hostId = newId('mgr');
+  const botId = newId('bot');
 
   const humanFormation: Formation = soloFormation || '4-3-3';
   const botFormations: Formation[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2'];
@@ -684,20 +714,15 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
 
   const pool = getPlayersForLobby('Global', 'Current');
 
-  // Generate 18-player squad for Human Manager
-  const humanSquad = generateValidSquad(humanFormation, pool);
-  const humanOvr = calculateTeamOverall(humanFormation, humanSquad);
-  const humanStarters = humanSquad.filter(s => s.isStarting);
-  const humanRoles = setupManagerRoles(humanStarters);
-
-  // Generate 18-player squad for Bot Manager (using distinct players if pool permits)
-  const humanPlayerIds = new Set(humanSquad.map(s => s.player.id));
-  const remainingPool = pool.filter(p => !humanPlayerIds.has(p.id));
-  const botPool = remainingPool.length >= 18 ? remainingPool : pool;
-  const botSquad = generateValidSquad(botFormation, botPool);
-  const botOvr = calculateTeamOverall(botFormation, botSquad);
-  const botStarters = botSquad.filter(s => s.isStarting);
-  const botRoles = setupManagerRoles(botStarters);
+  // Solo starts at formation selection. The player explicitly chooses START AUCTION
+  // or SKIP AUCTION; squads are generated only when Skip Auction is requested or
+  // when the auction itself finishes.
+  const humanSquad: SquadPlayerEntry[] = [];
+  const botSquad: SquadPlayerEntry[] = [];
+  const humanOvr = 0;
+  const botOvr = 0;
+  const humanRoles = setupManagerRoles([]);
+  const botRoles = setupManagerRoles([]);
 
   const humanManager: Manager = {
     id: hostId,
@@ -765,7 +790,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     code: roomCode,
     hostId,
     settings,
-    phase: 'team_management', // Directly transition to Team Management, bypassing auction & skipping lobby!
+    phase: 'formation_select',
     managers,
     auction: {
       currentPlayerIndex: 0,
@@ -781,9 +806,9 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
       soldPrice: 0,
       auctionHistory: [],
     },
-    fixtures,
+    fixtures: [],
     currentMatchday: 1,
-    totalMatchdays: Math.max(...fixtures.map(f => f.matchday), 2),
+    totalMatchdays: 1,
     leagueTable: calculateInitialTable(managers),
     transferOffers: [],
     awards: null,
@@ -933,11 +958,9 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          // Handle reconnection if manager already exists
-          let existing = reconnectId ? room.managers.find(m => m.id === reconnectId) : null;
-          if (!existing && managerName) {
-            existing = room.managers.find(m => m.name.toLowerCase() === managerName.trim().toLowerCase());
-          }
+          // Reconnection is identity-based. Never allow a name alone to impersonate
+          // an existing manager.
+          const existing = reconnectId ? room.managers.find(m => m.id === reconnectId) : null;
 
           if (existing) {
             if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
@@ -964,12 +987,20 @@ wss.on('connection', (ws) => {
           }
 
           // Check duplicate name
-          if (room.managers.some(m => m.name.toLowerCase() === managerName?.trim().toLowerCase())) {
+          if (!managerName?.trim()) {
+            sendSocketError(ws, 'Manager name is required.');
+            return;
+          }
+          if (managerName.trim().length > 24) {
+            sendSocketError(ws, 'Manager name must be 24 characters or fewer.');
+            return;
+          }
+          if (room.managers.some(m => m.name.toLowerCase() === managerName.trim().toLowerCase())) {
             ws.send(JSON.stringify({ type: 'ERROR', message: 'A manager with this name is already in the lobby.' }));
             return;
           }
 
-          const newManagerId = `mgr-${Date.now()}`;
+          const newManagerId = newId('mgr');
           const newManager: Manager = {
             id: newManagerId,
             name: managerName || `Manager ${room.managers.length + 1}`,
@@ -1019,10 +1050,21 @@ wss.on('connection', (ws) => {
         // --- 3. LOBBY SETTINGS UPDATE ---
         case 'UPDATE_SETTINGS': {
           const { roomCode, settings } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'lobby') return;
-
-          room.settings = { ...room.settings, ...settings };
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'lobby') return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the lobby host can change settings.');
+            return;
+          }
+          const safeMaxManagers = Math.max(2, Math.min(16, Number(settings?.maxManagers ?? room.settings.maxManagers)));
+          const safeBudget = Math.max(100, Math.min(5000, Number(settings?.startingBudget ?? room.settings.startingBudget)));
+          room.settings = {
+            ...room.settings,
+            ...settings,
+            maxManagers: safeMaxManagers,
+            startingBudget: safeBudget,
+          };
           // Apply budget adjustments to managers
           for (const m of room.managers) {
             m.budget = room.settings.startingBudget;
@@ -1035,8 +1077,9 @@ wss.on('connection', (ws) => {
         // --- 4. READY TOGGLE ---
         case 'TOGGLE_READY': {
           const { roomCode, managerId } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
@@ -1049,10 +1092,26 @@ wss.on('connection', (ws) => {
         // --- 5. KICK PLAYER ---
         case 'KICK_PLAYER': {
           const { roomCode, targetManagerId } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'lobby') return;
-
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'lobby') return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId) || targetManagerId === room.hostId) {
+            sendSocketError(ws, 'Only the host can kick another manager.');
+            return;
+          }
           room.managers = room.managers.filter(m => m.id !== targetManagerId);
+          const sockets = roomSockets.get(room.code);
+          if (sockets) {
+            for (const client of [...sockets]) {
+              const info = socketToRoom.get(client);
+              if (info?.managerId === targetManagerId) {
+                sockets.delete(client);
+                socketToRoom.delete(client);
+                if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ type: 'ERROR', message: 'You were removed from the lobby by the host.' }));
+                client.close();
+              }
+            }
+          }
           room.leagueTable = calculateInitialTable(room.managers);
           broadcastRoom(room.code);
           break;
@@ -1061,8 +1120,13 @@ wss.on('connection', (ws) => {
         // --- 6. START GAME (Move to formation select or auction) ---
         case 'START_GAME': {
           const { roomCode } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth) return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can start the game.');
+            return;
+          }
 
           // All players must be ready
           const allReady = room.managers.every(m => m.isReady || m.isBot);
@@ -1079,8 +1143,9 @@ wss.on('connection', (ws) => {
         // --- 7. FORMATION SELECT ---
         case 'SELECT_FORMATION': {
           const { roomCode, managerId, formation } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
@@ -1093,9 +1158,13 @@ wss.on('connection', (ws) => {
         // --- 8. BEGIN AUCTION ---
         case 'BEGIN_AUCTION': {
           const { roomCode } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
-
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth) return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId) || room.phase !== 'formation_select') {
+            sendSocketError(ws, 'Only the host can start the auction from formation setup.');
+            return;
+          }
           room.phase = 'auction';
           advanceAuction(room);
           break;
@@ -1104,8 +1173,14 @@ wss.on('connection', (ws) => {
         // --- 9. SKIP AUCTION (Solo Play only) ---
         case 'SKIP_AUCTION_SOLO': {
           const { roomCode } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth) return;
+          const { room, session } = auth;
+          const isSolo = room.managers.length === 2 && room.managers.some(m => m.isBot);
+          if (!isSolo || !isRoomHost(room, session.managerId) || room.phase !== 'formation_select') {
+            sendSocketError(ws, 'Skip Auction is available only in Solo Play during formation setup.');
+            return;
+          }
 
           const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
 
@@ -1125,19 +1200,25 @@ wss.on('connection', (ws) => {
         // --- 10. AUCTION BID (Classic & Quick) ---
         case 'AUCTION_BID': {
           const { roomCode, managerId, amount } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'auction') return;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth || auth.room.phase !== 'auction') return;
+          const { room } = auth;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
 
+          const bidAmount = Number(amount);
+          if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
+            sendSocketError(ws, 'Invalid bid amount.');
+            return;
+          }
           const minBid = room.auction.highestBidderId ? room.auction.currentBid + 1 : room.auction.currentBid;
-          if (amount < minBid) {
+          if (bidAmount < minBid) {
             ws.send(JSON.stringify({ type: 'ERROR', message: `Bid must be at least £${minBid}M.` }));
             return;
           }
 
-          if (manager.budget < amount) {
+          if (manager.budget < bidAmount) {
             ws.send(JSON.stringify({ type: 'ERROR', message: `Insufficient budget (£${manager.budget}M available).` }));
             return;
           }
@@ -1158,7 +1239,7 @@ wss.on('connection', (ws) => {
             }
           }
 
-          room.auction.currentBid = amount;
+          room.auction.currentBid = bidAmount;
           room.auction.highestBidderId = manager.id;
           room.auction.highestBidderName = manager.name;
 
@@ -1174,14 +1255,27 @@ wss.on('connection', (ws) => {
         // --- 11. BLIND AUCTION SECRET BID SUBMISSION ---
         case 'SUBMIT_BLIND_BID': {
           const { roomCode, managerId, amount } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'auction') return;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth || auth.room.phase !== 'auction') return;
+          const { room } = auth;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
 
-          if (manager.budget < amount) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Insufficient budget for secret bid.' }));
+          const bidAmount = Number(amount);
+          const currentPl = room.auction.currentPlayer;
+          if (!currentPl || !Number.isFinite(bidAmount) || bidAmount < currentPl.startingPrice) {
+            sendSocketError(ws, 'Secret bid must meet the player starting price.');
+            return;
+          }
+          if (manager.budget < bidAmount) {
+            sendSocketError(ws, 'Insufficient budget for secret bid.');
+            return;
+          }
+          const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+          const inCat = manager.squad.filter(s => s.player.category === currentPl.category).length;
+          if (inCat >= config.categoryRequirements[currentPl.category].max) {
+            sendSocketError(ws, `Maximum ${currentPl.category} limit reached for ${manager.formation}.`);
             return;
           }
 
@@ -1190,12 +1284,12 @@ wss.on('connection', (ws) => {
             secretMap = {};
             blindSecretBids.set(roomCode, secretMap);
           }
-          secretMap[managerId] = amount;
+          secretMap[managerId] = bidAmount;
 
           // Acknowledge submission privately to this client only
           ws.send(JSON.stringify({
             type: 'BLIND_BID_CONFIRMED',
-            amount,
+            amount: bidAmount,
           }));
 
           // Broadcast public update that this manager submitted (without amount)
@@ -1206,8 +1300,9 @@ wss.on('connection', (ws) => {
         // --- 12. TEAM MANAGEMENT & TACTICS ---
         case 'UPDATE_LINEUP': {
           const { roomCode, managerId, squad, formation, tactics, roles } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
@@ -1224,8 +1319,9 @@ wss.on('connection', (ws) => {
         // --- 13. CONFIRM TEAM ---
         case 'CONFIRM_TEAM': {
           const { roomCode, managerId } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
@@ -1256,8 +1352,9 @@ wss.on('connection', (ws) => {
         // --- 14. SIMULATE MATCHDAY ---
         case 'RUN_MATCHDAY': {
           const { roomCode, matchday } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'league') return;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'league') return;
+          const { room } = auth;
 
           const targetMatchday = Number(matchday || room.currentMatchday);
           const currentFixtures = room.fixtures.filter(f => f.matchday === targetMatchday && !f.played);
@@ -1283,8 +1380,9 @@ wss.on('connection', (ws) => {
         // --- 14b. NEXT MATCHDAY ---
         case 'NEXT_MATCHDAY': {
           const { roomCode, nextMatchday } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'league') return;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'league') return;
+          const { room } = auth;
 
           room.currentMatchday = Math.min(room.totalMatchdays, Number(nextMatchday || room.currentMatchday + 1));
           broadcastRoom(room.code);
@@ -1294,8 +1392,13 @@ wss.on('connection', (ws) => {
         // --- 14c. FINISH SEASON ---
         case 'FINISH_SEASON': {
           const { roomCode } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || room.phase !== 'league') return;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'league') return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can finish the season.');
+            return;
+          }
 
           room.phase = 'season_end';
           room.awards = calculateSeasonAwards(room);
@@ -1306,8 +1409,9 @@ wss.on('connection', (ws) => {
         // --- 15. PROPOSE TRANSFER ---
         case 'PROPOSE_TRANSFER': {
           const { roomCode, offer } = payload;
-          const room = rooms.get(roomCode);
-          if (!room || !room.settings.transfersEnabled) return;
+          const auth = authorizeSocket(ws, roomCode, offer?.fromManagerId);
+          if (!auth || !auth.room.settings.transfersEnabled) return;
+          const { room } = auth;
 
           const newOffer: TransferOffer = {
             id: `tr-${Date.now()}`,
@@ -1363,8 +1467,13 @@ wss.on('connection', (ws) => {
         // --- 16. REMATCH / RESET ---
         case 'REMATCH': {
           const { roomCode } = payload;
-          const room = rooms.get(roomCode);
-          if (!room) return;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth) return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can start a rematch.');
+            return;
+          }
 
           room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
           room.currentMatchday = 1;
