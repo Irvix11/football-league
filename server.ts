@@ -1368,6 +1368,7 @@ wss.on('connection', (ws) => {
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth) return;
           const { room } = auth;
+          if (room.phase !== 'lobby') return;
 
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
