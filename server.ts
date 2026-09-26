@@ -1632,11 +1632,15 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
-          room.currentMatchday = 1;
-          room.leagueTable = calculateInitialTable(room.managers);
           room.awards = null;
-          room.phase = 'league';
+          if (room.settings.competitionFormat === 'Knockout') {
+            initializeKnockout(room);
+          } else {
+            room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
+            room.currentMatchday = 1;
+            room.leagueTable = calculateInitialTable(room.managers);
+            room.phase = 'league';
+          }
 
           broadcastRoom(room.code);
           break;
