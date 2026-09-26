@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GameRoom, Formation, TeamTactics, TeamRoles, SquadPlayerEntry, LobbySettings } from '../types/football';
-import { calculateTeamOverall } from '../constants/formations';
 import { sound } from '../utils/audio';
 
 export interface SavedSession {
@@ -265,20 +264,6 @@ export function useGameSocket() {
 
   const updateLineup = useCallback((squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => {
     if (!room || !managerId) return;
-    setRoom((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        managers: prev.managers.map((m) => m.id === managerId ? {
-          ...m,
-          formation: formation || m.formation,
-          squad: squad || m.squad,
-          tactics: tactics || m.tactics,
-          roles: roles || m.roles,
-          teamOverall: calculateTeamOverall(formation || m.formation, squad || m.squad),
-        } : m),
-      };
-    });
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       send('UPDATE_LINEUP', { roomCode: room.code, managerId, squad, formation, tactics, roles });
     } else {
