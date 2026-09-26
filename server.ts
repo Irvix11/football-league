@@ -1585,7 +1585,7 @@ wss.on('connection', (ws) => {
           // Check if all confirmed
           const allConfirmed = room.managers.every(m => m.confirmedTeam);
           if (allConfirmed) {
-            if (room.settings.competitionFormat === 'Knockout') {
+            if (room.settings.competitionFormat !== 'League') {
               initializeKnockout(room);
             } else {
               room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
@@ -1795,7 +1795,7 @@ wss.on('connection', (ws) => {
           }
 
           room.awards = null;
-          if (room.settings.competitionFormat === 'Knockout') {
+          if (room.settings.competitionFormat !== 'League') {
             initializeKnockout(room);
           } else {
             room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
