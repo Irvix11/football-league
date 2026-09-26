@@ -62,7 +62,7 @@ export function useGameSocket() {
       setErrorMessage(null);
 
       const saved = getSavedSession();
-      if (saved && !managerIdRef.current) {
+      if (saved) {
         ws.send(JSON.stringify({
           type: 'JOIN_LOBBY',
           payload: {
