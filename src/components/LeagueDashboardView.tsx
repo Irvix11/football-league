@@ -14,6 +14,7 @@ interface LeagueDashboardViewProps {
   onProceedNextMatchday?: (nextMatchday: number) => Promise<void> | void;
   onFinishSeason?: () => Promise<void> | void;
   onProposeTransfer: (offer: any) => void;
+  onRespondTransfer: (offerId: string, accept: boolean) => void;
   isSimulating?: boolean;
   simulationError?: string | null;
 }
@@ -25,6 +26,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   onProceedNextMatchday,
   onFinishSeason,
   onProposeTransfer,
+  onRespondTransfer,
   isSimulating = false,
   simulationError = null,
 }) => {
