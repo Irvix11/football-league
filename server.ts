@@ -911,6 +911,34 @@ function advanceKnockoutRound(room: GameRoom) {
   room.currentMatchday = currentRound.matchday + 1;
 }
 
+function executeTransferOffer(room: GameRoom, offer: TransferOffer): boolean {
+  const sender = room.managers.find(m => m.id === offer.fromManagerId);
+  const target = room.managers.find(m => m.id === offer.toManagerId);
+  if (!sender || !target || sender.id === target.id) return false;
+  if (offer.offeredCash < 0 || offer.offeredCash > sender.budget) return false;
+
+  const senderIndex = sender.squad.findIndex(s => s.player.id === offer.offeredPlayerId);
+  const targetIndex = target.squad.findIndex(s => s.player.id === offer.requestedPlayerId);
+  if (senderIndex < 0 || targetIndex < 0) return false;
+
+  const senderPlayer = sender.squad[senderIndex].player;
+  const targetPlayer = target.squad[targetIndex].player;
+  sender.squad[senderIndex] = { ...sender.squad[senderIndex], player: targetPlayer };
+  target.squad[targetIndex] = { ...target.squad[targetIndex], player: senderPlayer };
+
+  sender.budget -= offer.offeredCash;
+  target.budget += offer.offeredCash;
+  sender.teamOverall = calculateTeamOverall(sender.formation, sender.squad);
+  target.teamOverall = calculateTeamOverall(target.formation, target.squad);
+  sender.roles = setupManagerRoles(sender.squad.filter(s => s.isStarting));
+  target.roles = setupManagerRoles(target.squad.filter(s => s.isStarting));
+  return true;
+}
+
+function isTransferWindowOpen(room: GameRoom) {
+  return room.phase === 'league' && room.currentMatchday > 0 && room.currentMatchday % 5 === 0;
+}
+
 // Authoritative Solo Play setup engine
 function createSoloGameRoom(managerName: string, soloFormation?: Formation): { roomCode: string; managerId: string; room: GameRoom } {
   const roomCode = generateLobbyCode();
@@ -1654,60 +1682,85 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        // --- 15. PROPOSE TRANSFER ---
+        // --- 15. TRANSFERS ---
         case 'PROPOSE_TRANSFER': {
           const { roomCode, offer } = payload;
           const auth = authorizeSocket(ws, roomCode, offer?.fromManagerId);
-          if (!auth || !auth.room.settings.transfersEnabled) return;
+          if (!auth) return;
           const { room } = auth;
 
+          if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
+            sendSocketError(ws, 'Transfers are only available every 5 matchdays.');
+            return;
+          }
+
+          const sender = room.managers.find(m => m.id === offer.fromManagerId);
+          const target = room.managers.find(m => m.id === offer.toManagerId);
+          const offeredCash = Number(offer.offeredCash || 0);
+          if (!sender || !target || sender.id === target.id) {
+            sendSocketError(ws, 'Invalid transfer participants.');
+            return;
+          }
+          if (!Number.isFinite(offeredCash) || offeredCash < 0 || offeredCash > sender.budget) {
+            sendSocketError(ws, 'Invalid cash amount.');
+            return;
+          }
+
+          const offeredEntry = sender.squad.find(s => s.player.id === offer.offeredPlayerId);
+          const requestedEntry = target.squad.find(s => s.player.id === offer.requestedPlayerId);
+          if (!offeredEntry || !requestedEntry) {
+            sendSocketError(ws, 'You can only trade players currently owned by the two managers.');
+            return;
+          }
+
           const newOffer: TransferOffer = {
-            id: `tr-${Date.now()}`,
-            ...offer,
+            id: newId('transfer'),
+            fromManagerId: sender.id,
+            fromManagerName: sender.name,
+            toManagerId: target.id,
+            toManagerName: target.name,
+            offeredPlayerId: offeredEntry.player.id,
+            offeredPlayerName: offeredEntry.player.name,
+            requestedPlayerId: requestedEntry.player.id,
+            requestedPlayerName: requestedEntry.player.name,
+            offeredCash,
+            matchday: room.currentMatchday,
             status: 'pending',
             createdAt: Date.now(),
           };
 
-          room.transferOffers.push(newOffer);
-
-          // If target is Bot, auto-evaluate transfer
-          const targetManager = room.managers.find(m => m.id === offer.toManagerId);
-          if (targetManager?.isBot) {
-            const pool = VERIFIED_FC_PLAYERS;
-            const offered = pool.find(p => p.id === offer.offeredPlayerId);
-            const requested = pool.find(p => p.id === offer.requestedPlayerId);
-
-            // Accept if offered overall + cash value >= requested
-            const offeredVal = (offered?.overall || 75) + (offer.offeredCash || 0) * 0.2;
-            const requestedVal = requested?.overall || 80;
-
-            if (offeredVal >= requestedVal) {
-              newOffer.status = 'accepted';
-              // Execute swap
-              const sender = room.managers.find(m => m.id === offer.fromManagerId);
-              if (sender && targetManager) {
-                const sIdx = sender.squad.findIndex(s => s.player.id === offer.offeredPlayerId);
-                const tIdx = targetManager.squad.findIndex(s => s.player.id === offer.requestedPlayerId);
-
-                if (sIdx !== -1 && tIdx !== -1) {
-                  const sPlayer = sender.squad[sIdx];
-                  const tPlayer = targetManager.squad[tIdx];
-
-                  sender.squad[sIdx] = { ...sPlayer, player: tPlayer.player };
-                  targetManager.squad[tIdx] = { ...tPlayer, player: sPlayer.player };
-
-                  sender.budget -= (offer.offeredCash || 0);
-                  targetManager.budget += (offer.offeredCash || 0);
-
-                  sender.teamOverall = calculateTeamOverall(sender.formation, sender.squad);
-                  targetManager.teamOverall = calculateTeamOverall(targetManager.formation, targetManager.squad);
-                }
-              }
-            } else {
-              newOffer.status = 'rejected';
-            }
+          if (target.isBot) {
+            const offeredValue = offeredEntry.player.overall + offeredCash * 0.20;
+            const requestedValue = requestedEntry.player.overall;
+            newOffer.status = offeredValue >= requestedValue ? 'accepted' : 'rejected';
+            if (newOffer.status === 'accepted') executeTransferOffer(room, newOffer);
+            room.transferOffers.push(newOffer);
+          } else {
+            room.transferOffers.push(newOffer);
           }
 
+          broadcastRoom(room.code);
+          break;
+        }
+
+        case 'RESPOND_TRANSFER': {
+          const { roomCode, managerId, offerId, accept } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
+
+          if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
+            sendSocketError(ws, 'Transfers are only available every 5 matchdays.');
+            return;
+          }
+
+          const offer = room.transferOffers.find(o => o.id === offerId && o.status === 'pending');
+          if (!offer || offer.toManagerId !== managerId) {
+            sendSocketError(ws, 'Transfer proposal not found or already resolved.');
+            return;
+          }
+
+          offer.status = accept && executeTransferOffer(room, offer) ? 'accepted' : 'rejected';
           broadcastRoom(room.code);
           break;
         }
