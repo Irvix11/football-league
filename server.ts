@@ -2107,4 +2107,7 @@ async function startServer() {
   });
 }
 
+// Vercel Node runtime captures this server and upgrades WebSocket connections.
+export default server;
+
 startServer();
