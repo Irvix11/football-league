@@ -2,5 +2,16 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "fluid": true,
   "buildCommand": "npm run build:full",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "functions": {
+    "api/ws.ts": {
+      "runtime": "nodejs24.x",
+      "maxDuration": 300,
+      "includeFiles": [
+        "server.ts",
+        "src/**"
+      ]
+    }
+  }
 }
