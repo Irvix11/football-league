@@ -264,89 +264,44 @@ export function useGameSocket() {
 
   const updateLineup = useCallback((squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => {
     if (!room || !managerId) return;
-
-    // Optimistic update keeps formation/tactics controls instant on mobile.
     setRoom((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        managers: prev.managers.map((m) => {
-          if (m.id !== managerId) return m;
-          const nextFormation = formation || m.formation;
-          const nextSquad = squad || m.squad;
-          const nextTactics = tactics || m.tactics;
-          const nextRoles = roles || m.roles;
-          return {
-            ...m,
-            formation: nextFormation,
-            squad: nextSquad,
-            tactics: nextTactics,
-            roles: nextRoles,
-            teamOverall: calculateTeamOverall(nextFormation, nextSquad),
-          };
-        }),
+        managers: prev.managers.map((m) => m.id === managerId ? {
+          ...m,
+          formation: formation || m.formation,
+          squad: squad || m.squad,
+          tactics: tactics || m.tactics,
+          roles: roles || m.roles,
+          teamOverall: calculateTeamOverall(formation || m.formation, squad || m.squad),
+        } : m),
       };
     });
-
-    const payload = { roomCode: room.code, managerId, squad, formation, tactics, roles };
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('UPDATE_LINEUP', payload);
+      send('UPDATE_LINEUP', { roomCode: room.code, managerId, squad, formation, tactics, roles });
     } else {
-      fetch('/api/room/update-lineup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => data?.room && setRoom(data.room))
-        .catch(() => {});
+      setErrorMessage('Connection lost. Reconnect before changing your lineup.');
     }
   }, [room, managerId, send]);
 
   const confirmTeam = useCallback(async () => {
     if (!room || !managerId) return;
     sound.playWhistle();
-    const payload = { roomCode: room.code, managerId };
-
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('CONFIRM_TEAM', payload);
-      return;
+      send('CONFIRM_TEAM', { roomCode: room.code, managerId });
+    } else {
+      setErrorMessage('Connection lost. Reconnect before confirming your team.');
     }
-
-    try {
-      const res = await fetch('/api/room/confirm-team', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.room) setRoom(data.room);
-      }
-    } catch {}
   }, [room, managerId, send]);
 
   const runKnockoutMatch = useCallback(async (fixtureId: string) => {
     if (!room) return;
     setSimulationError(null);
-    const payload = { roomCode: room.code, fixtureId };
-
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('RUN_KNOCKOUT_MATCH', payload);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/room/run-knockout-match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to run knockout match');
-      if (data.room) setRoom(data.room);
-    } catch (err: any) {
-      setSimulationError(err.message || 'Error running knockout match.');
+      send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, fixtureId });
+    } else {
+      setSimulationError('Connection lost. Reconnect before starting the knockout match.');
     }
   }, [room, send]);
 
@@ -355,74 +310,32 @@ export function useGameSocket() {
     setIsSimulating(true);
     setSimulationError(null);
     sound.playWhistle();
-    const payload = { roomCode: room.code, matchday };
-
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('RUN_MATCHDAY', payload);
-      // The authoritative room update will clear the simulation state below.
+      send('RUN_MATCHDAY', { roomCode: room.code, matchday });
       window.setTimeout(() => setIsSimulating(false), 350);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/room/run-matchday', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to simulate matchday');
-      if (data.room) setRoom(data.room);
-    } catch (err: any) {
-      setSimulationError(err.message || 'Error simulating matchday. Please try again.');
-    } finally {
+    } else {
       setIsSimulating(false);
+      setSimulationError('Connection lost. Reconnect before simulating a matchday.');
     }
   }, [room, send]);
 
   const proceedToNextMatchday = useCallback(async (nextMatchday: number) => {
     if (!room) return;
     setSimulationError(null);
-    const payload = { roomCode: room.code, nextMatchday };
-
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('NEXT_MATCHDAY', payload);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/room/next-matchday', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.room) setRoom(data.room);
-    } catch (err: any) {
-      setSimulationError(err.message || 'Error proceeding to next matchday.');
+      send('NEXT_MATCHDAY', { roomCode: room.code, nextMatchday });
+    } else {
+      setSimulationError('Connection lost. Reconnect before advancing the matchday.');
     }
   }, [room, send]);
 
   const finishSeason = useCallback(async () => {
     if (!room) return;
     setSimulationError(null);
-    const payload = { roomCode: room.code };
-
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('FINISH_SEASON', payload);
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/room/finish-season', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.room) setRoom(data.room);
-    } catch (err: any) {
-      setSimulationError(err.message || 'Error finishing season.');
+      send('FINISH_SEASON', { roomCode: room.code });
+    } else {
+      setSimulationError('Connection lost. Reconnect before finishing the season.');
     }
   }, [room, send]);
 
