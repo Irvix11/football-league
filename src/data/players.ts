@@ -5,7 +5,7 @@ import { Player, PlayerPool, Era } from '../types/football';
  * IMPORTANT: this is not a complete FC 27 database. Production imports should use an
  * authorized/officially obtained FC 27 dataset rather than invented or scraped values.
  */
-export const VERIFIED_FC_PLAYERS: Player[] = [
+export const DEVELOPMENT_PLAYERS: Player[] = [
   // --- GOALKEEPERS ---
   {
     id: 'fc-gk-01',
@@ -1142,7 +1142,7 @@ export const VERIFIED_FC_PLAYERS: Player[] = [
  * Filter players by pool and era.
  */
 export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
-  let list = [...VERIFIED_FC_PLAYERS];
+  let list = [...DEVELOPMENT_PLAYERS];
 
   if (era === 'Current') {
     list = list.filter(p => !p.id.startsWith('fc-icon') || p.id === 'fc-icon-08' || p.id === 'fc-icon-09');
@@ -1163,7 +1163,7 @@ export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
   // If filtered pool is too small to build full 18-man squads, backfill with top Global players
   if (list.length < 36) {
     const existingIds = new Set(list.map(p => p.id));
-    const globalFill = VERIFIED_FC_PLAYERS.filter(p => !existingIds.has(p.id));
+    const globalFill = DEVELOPMENT_PLAYERS.filter(p => !existingIds.has(p.id));
     list = [...list, ...globalFill];
   }
 
