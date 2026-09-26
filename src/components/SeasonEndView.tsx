@@ -20,7 +20,7 @@ export const SeasonEndView: React.FC<SeasonEndViewProps> = ({
   const champion = room.leagueTable[0];
   const knockoutChampionId = room.knockoutStage?.championId;
   const knockoutChampionName = room.knockoutStage?.championName;
-  const isKnockout = room.settings.competitionFormat === 'Knockout';
+  const isKnockout = room.settings.competitionFormat !== 'League';
   const isChampion = isKnockout ? knockoutChampionId === managerId : champion?.managerId === managerId;
   const awards = room.awards;
 
