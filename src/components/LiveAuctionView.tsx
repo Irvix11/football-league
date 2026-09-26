@@ -479,7 +479,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             </div>
             <div className="mt-2 h-1.5 rounded-full bg-slate-800 overflow-hidden">
               <div className="h-full bg-emerald-400 transition-all duration-500" style={{
-                width: `${Math.min(100, Math.round((currentManager.squad.filter(s => s.player.category === (auctionStage || player?.category)).length / Math.max(1, starterCategoryCounts[auctionStage || player?.category])) * 100))}%`
+                width: `${Math.min(100, Math.round((currentManager.squad.filter(s => s.player.category === (auctionStage || player?.category || 'GK')).length / Math.max(1, auctionStage ? starterCategoryCounts[auctionStage] : player ? starterCategoryCounts[player.category] : 1)) * 100))}%`
               }} />
             </div>
           </div>
