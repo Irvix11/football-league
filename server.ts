@@ -1921,19 +1921,22 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          for (const fix of currentFixtures) {
-            const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
-            const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+          // Run exactly one fixture per action so its authoritative event
+          // timeline can be watched in the 2D Live Match Engine.
+          const fix = currentFixtures[0];
+          const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+          const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
 
-            if (homeMgr && awayMgr) {
-              const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday);
-              // Update fixture in place
-              Object.assign(fix, result);
-              // Update table
-              room.leagueTable = updateLeagueTable(room.leagueTable, fix);
-            }
+          if (!homeMgr || !awayMgr) {
+            sendSocketError(ws, 'Unable to load both teams for this fixture.');
+            return;
           }
 
+          const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday);
+          Object.assign(fix, result);
+          room.leagueTable = updateLeagueTable(room.leagueTable, fix);
+
+          // Stay in the league phase until every fixture has been watched.
           room.currentMatchday = targetMatchday;
           broadcastRoom(room.code);
           break;
