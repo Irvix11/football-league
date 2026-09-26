@@ -372,6 +372,7 @@ export function useGameSocket() {
     confirmTeam,
     runMatchday,
     runKnockoutMatch,
+    completeKnockoutMatch,
     proceedToNextMatchday,
     finishSeason,
     proposeTransfer,
