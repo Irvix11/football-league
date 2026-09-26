@@ -87,6 +87,14 @@ const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
 
+function allowedPositionsForPlayer(player: Player): Position[] {
+  // GK stays GK; outfield players can be manually deployed anywhere outfield.
+  // Position fit is calculated by the engine, so out-of-position use has a real rating impact.
+  return player.category === 'GK'
+    ? ['GK']
+    : ALL_POSITIONS.filter((position) => position !== 'GK');
+}
+
 function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF' | 'MID' | 'ATT'): Position {
   const candidates = ALL_POSITIONS.filter((p) => getPositionCategory(p) === category);
   return [...candidates].sort(
@@ -96,48 +104,16 @@ function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF'
   )[0] || entry.player.position;
 }
 
-function normalizeBenchForFormation(squad: SquadPlayerEntry[], formation: Formation): SquadPlayerEntry[] {
-  const limits = {
-    ...FORMATIONS_CONFIG[formation],
-  };
-  const target = {
-    GK: 0, DEF: 0, MID: 0, ATT: 0,
-  } as Record<'GK' | 'DEF' | 'MID' | 'ATT', number>;
-
-  // Start with the exact XI assignments.
-  for (const entry of squad.filter((e) => e.isStarting)) {
-    const position = entry.assignedPosition || entry.player.position;
-    target[getPositionCategory(position)] += 1;
-  }
-
-  const squadLimits = ((): Record<'GK' | 'DEF' | 'MID' | 'ATT', number> => {
-    const slots = limits.slots;
-    const counts = { GK: 0, DEF: 0, MID: 0, ATT: 0 } as Record<'GK' | 'DEF' | 'MID' | 'ATT', number>;
-    for (const slot of slots) counts[slot.category] += 1;
-    return { GK: counts.GK + 1, DEF: counts.DEF + 2, MID: counts.MID + 2, ATT: counts.ATT + 2 };
-  })();
-
-  const bench = squad.filter((e) => !e.isStarting).map((entry) => ({ ...entry }));
-  for (const entry of bench) {
-    const current = getPositionCategory(entry.assignedPosition || entry.player.position);
-    if (target[current] < squadLimits[current]) {
-      target[current] += 1;
-      continue;
-    }
-    const available = (['GK','DEF','MID','ATT'] as const).filter((cat) => target[cat] < squadLimits[cat]);
-    if (available.length) {
-      const best = [...available].sort(
-        (a,b) => calculatePositionFit(entry.player.position, entry.player.alternatePositions, bestPositionForCategory(entry,b))
-                - calculatePositionFit(entry.player.position, entry.player.alternatePositions, bestPositionForCategory(entry,a))
-      )[0];
-      entry.assignedPosition = bestPositionForCategory(entry, best);
-      target[best] += 1;
-    }
-  }
-
-  return [...squad.filter((e) => e.isStarting), ...bench.map((entry,index) => ({
-    ...entry, benchIndex: index,
-  }))];
+function normalizeBenchForFormation(squad: SquadPlayerEntry[], _formation: Formation): SquadPlayerEntry[] {
+  // Bench positions are flexible. Only the starting XI must match the selected formation.
+  return [
+    ...squad.filter((entry) => entry.isStarting),
+    ...squad.filter((entry) => !entry.isStarting).map((entry, index) => ({
+      ...entry,
+      benchIndex: index,
+      assignedPosition: entry.assignedPosition || entry.player.position,
+    })),
+  ];
 }
 
 function reassignStartersToFormation(squad: SquadPlayerEntry[], newFormation: Formation): SquadPlayerEntry[] {
