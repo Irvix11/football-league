@@ -38,6 +38,7 @@ export default function App() {
     isSimulating,
     simulationError,
     proposeTransfer,
+    respondTransfer,
     rematch,
     leaveLobby,
     savedSession,
@@ -121,6 +122,7 @@ export default function App() {
           onProceedNextMatchday={proceedToNextMatchday}
           onFinishSeason={finishSeason}
           onProposeTransfer={proposeTransfer}
+          onRespondTransfer={respondTransfer}
           isSimulating={isSimulating}
           simulationError={simulationError}
         />
