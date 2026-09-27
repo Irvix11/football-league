@@ -433,12 +433,12 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         }
       }
 
-      if (isPlaying && !goalOverlay && !halfTimeOverlay && !fullTimeOverlay) {
+      if (isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
         animationFrameRef.current = requestAnimationFrame(animateFrame);
       }
     };
 
-    if (isPlaying && !goalOverlay && !halfTimeOverlay && !fullTimeOverlay) {
+    if (isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
       animationFrameRef.current = requestAnimationFrame(animateFrame);
     }
 
