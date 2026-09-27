@@ -6,7 +6,7 @@ import { PitchGraphic } from './PitchGraphic';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
 import { sound } from '../utils/audio';
 import confetti from 'canvas-confetti';
-import { Gavel, Clock, Lock, Sparkles, CheckCircle2, ArrowRight, AlertTriangle, Shield } from 'lucide-react';
+import { Gavel, Clock, Lock, Sparkles, CheckCircle2, ArrowRight, AlertTriangle, Shield, LogOut } from 'lucide-react';
 
 interface LiveAuctionViewProps {
   room: GameRoom;
@@ -223,6 +223,18 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
       {/* Top Bar: Live Auction status, User budget, Team metrics */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Leave this auction? You will be removed from the match and cannot rejoin it.')) {
+              onLeaveMatch();
+            }
+          }}
+          className="order-2 sm:order-1 self-start sm:self-auto inline-flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-950/20 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/15 hover:text-rose-200 active:scale-95"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          Leave Match
+        </button>
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] uppercase tracking-widest font-black text-amber-400 flex items-center gap-1.5">
