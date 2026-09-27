@@ -497,13 +497,21 @@ function advanceAuction(room: GameRoom) {
   }
 
   // Stage the auction so every manager completes the same positional block
-  // before the next block begins: GK -> DEF -> MID -> ATT.
-  const starterStage = getAuctionCategoryForStage(room);
-  const eligibleByStage = starterStage
+  // before the next block begins: GK -> DEF -> MID -> ATT. If a pool does not
+  // contain a player for the earliest required category, skip that empty block
+  // instead of repeatedly presenting an unbuyable player and stalling the auction.
+  const orderedCategories: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
+  const neededCategories = orderedCategories.filter(category =>
+    room.managers.some(manager => {
+      const required = getFormationStarterCategoryCounts(manager.formation)[category];
+      const count = manager.squad.filter(entry => entry.player.category === category).length;
+      return count < required;
+    })
+  );
+  const starterStage = neededCategories.find(category => unowned.some(p => p.category === category)) || null;
+  const auctionCandidates = starterStage
     ? unowned.filter(p => p.category === starterStage)
     : unowned;
-
-  const auctionCandidates = eligibleByStage.length ? eligibleByStage : unowned;
   const nextPlayer = auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)];
   const isQuick = room.settings.auctionMode === 'Quick';
   const duration = isQuick ? 8 : (room.settings.auctionMode === 'Blind' ? 15 : 12);
@@ -602,7 +610,11 @@ function simulateBotBids(room: GameRoom) {
 
 function finalizeAuctionItem(room: GameRoom) {
   const player = room.auction.currentPlayer;
-  if (!player) return;
+  if (!player || room.auction.isSold) return;
+
+  // Close the bidding window immediately. This makes finalization idempotent
+  // and prevents a late client message from reopening/changing the auction.
+  room.auction.isSold = true;
 
   let winnerId = room.auction.highestBidderId;
   let finalPrice = room.auction.currentBid;
@@ -641,7 +653,17 @@ function finalizeAuctionItem(room: GameRoom) {
 
   if (winnerId) {
     const winner = room.managers.find(m => m.id === winnerId);
-    if (winner && winner.budget >= finalPrice) {
+    const winnerLimits = winner ? getFormationSquadCategoryLimits(winner.formation) : null;
+    const winnerCategoryCount = winner
+      ? winner.squad.filter(s => s.player.category === player.category).length
+      : 0;
+    if (
+      winner &&
+      winner.budget >= finalPrice &&
+      winner.squad.length < 11 &&
+      winnerLimits &&
+      winnerCategoryCount < winnerLimits[player.category]
+    ) {
       winner.budget -= finalPrice;
       winner.squad.push({
         player,
@@ -1884,6 +1906,11 @@ wss.on('connection', (ws) => {
           }
 
           const bidAmount = Number(amount);
+          if (room.auction.isSold || !room.auction.currentPlayer || room.auction.secondsRemaining <= 0) {
+            sendSocketError(ws, 'This auction has already closed.');
+            return;
+          }
+
           if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
             sendSocketError(ws, 'Invalid bid amount.');
             return;
@@ -1945,6 +1972,11 @@ wss.on('connection', (ws) => {
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
 
+          if (room.auction.isSold || room.auction.secondsRemaining <= 0) {
+            sendSocketError(ws, 'This auction has already closed.');
+            return;
+          }
+
           const bidAmount = Number(amount);
           const currentPl = room.auction.currentPlayer;
           if (!currentPl || !Number.isFinite(bidAmount) || bidAmount < currentPl.startingPrice) {
@@ -1996,7 +2028,7 @@ wss.on('connection', (ws) => {
           for (const entry of manager.squad) counts[entry.player.category] += 1;
           const complete = manager.squad.length === 11 && (['GK','DEF','MID','ATT'] as PositionCategory[]).every(cat => counts[cat] >= getFormationStarterCategoryCounts(manager.formation)[cat]);
           if (!complete) {
-            sendSocketError(ws, 'Finish your 18-player squad before pressing I\'M DONE.');
+            sendSocketError(ws, 'Finish your 11-player squad before pressing I\'M DONE.');
             return;
           }
           const ready = new Set(room.phaseReadyIds || []);
