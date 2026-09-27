@@ -116,6 +116,12 @@ export function useGameSocket() {
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
+                      // Restore the server snapshot into the UI before retrying the
+                      // WebSocket join. This prevents the home screen from flashing
+                      // a false "lobby not found" state during a Vercel cold start.
+                      response.json().then((snapshot) => {
+                        if (snapshot?.code) setRoom(snapshot as GameRoom);
+                      }).catch(() => {});
                       if (socketRef.current?.readyState === WebSocket.OPEN) {
                         socketRef.current.send(JSON.stringify({
                           type: 'JOIN_LOBBY',
