@@ -1145,7 +1145,15 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  * The game economy is driven by OVR with a simple bounded starting-price curve.
  */
 export function getAuctionStartingPrice(_player: Player): number {
-  return 0;
+  // Every live auction lot starts at exactly £1M. Market value is used only
+  // for the final forced purchase when one manager is the last eligible buyer.
+  return 1;
+}
+
+function normalizeDisplayName(value: unknown): string {
+  const raw = String(value ?? '').replace(/\s+/g, ' ').trim();
+  const quoted = raw.match(/"([^"]+)"/);
+  return quoted?.[1]?.trim() || raw;
 }
 
 /**
@@ -1190,6 +1198,7 @@ export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
   // Market value is legacy data only. Auction lots are priced from OVR.
   return list.map(player => ({
     ...player,
+    name: normalizeDisplayName(player.name),
     startingPrice: getAuctionStartingPrice(player),
   }));
 }
