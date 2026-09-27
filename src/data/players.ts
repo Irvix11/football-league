@@ -1148,11 +1148,11 @@ export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
   // 200-player prime legend pool. Curated All-Time entries win on duplicate
   // names so players such as Messi/Ronaldo use their prime versions.
   const currentSource = FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS;
+  const normalizePlayerName = (name: string) =>
+    name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const legendNames = new Set(ALL_TIME_PLAYERS.map(legend => normalizePlayerName(legend.name)));
   const source = era === 'All-Time'
-    ? [...ALL_TIME_PLAYERS, ...currentSource.filter(current => {
-        const normalized = current.name.trim().toLowerCase();
-        return !ALL_TIME_PLAYERS.some(legend => legend.name.trim().toLowerCase() === normalized);
-      })]
+    ? [...ALL_TIME_PLAYERS, ...currentSource.filter(current => !legendNames.has(normalizePlayerName(current.name)))]
     : currentSource;
   let list = [...source];
 
