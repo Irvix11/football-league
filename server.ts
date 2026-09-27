@@ -2173,7 +2173,33 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
   return { roomCode, managerId: hostId, room };
 }
 
+function normalizeLegacyPlayerNames(room: GameRoom) {
+  const normalize = (value: unknown) => {
+    const raw = String(value ?? '').replace(/\s+/g, ' ').trim();
+    const quoted = raw.match(/"([^"]+)"/);
+    return quoted?.[1]?.trim() || raw;
+  };
+
+  for (const manager of room.managers) {
+    manager.name = sanitizeManagerName(manager.name, 'Manager');
+    for (const entry of manager.squad) {
+      entry.player.name = normalize(entry.player.name);
+      entry.player.startingPrice = 1;
+      if (!Number.isFinite(entry.player.marketValue) || entry.player.marketValue < 0) {
+        entry.player.marketValue = 0;
+      }
+    }
+  }
+
+  if (room.auction.currentPlayer) {
+    room.auction.currentPlayer.name = normalize(room.auction.currentPlayer.name);
+    room.auction.currentPlayer.startingPrice = 1;
+    room.auction.currentBid = Math.max(1, Number(room.auction.currentBid) || 1);
+  }
+}
+
 function repairManagersForMatch(room: GameRoom) {
+  normalizeLegacyPlayerNames(room);
   const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
   let owned = new Set(room.managers.flatMap(m => m.squad.map(s => s.player.id)));
 
@@ -2344,6 +2370,7 @@ wss.on('connection', (ws) => {
           if (!room && normalizedRoomCode) {
             room = await loadRoomSnapshot(normalizedRoomCode) || undefined;
             if (room) {
+              normalizeLegacyPlayerNames(room);
               if (normalizeRoomToXI(room)) await saveRoomSnapshot(room);
               if (['lobby', 'formation_select', 'team_management'].includes(room.phase) && !room.phaseReadyDeadline && room.managers.length >= 2) {
                 room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
