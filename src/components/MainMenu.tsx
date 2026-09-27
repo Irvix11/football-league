@@ -163,10 +163,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         </div>
 
         <p className="max-w-2xl text-slate-400 text-xs sm:text-sm md:text-base leading-relaxed mb-5 px-4">
-          Draft world-class stars, build an 18-player squad, tune your tactics, and play through live animated matchdays.
+          Draft world-class stars, build an 11-player squad, tune your tactics, and play through live animated matchdays.
         </p>
         <div className="mb-8 flex flex-wrap justify-center gap-2.5 px-3">
-          {['LIVE AUCTION', '18 PLAYER SQUADS', '2–16 MANAGERS', '2D MATCH ENGINE'].map((label) => (
+          {['LIVE AUCTION', '11 PLAYER SQUADS', '2–16 MANAGERS', '2D MATCH ENGINE'].map((label) => (
             <span key={label} className="rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-[9px] font-black tracking-[0.16em] text-slate-400 shadow-lg shadow-black/10 backdrop-blur-xl">
               {label}
             </span>
@@ -252,7 +252,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
       {/* Footer */}
       <footer className="relative z-10 max-w-6xl mx-auto w-full py-4 border-t border-slate-900/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
-        <div>Verified football ratings & 18-player squad tactical simulation.</div>
+        <div>Verified football ratings & 11-player squad tactical simulation.</div>
         <div className="flex items-center gap-3 text-slate-400">
           <span>Season 2025/26</span>
           <span aria-hidden="true">·</span>
