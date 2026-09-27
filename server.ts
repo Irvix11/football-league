@@ -1764,6 +1764,9 @@ function initializeLeaguePlayoffs(room: GameRoom) {
   if (ranked.length < 2) {
     room.phase = 'season_end';
     room.awards = calculateSeasonAwards(room);
+    // Keep the finished result available to currently connected clients, but
+    // never retain completed games in durable storage.
+    void deleteRoomSnapshot(room.code);
     return;
   }
 
@@ -2361,7 +2364,7 @@ wss.on('connection', (ws) => {
             // the in-memory ticker from the persisted absolute deadline.
             ensureAuctionTicker(room);
             ensurePhaseReadyTicker(room);
-            if (!roomSockets.has(room)) roomSockets.set(room.code, new Set());
+            if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
             roomSockets.get(room.code)!.add(ws);
             socketToRoom.set(ws, { roomCode: room.code, managerId: existing.id });
             ws.send(JSON.stringify({
@@ -3412,6 +3415,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'league') return res.status(409).json({ error: 'League is not active.' });
     if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    if (!isRoomHost(room, managerId)) return res.status(403).json({ error: 'Only the host can run the matchday fallback.' });
     if (room.transferWindowOpen) return res.status(409).json({ error: 'Mid-season management window is open.' });
 
     const matchday = Number.isInteger(requestedMatchday) && requestedMatchday > 0
@@ -3444,7 +3448,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
 
     await saveRoomSnapshot(room);
     broadcastRoom(room.code);
-    return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
+    return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
   } catch (error: any) {
     console.error('[REST] run-matchday failed:', error);
     return res.status(500).json({ error: error?.message || 'Failed to simulate match.' });
@@ -3471,18 +3475,21 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
     const round = stage.rounds[stage.rounds.length - 1];
     const fix = round?.fixtures.find(f => f.id === fixtureId);
     if (!fix) return res.status(404).json({ error: 'Fixture not found.' });
-    if (fix.played) return res.status(409).json({ error: 'This match has already been played.', room: JSON.parse(JSON.stringify(room)) });
+    if (fix.played) return res.status(409).json({ error: 'This match has already been played.', room: sanitizeRoomForViewer(room, managerId) });
 
     const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
     const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
     if (!homeMgr || !awayMgr) return res.status(409).json({ error: 'Unable to load both teams for this fixture.' });
+    if (managerId !== fix.homeManagerId && managerId !== fix.awayManagerId && managerId !== room.hostId) {
+      return res.status(403).json({ error: 'Only a fixture participant or the host can start this match.' });
+    }
 
     const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
     Object.assign(fix, result);
     room.fixtures = round.fixtures;
 
     broadcastRoom(room.code);
-    return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
+    return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
   } catch (error: any) {
     console.error('[REST] run-knockout-match failed:', error);
     return res.status(500).json({ error: error?.message || 'Failed to simulate knockout match.' });
@@ -3508,10 +3515,13 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
     const round = stage.rounds[stage.rounds.length - 1];
     const fix = round?.fixtures.find(f => f.id === fixtureId);
     if (!fix || !fix.played) return res.status(409).json({ error: 'Match is not complete yet.' });
+    if (managerId !== fix.homeManagerId && managerId !== fix.awayManagerId && managerId !== room.hostId) {
+      return res.status(403).json({ error: 'Only a fixture participant or the host can continue this round.' });
+    }
 
     advanceKnockoutRound(room);
     broadcastRoom(room.code);
-    return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
+    return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
   } catch (error: any) {
     console.error('[REST] complete-knockout-match failed:', error);
     return res.status(500).json({ error: error?.message || 'Failed to advance knockout round.' });
@@ -3594,7 +3604,7 @@ app.post('/api/solo-game', (req, res) => {
       success: true,
       roomCode: result.roomCode,
       managerId: result.managerId,
-      room: result.room,
+      room: sanitizeRoomForViewer(result.room, result.managerId),
     });
   } catch (err: any) {
     console.error('Error creating solo game:', err);
