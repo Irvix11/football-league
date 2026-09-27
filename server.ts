@@ -69,12 +69,28 @@ const blindSecretBids = new Map<string, Record<string, number>>();
 // Active countdown intervals: roomCode -> NodeJS.Timeout
 const auctionIntervals = new Map<string, NodeJS.Timeout>();
 
+// Serialize snapshot writes per room. Auction ticks can broadcast every second;
+// without a queue, slower Supabase requests can finish out of order and overwrite
+// a newer snapshot with an older one, which makes rejoin/polling appear to roll back.
+const persistenceQueues = new Map<string, Promise<void>>();
+
+function queueRoomSnapshot(room: GameRoom) {
+  const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
+  const previous = persistenceQueues.get(room.code) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => saveRoomSnapshot(snapshot))
+    .catch((error) => {
+      console.error('[persistence] queued room save failed:', error);
+    });
+  persistenceQueues.set(room.code, next);
+}
+
 function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
   const sockets = roomSockets.get(roomCode);
-  if (!sockets) return;
 
   // Clone room to sanitize blind auction state (never reveal hidden bids)
   const sanitizedRoom = JSON.parse(JSON.stringify(room)) as GameRoom;
@@ -123,7 +139,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
   }
 
   room.updatedAt = Date.now();
-  void saveRoomSnapshot(room);
+  queueRoomSnapshot(room);
   const payload = JSON.stringify({
     type: 'ROOM_UPDATE',
     room: sanitizedRoom,
