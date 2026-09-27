@@ -34,11 +34,11 @@ export function getFormationStarterCategoryCounts(formation: Formation): Record<
   return counts;
 }
 
-export function getFormationSquadCategoryLimits(_formation: Formation): Record<PositionCategory, number> {
-  // Squad acquisition is no longer locked to natural position categories.
-  // The formation controls the 11 starting slots; the 7-player bench may contain
-  // any outfield mix. Keep only a sensible two-GK ceiling for an 18-player squad.
-  return { GK: 2, DEF: 16, MID: 16, ATT: 16 };
+export function getFormationSquadCategoryLimits(formation: Formation): Record<PositionCategory, number> {
+  // There is no bench: each manager owns exactly the 11 players needed by the
+  // selected formation. Natural categories are used for auction quotas; after
+  // purchase, any outfield player may be assigned to any outfield role.
+  return getFormationStarterCategoryCounts(formation);
 }
 
 export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
@@ -315,15 +315,15 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
     }
   }
 
-  if (squad.length > 18) errors.push('Squad cannot exceed 18 players.');
+  if (squad.length > 11) errors.push('Squad cannot exceed 11 players.');
   if (starters.length !== 11) errors.push('Starting XI must contain exactly 11 players.');
-  if (substitutes.length !== 7) errors.push('Squad must contain exactly 7 substitutes.');
+  if (substitutes.length !== 0) errors.push('There are no substitutes: all 11 squad players must be starters.');
 
   const gkCount = squad.filter(s => s.player.category === 'GK').length;
-  if (gkCount > 2) errors.push('Squad can contain at most 2 goalkeepers.');
+  if (gkCount > 1) errors.push('Squad can contain exactly 1 goalkeeper.');
 
   return {
-    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 7 && squad.length === 18,
+    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 0 && squad.length === 11,
     startersCount: starters.length,
     substitutesCount: substitutes.length,
     totalCount: squad.length,
