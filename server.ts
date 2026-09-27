@@ -1221,7 +1221,35 @@ function executeTransferOffer(room: GameRoom, offer: TransferOffer): boolean {
 }
 
 function isTransferWindowOpen(room: GameRoom) {
-  return room.phase === 'league' && room.currentMatchday > 0 && room.currentMatchday % 5 === 0;
+  return room.phase === 'league' &&
+    room.transferWindowOpen === true &&
+    room.currentMatchday === (room.transferWindowMatchday || 0);
+}
+
+function getMidSeasonWindowMatchday(room: GameRoom): number {
+  if (room.totalMatchdays <= 1) return 0;
+  return Math.ceil(room.totalMatchdays / 2);
+}
+
+function openMidSeasonWindow(room: GameRoom) {
+  const windowMatchday = getMidSeasonWindowMatchday(room);
+  if (!windowMatchday || room.transferWindowOpen) return false;
+  room.transferWindowOpen = true;
+  room.transferWindowMatchday = windowMatchday;
+  room.transferWindowReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+  room.updatedAt = Date.now();
+  return true;
+}
+
+function maybeCloseMidSeasonWindow(room: GameRoom): boolean {
+  if (!room.transferWindowOpen) return false;
+  const humanIds = room.managers.filter(m => !m.isBot).map(m => m.id);
+  const ready = new Set(room.transferWindowReadyIds || []);
+  if (!humanIds.every(id => ready.has(id))) return false;
+  room.transferWindowOpen = false;
+  room.transferWindowReadyIds = [];
+  room.transferWindowMatchday = undefined;
+  return true;
 }
 
 // Authoritative Solo Play setup engine
@@ -1334,6 +1362,8 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     totalMatchdays: 1,
     leagueTable: calculateInitialTable(managers),
     transferOffers: [],
+    transferWindowOpen: false,
+    transferWindowReadyIds: [],
     awards: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -2045,6 +2075,11 @@ wss.on('connection', (ws) => {
           if (!auth || auth.room.phase !== 'league') return;
           const { room } = auth;
 
+          if (room.transferWindowOpen) {
+            sendSocketError(ws, 'Mid-season management window is open. Finish your squad review before playing the next match.');
+            return;
+          }
+
           const targetMatchday = Number(matchday || room.currentMatchday);
           if (!Number.isInteger(targetMatchday) || targetMatchday < 1 || targetMatchday > room.totalMatchdays) {
             sendSocketError(ws, 'Invalid matchday.');
@@ -2081,6 +2116,17 @@ wss.on('connection', (ws) => {
           // 2-5 teams -> Final, 6-9 -> top 4 Semi-Finals, 10-16 -> top 8 Quarter-Finals.
           const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
           room.currentMatchday = targetMatchday;
+
+          const midpointMatchday = getMidSeasonWindowMatchday(room);
+          const midpointComplete =
+            midpointMatchday > 0 &&
+            targetMatchday === midpointMatchday &&
+            room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
+
+          if (midpointComplete && !leagueComplete) {
+            openMidSeasonWindow(room);
+          }
+
           if (leagueComplete) {
             initializeLeaguePlayoffs(room);
           }
@@ -2095,6 +2141,11 @@ wss.on('connection', (ws) => {
           const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'league') return;
           const { room } = auth;
+
+          if (room.transferWindowOpen) {
+            sendSocketError(ws, 'Finish the mid-season management window before continuing.');
+            return;
+          }
 
           const requestedNext = Number(nextMatchday || room.currentMatchday + 1);
           const currentPlayed = room.fixtures.filter(f => f.matchday === room.currentMatchday).every(f => f.played);
@@ -2138,7 +2189,7 @@ wss.on('connection', (ws) => {
           const { room } = auth;
 
           if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
-            sendSocketError(ws, 'Transfers are only available every 5 matchdays.');
+            sendSocketError(ws, 'Transfers are only available during the mid-season management window.');
             return;
           }
 
@@ -2198,7 +2249,7 @@ wss.on('connection', (ws) => {
           const { room } = auth;
 
           if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
-            sendSocketError(ws, 'Transfers are only available every 5 matchdays.');
+            sendSocketError(ws, 'Transfers are only available during the mid-season management window.');
             return;
           }
 
@@ -2209,6 +2260,33 @@ wss.on('connection', (ws) => {
           }
 
           offer.status = accept && executeTransferOffer(room, offer) ? 'accepted' : 'rejected';
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- MID-SEASON MANAGEMENT WINDOW ---
+        case 'CLOSE_TRANSFER_WINDOW': {
+          const { roomCode, managerId } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
+
+          if (!room.transferWindowOpen) {
+            sendSocketError(ws, 'The mid-season management window is not open.');
+            return;
+          }
+
+          const manager = room.managers.find(m => m.id === managerId);
+          if (!manager) return;
+
+          const readyIds = new Set(room.transferWindowReadyIds || []);
+          readyIds.add(managerId);
+          room.transferWindowReadyIds = [...readyIds];
+
+          if (maybeCloseMidSeasonWindow(room)) {
+            room.currentMatchday = Math.min(room.totalMatchdays, room.currentMatchday + 1);
+          }
+
           broadcastRoom(room.code);
           break;
         }
