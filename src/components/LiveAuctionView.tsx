@@ -304,7 +304,11 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     <span className="text-amber-400 font-display">{player.name}</span>
                     <ArrowRight className="w-4 h-4 text-emerald-400" />
                     <span className={auction.winnerId === managerId ? 'text-emerald-400' : 'text-slate-400'}>
-                      {auction.winnerId === managerId ? 'YOUR SQUAD' : `${auction.highestBidderName}'S SQUAD`}
+                      {auction.winnerId === managerId
+                        ? 'YOUR SQUAD'
+                        : auction.winnerId
+                          ? `${auction.highestBidderName || 'WINNER'}'S SQUAD`
+                          : 'UNASSIGNED — NEXT LOT'}
                     </span>
                   </div>
 
