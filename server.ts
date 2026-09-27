@@ -421,6 +421,50 @@ function autoFillManagerLineup(manager: Manager) {
   manager.roles = setupManagerRoles(manager.squad);
 }
 
+function normalizeRoomToXI(room: GameRoom): boolean {
+  let changed = false;
+
+  for (const manager of room.managers) {
+    if (manager.squad.length > 11) {
+      // Migrate legacy 18-player saves by rebuilding the starting XI from the
+      // existing owned players. This removes substitutes without inventing players.
+      autoFillManagerLineup(manager);
+      changed = true;
+    } else if (manager.squad.length === 11) {
+      const normalized = manager.squad.map(entry => ({
+        ...entry,
+        isStarting: true,
+        benchIndex: undefined,
+      }));
+      if (normalized.some((entry, index) =>
+        entry.isStarting !== manager.squad[index].isStarting ||
+        entry.benchIndex !== manager.squad[index].benchIndex
+      )) {
+        manager.squad = normalized;
+        manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
+        manager.roles = setupManagerRoles(manager.squad);
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    // Any pending offer involving a removed legacy substitute is no longer valid.
+    room.transferOffers = room.transferOffers.map(offer => {
+      if (offer.status !== 'pending') return offer;
+      const sender = room.managers.find(m => m.id === offer.fromManagerId);
+      const target = room.managers.find(m => m.id === offer.toManagerId);
+      const stillOwned =
+        sender?.squad.some(s => s.player.id === offer.offeredPlayerId) &&
+        target?.squad.some(s => s.player.id === offer.requestedPlayerId);
+      return stillOwned ? offer : { ...offer, status: 'cancelled' };
+    });
+    room.updatedAt = Date.now();
+  }
+
+  return changed;
+}
+
 function generateValidSquad(formation: Formation, availablePool: any[]): SquadPlayerEntry[] {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const shuffled = [...availablePool].sort(() => Math.random() - 0.5);
@@ -1547,7 +1591,10 @@ wss.on('connection', (ws) => {
           let room = rooms.get(normalizedRoomCode);
           if (!room && normalizedRoomCode) {
             room = await loadRoomSnapshot(normalizedRoomCode) || undefined;
-            if (room) rooms.set(normalizedRoomCode, room);
+            if (room) {
+              if (normalizeRoomToXI(room)) await saveRoomSnapshot(room);
+              rooms.set(normalizedRoomCode, room);
+            }
           }
 
           if (!room) {
