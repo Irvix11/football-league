@@ -1,4 +1,4 @@
-import { DEVELOPMENT_PLAYERS } from '../src/data/players';
+import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from '../src/data/players';
 import { FORMATIONS_CONFIG, calculateTeamOverall } from '../src/constants/formations';
 import { simulateMatch } from '../src/engine/simulation';
 import { Manager, SquadPlayerEntry } from '../src/types/football';
@@ -11,6 +11,25 @@ const condition = () => ({
   redCards: 0,
   suspensionMatchesLeft: 0,
 });
+
+// Data-pool regressions: production must contain current players, while
+// All-Time must retain the 200 curated prime/legend entries and deduplicate
+// current players that already have a curated prime version.
+const currentPool = getPlayersForLobby('Global', 'Current');
+const allTimePool = getPlayersForLobby('Global', 'All-Time');
+if (allTimePool.length < 200) throw new Error('All-Time pool lost part of the 200-player legend set');
+if (allTimePool.some(p => p.age === 0)) throw new Error('All-Time pool contains invalid age 0');
+const normalizeName = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizedNames = allTimePool.map(p => normalizeName(p.name));
+if (new Set(normalizedNames).size !== normalizedNames.length) {
+  throw new Error('All-Time pool contains duplicate player identities');
+}
+if (allTimePool.find(p => normalizeName(p.name) === normalizeName('Lionel Messi'))?.overall !== 98) {
+  throw new Error('All-Time Messi prime override is missing');
+}
+if (currentPool.length <= DEVELOPMENT_PLAYERS.length && DEVELOPMENT_PLAYERS.length > 20) {
+  throw new Error('Current production player import did not replace the development-only pool');
+}
 
 function buildManager(id: string, name: string): Manager {
   const formation = '4-3-3';
