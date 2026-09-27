@@ -1144,11 +1144,16 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  * Filter players by pool and era.
  */
 export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
-  // All-Time mode is a separate curated 200-player prime pool.
-  // Current mode continues using the imported/current database.
+  // All-Time mode combines the current player database with the curated
+  // 200-player prime legend pool. Curated All-Time entries win on duplicate
+  // names so players such as Messi/Ronaldo use their prime versions.
+  const currentSource = FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS;
   const source = era === 'All-Time'
-    ? ALL_TIME_PLAYERS
-    : (FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS);
+    ? [...ALL_TIME_PLAYERS, ...currentSource.filter(current => {
+        const normalized = current.name.trim().toLowerCase();
+        return !ALL_TIME_PLAYERS.some(legend => legend.name.trim().toLowerCase() === normalized);
+      })]
+    : currentSource;
   let list = [...source];
 
   if (era === 'Current') {
