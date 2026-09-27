@@ -8,6 +8,21 @@ export interface SavedSession {
   managerName: string;
 }
 
+function getGameServerBaseUrl(): string {
+  const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
+  return configured ? configured.replace(/\/$/, '') : window.location.origin;
+}
+
+function getWebSocketBaseUrl(): string {
+  const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
+  if (configured) {
+    const url = new URL(configured);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    return url.toString().replace(/\/$/, '');
+  }
+  return `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+}
+
 export function useGameSocket() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [managerId, setManagerId] = useState<string | null>(null);
@@ -52,9 +67,7 @@ export function useGameSocket() {
     }
 
     intentionalCloseRef.current = false;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(`${getWebSocketBaseUrl()}/api/ws`);
 
     ws.onopen = () => {
       setIsConnected(true);
@@ -112,7 +125,7 @@ export function useGameSocket() {
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
               const saved = getSavedSession();
               if (saved) {
-                fetch('/api/room/' + encodeURIComponent(saved.roomCode), { cache: 'no-store' })
+                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}`, { cache: 'no-store' })
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
@@ -186,14 +199,13 @@ export function useGameSocket() {
     };
   }, [connect]);
 
-  // Vercel WebSocket instances are not guaranteed to share in-memory state.
   // Poll the durable room snapshot so reconnects and multi-instance updates stay synchronized.
   useEffect(() => {
     if (!room?.code) return;
     let cancelled = false;
     const sync = async () => {
       try {
-        const response = await fetch(`/api/room/${encodeURIComponent(room.code)}`, { cache: 'no-store' });
+        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}`, { cache: 'no-store' });
         if (!response.ok) return;
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
@@ -219,8 +231,6 @@ export function useGameSocket() {
   const startSoloGame = useCallback(async (managerName: string, formation: Formation = '4-3-3') => {
     try {
       setErrorMessage(null);
-      // Create the solo room through the same WebSocket Function that owns
-      // the room state. This avoids split in-memory state between Vercel Functions.
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         socketRef.current.send(JSON.stringify({
           type: 'START_SOLO_GAME',
@@ -252,10 +262,7 @@ export function useGameSocket() {
     const roomCode = session.roomCode.trim().toUpperCase();
     saveSession(session);
 
-    // Vercel deployments can move a WebSocket reconnect to a different
-    // Function instance. Check the durable snapshot first so stale local
-    // sessions are handled cleanly instead of looping on "Lobby not found".
-    fetch('/api/room/' + encodeURIComponent(roomCode), { cache: 'no-store' })
+      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}`, { cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
