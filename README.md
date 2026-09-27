@@ -43,3 +43,5 @@ EA SPORTS FC 27's official ratings database is maintained by EA: https://www.ea.
 <!-- production-deploy-trigger -->
 
 <!-- Vercel deployment trigger: 2026-09-27T10:37:54.677Z -->
+
+<!-- FORCE VERCEL REDEPLOY: 2026-09-27T2026-09-27T10:52:57.798Z -->
