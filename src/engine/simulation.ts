@@ -1404,7 +1404,7 @@ export function simulateMatch(
         team: 'home',
         takerId: hTaker.player.id,
         takerName: hTaker.player.name,
-        takerNumber: round,
+        takerNumber: getPlayerNumber(homeStarters, hTaker.player.id),
         outcome: hOutcome,
         scoreAfter: { home: hPens, away: aPens },
         commentary: hOutcome === 'goal' 
@@ -1444,7 +1444,7 @@ export function simulateMatch(
         team: 'away',
         takerId: aTaker.player.id,
         takerName: aTaker.player.name,
-        takerNumber: round,
+        takerNumber: getPlayerNumber(awayStarters, aTaker.player.id),
         outcome: aOutcome,
         scoreAfter: { home: hPens, away: aPens },
         commentary: aOutcome === 'goal' 
