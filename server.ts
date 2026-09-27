@@ -3353,9 +3353,10 @@ wss.on('connection', (ws) => {
           const leavingId = session.managerId;
           const canLeaveActiveMatch = room.phase === 'formation_select' || room.phase === 'auction';
           const canLeaveLobby = room.phase === 'lobby';
+          const canLeaveFinishedGame = room.phase === 'season_end';
 
-          if (!canLeaveLobby && !canLeaveActiveMatch) {
-            sendSocketError(ws, 'You can only leave before the season starts or during the auction.');
+          if (!canLeaveLobby && !canLeaveActiveMatch && !canLeaveFinishedGame) {
+            sendSocketError(ws, 'You can only leave before the season starts, during the auction, or after the season ends.');
             return;
           }
 
@@ -3382,8 +3383,26 @@ wss.on('connection', (ws) => {
           }
 
           room.updatedAt = Date.now();
-          await saveRoomSnapshot(room);
-          broadcastRoom(room.code);
+
+          if (room.phase === 'season_end') {
+            // Finished games are disposable. If the last viewer leaves, remove
+            // the room from memory and make sure no stale snapshot survives.
+            if (room.managers.length === 0) {
+              rooms.delete(room.code);
+              roomSockets.delete(room.code);
+              blindSecretBids.delete(room.code);
+              const auctionTimer = auctionIntervals.get(room.code);
+              if (auctionTimer) clearInterval(auctionTimer);
+              auctionIntervals.delete(room.code);
+              clearPhaseReadyTimer(room);
+              await deleteRoomSnapshot(room.code);
+            } else {
+              broadcastRoom(room.code, undefined, false);
+            }
+          } else {
+            await saveRoomSnapshot(room);
+            broadcastRoom(room.code);
+          }
           break;
         }
 
