@@ -87,3 +87,5 @@ Before shipping a release, verify:
 - Semi-Finals are followed by a Third-Place match, then the Final.
 
 <!-- vercel-force-deploy: 2026-09-27T19:58 -->
+
+<!-- force-vercel: 1790519815791 -->
