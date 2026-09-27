@@ -14,7 +14,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "import:fc27": "tsx scripts/import-fc27.ts",
     "import:fc27:remote": "tsx scripts/import-fc27.ts https://raw.githubusercontent.com/Akif-b-Atif/Football-wordle/5e3007e561acd76d12475dc0619d0d605f1f9a8c/data/players.csv 79",
-    "build:full": "npm run import:fc27:remote && tsc --noEmit && vite build"
+    "build:full": "tsc --noEmit && vite build",
+    "refresh:fc27": "npm run import:fc27:remote && npm run lint && npm run build"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
