@@ -1,5 +1,6 @@
 import { Player, PlayerPool, Era } from '../types/football.js';
 import { FC27_IMPORTED_PLAYERS } from './fc27.generated.js';
+import { ALL_TIME_PLAYERS } from './allTimePlayers.js';
 
 /**
  * Curated development player dataset.
@@ -1143,7 +1144,11 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  * Filter players by pool and era.
  */
 export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
-  const source = FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS;
+  // All-Time mode is a separate curated 200-player prime pool.
+  // Current mode continues using the imported/current database.
+  const source = era === 'All-Time'
+    ? ALL_TIME_PLAYERS
+    : (FC27_IMPORTED_PLAYERS.length ? FC27_IMPORTED_PLAYERS : DEVELOPMENT_PLAYERS);
   let list = [...source];
 
   if (era === 'Current') {
