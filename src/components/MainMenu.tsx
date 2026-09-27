@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Formation, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
 import { FORMATIONS_CONFIG } from '../constants/formations';
-import { ArrowRight, Trophy } from 'lucide-react';
+import { Play, Zap } from 'lucide-react';
 import ResponsiveHeroBanner from './ui/responsive-hero-banner';
 
 interface MainMenuProps {
