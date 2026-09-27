@@ -1,7 +1,7 @@
 import React from 'react';
 import { Player } from '../types/football';
 
-function LockIcon() {
+function BlindLockIcon() {
   return (
     <div className="w-11 h-11 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-300 text-xl font-black">
       ?
@@ -27,7 +27,6 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   const isGK = player.category === 'GK';
   const isBlindMystery = player.id.startsWith('blind-');
   const isHighOvr = player.overall >= 88;
-  const isIcon = player.id.startsWith('fc-icon');
 
   const blindLabels: Record<string, string> = {
     pac: 'PACE',
@@ -37,6 +36,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
     def: 'DEFENDING',
     phy: 'PHYSICAL',
   };
+  const isIcon = player.id.startsWith('fc-icon');
 
   if (size === 'sm') {
     return (
@@ -83,11 +83,11 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
             <div className="text-[10px] uppercase tracking-[0.2em] font-black text-amber-400">BLIND AUCTION</div>
             <div className="font-display font-black text-2xl text-white mt-1">MYSTERY PLAYER</div>
           </div>
-          <LockIcon />
+          <BlindLockIcon />
         </div>
         <div className="px-5 py-4 bg-slate-950/50">
-          <div className="text-xs text-slate-400">No name · no OVR · no club · no nationality</div>
-          <div className="text-[10px] text-slate-500 mt-1">Only two attributes are revealed before you bid.</div>
+          <div className="text-xs text-slate-400">Name and OVR are hidden.</div>
+          <div className="text-[10px] text-slate-500 mt-1">Only two attributes are revealed before the bid.</div>
         </div>
         <div className="p-5 grid grid-cols-2 gap-3 bg-slate-900/60">
           {(player.blindClues || []).slice(0, 2).map((clue) => (
