@@ -187,11 +187,11 @@ const ResponsiveHeroBanner: React.FC<ResponsiveHeroBannerProps> = ({
             {description}
           </p>
 
-          <div className="mt-9 flex animate-fal-fade-4 flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-9 flex animate-fal-fade-4 flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
             <a
               href={primaryButtonHref}
               onClick={handleAction(onPrimaryClick, primaryButtonHref)}
-              className="group inline-flex min-w-40 items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3.5 text-sm font-black text-slate-950 shadow-2xl shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-300"
+              className="group inline-flex min-w-44 items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3.5 text-sm font-black text-slate-950 shadow-2xl shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:bg-emerald-300"
             >
               <Play className="h-4 w-4 fill-current" />
               {primaryButtonText}
@@ -199,10 +199,18 @@ const ResponsiveHeroBanner: React.FC<ResponsiveHeroBannerProps> = ({
             <a
               href={secondaryButtonHref}
               onClick={handleAction(onSecondaryClick, secondaryButtonHref)}
-              className="inline-flex min-w-40 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-black text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/10"
+              className="inline-flex min-w-44 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3.5 text-sm font-black text-white backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/10"
             >
               {secondaryButtonText}
-              <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              <ArrowUpRight className="h-4 w-4" />
+            </a>
+            <a
+              href={ctaButtonHref}
+              onClick={handleAction(onCtaClick, ctaButtonHref)}
+              className="inline-flex min-w-44 items-center justify-center gap-2 rounded-full border border-emerald-300/35 bg-emerald-400/10 px-6 py-3.5 text-sm font-black text-emerald-200 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-emerald-300/60 hover:bg-emerald-400/20 hover:text-white"
+            >
+              {ctaButtonText}
+              <ArrowUpRight className="h-4 w-4" />
             </a>
           </div>
 
