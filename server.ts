@@ -892,8 +892,15 @@ function advanceAuction(room: GameRoom) {
     ? 4
     : (isQuick ? 8 : (room.settings.auctionMode === 'Blind' ? 15 : 12));
 
+  // Lot number must advance even when a player receives no bids.
+  // Using auctionHistory.length caused the UI to repeat the same "Lot X"
+  // after every NO VALID BIDS lot.
+  const previousLot = Number.isFinite(Number(room.auction.currentPlayerIndex))
+    ? Number(room.auction.currentPlayerIndex)
+    : 0;
+
   room.auction = {
-    currentPlayerIndex: room.auction.auctionHistory.length + 1,
+    currentPlayerIndex: previousLot + 1,
     totalPlayersInPool: pool.length,
     currentPlayer: nextPlayer,
     currentBid: nextPlayer.startingPrice,
