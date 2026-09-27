@@ -651,9 +651,15 @@ function advanceAuction(room: GameRoom) {
     const currentR = rooms.get(room.code);
     if (!currentR || currentR.phase !== 'auction' || currentR.auction.isPaused) return;
 
-    // Solo bot bidding simulation in Classic/Quick mode
-    if (currentR.settings.auctionMode !== 'Blind' && currentR.auction.secondsRemaining > 2) {
-      simulateBotBids(currentR);
+    // Bots participate in every auction mode. Blind-mode bots submit
+    // private bids based on their hidden player valuation, so Solo mode remains
+    // fully playable without leaking the mystery player's identity to humans.
+    if (currentR.auction.secondsRemaining > 2) {
+      if (currentR.settings.auctionMode === 'Blind') {
+        simulateBotBlindBids(currentR);
+      } else {
+        simulateBotBids(currentR);
+      }
     }
 
     if (currentR.auction.secondsRemaining > 0) {
@@ -680,6 +686,54 @@ function createBlindAuctionClues(player: any) {
     { key: first, value: Number(player.attributes?.[first] ?? 0) },
     { key: secondKey, value: Number(player.attributes?.[secondKey] ?? 0) },
   ];
+}
+
+function simulateBotBlindBids(room: GameRoom) {
+  const currentPl = room.auction.currentPlayer;
+  if (!currentPl) return;
+
+  const bids = blindSecretBids.get(room.code) || {};
+
+  for (const bot of room.managers.filter(m => m.isBot && m.squad.length < 11)) {
+    // One secret bid per lot. Repeated timer ticks must not overwrite it.
+    if (bids[bot.id] !== undefined) continue;
+    if (bot.budget < currentPl.startingPrice) continue;
+
+    const limits = getFormationSquadCategoryLimits(bot.formation);
+    const categoryCount = bot.squad.filter(s => s.player.category === currentPl.category).length;
+    if (categoryCount >= limits[currentPl.category]) continue;
+
+    // Bots can see the full card server-side. Their valuation combines market
+    // value and the six football attributes, with a small role-aware weighting.
+    const a = currentPl.attributes || { pac: 0, sho: 0, pas: 0, dri: 0, def: 0, phy: 0 };
+    const roleScore =
+      currentPl.category === 'ATT'
+        ? a.sho * 0.40 + a.pac * 0.20 + a.dri * 0.25 + a.pas * 0.15
+        : currentPl.category === 'MID'
+          ? a.pas * 0.35 + a.dri * 0.25 + a.phy * 0.15 + a.sho * 0.15 + a.pac * 0.10
+          : currentPl.category === 'DEF'
+            ? a.def * 0.50 + a.phy * 0.20 + a.pac * 0.15 + a.pas * 0.15
+            : a.dri * 0.45 + a.phy * 0.20 + a.pas * 0.15 + a.sho * 0.20;
+
+    const valuation = Math.max(
+      currentPl.startingPrice,
+      Math.min(bot.budget, currentPl.marketValue * 0.45 + roleScore * 0.70)
+    );
+
+    // Different bots get slightly different risk appetites so Solo games don't
+    // feel deterministic.
+    const personality = 0.85 + ((bot.id.length * 17) % 31) / 100;
+    const bid = Math.floor(Math.min(bot.budget, valuation * personality));
+
+    if (bid >= currentPl.startingPrice && Math.random() < 0.42) {
+      bids[bot.id] = bid;
+    }
+  }
+
+  blindSecretBids.set(room.code, bids);
+
+  const submitted = Object.keys(bids).length;
+  if (submitted > 0) broadcastRoom(room.code);
 }
 
 function simulateBotBids(room: GameRoom) {
@@ -2569,9 +2623,33 @@ app.get('/api/room/:code', async (req, res) => {
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
   const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
-  if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction') {
+  if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction' && !snapshot.auction.isSold) {
+    // Keep the REST snapshot behind the same privacy boundary as WebSocket
+    // broadcasts: humans see exactly two clues, never the real identity/OVR.
+    const sourcePlayer = snapshot.auction.currentPlayer;
+    if (sourcePlayer) {
+      snapshot.auction.currentPlayer = {
+        ...sourcePlayer,
+        id: `blind-${sourcePlayer.id}`,
+        name: 'Mystery Player',
+        club: 'Unknown Club',
+        league: 'Unknown League',
+        nationality: 'Unknown',
+        position: 'ST',
+        category: 'ATT',
+        overall: 0,
+        attributes: { pac: 0, sho: 0, pas: 0, dri: 0, def: 0, phy: 0 },
+        age: 0,
+        preferredFoot: 'Right',
+        alternatePositions: [],
+        marketValue: 0,
+        valueSource: 'Blind Auction',
+        valueVersion: 'hidden',
+        updatedAt: '',
+        blindClues: snapshot.auction.blindClues || [],
+      } as any;
+    }
     snapshot.auction.hasSubmittedSecretBid = undefined;
-    snapshot.auction.currentPlayer = snapshot.auction.isSold ? snapshot.auction.currentPlayer : null;
   }
   return res.json(snapshot);
 });
