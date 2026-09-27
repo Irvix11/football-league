@@ -1698,7 +1698,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     managers,
     auction: {
       currentPlayerIndex: 0,
-      totalPlayersInPool: DEVELOPMENT_PLAYERS.length,
+      totalPlayersInPool: getPlayersForLobby('Global', 'Current').length,
       currentPlayer: null,
       currentBid: 0,
       highestBidderId: null,
@@ -1842,7 +1842,7 @@ wss.on('connection', (ws) => {
             managers,
             auction: {
               currentPlayerIndex: 0,
-              totalPlayersInPool: DEVELOPMENT_PLAYERS.length,
+              totalPlayersInPool: getPlayersForLobby(settings.playerPool, settings.era).length,
               currentPlayer: null,
               currentBid: 0,
               highestBidderId: null,
