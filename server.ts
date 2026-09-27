@@ -484,7 +484,10 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = tr
   room.updatedAt = Date.now();
   const rawSecretBids = blindSecretBids.get(roomCode) || {};
 
-  if (persist) queueRoomSnapshot(room);
+  // Completed seasons are intentionally ephemeral. They remain in memory for
+  // currently connected clients so awards/results can be viewed, but are never
+  // written back to durable storage.
+  if (persist && room.phase !== 'season_end') queueRoomSnapshot(room);
 
   for (const client of sockets) {
     if (client === excludeSocket || client.readyState !== WebSocket.OPEN) continue;
@@ -3392,6 +3395,21 @@ wss.on('connection', (ws) => {
       const sockets = roomSockets.get(info.roomCode);
       if (sockets) {
         sockets.delete(ws);
+        if (sockets.size === 0) {
+          const room = rooms.get(info.roomCode);
+          // A completed game has no reason to remain in memory once nobody is
+          // viewing it. Active lobbies remain available for reconnects.
+          if (room?.phase === 'season_end') {
+            rooms.delete(info.roomCode);
+            roomSockets.delete(info.roomCode);
+            blindSecretBids.delete(info.roomCode);
+            const auctionTimer = auctionIntervals.get(info.roomCode);
+            if (auctionTimer) clearInterval(auctionTimer);
+            auctionIntervals.delete(info.roomCode);
+            clearPhaseReadyTimer(room);
+            void deleteRoomSnapshot(info.roomCode);
+          }
+        }
       }
       socketToRoom.delete(ws);
     }
