@@ -389,6 +389,12 @@ export interface GameRoom {
   totalMatchdays: number;
   leagueTable: LeagueTableRow[];
   transferOffers: TransferOffer[];
+  /** True when the season is paused for the mid-season management/transfer window. */
+  transferWindowOpen?: boolean;
+  /** Matchday after which the mid-season window opened. */
+  transferWindowMatchday?: number;
+  /** Managers who have finished their mid-season review. */
+  transferWindowReadyIds?: string[];
   knockoutStage?: KnockoutStageState;
   awards: SeasonAwards | null;
   createdAt: number;
