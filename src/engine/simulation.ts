@@ -107,7 +107,14 @@ function calculateTeamPower(manager: Manager): TeamPower {
     effectiveDefense -= 2;
   }
 
-  // Explicit mentality modifiers requested by the game design.
+  // Roles now have real, bounded effects. They are never large enough to replace
+  // player quality, but a good specialist can matter in the situations they own.
+  const roles = manager.roles || { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
+  const starterIds = new Set(starters.map(s => s.player.id));
+  const captainBoost = starterIds.has(roles.captainId) ? 1.2 : 0;
+  const freeKickBoost = starterIds.has(roles.freeKickTakerId) ? 0.8 : 0;
+  const cornerBoost = starterIds.has(roles.cornerTakerId) ? 0.8 : 0;
+  effectiveAttack += captainBoost + freeKickBoost + cornerBoost;
   if (tactics.mentality === 'Defensive') {
     effectiveDefense *= 1.10;
     effectiveAttack *= 0.95;
@@ -582,6 +589,8 @@ export function simulateMatch(
   const homeAdvantage = isKnockout ? 0.5 : 2.75;
   const homeTactics = homeManager.tactics;
   const awayTactics = awayManager.tactics;
+  const homeRoles = homeManager.roles || { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
+  const awayRoles = awayManager.roles || { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
 
   // Initialize player match statistics
   const playerStatsMap = new Map<string, PlayerMatchStat>();
@@ -1212,16 +1221,28 @@ export function simulateMatch(
         goalProbability = Math.max(0.045, Math.min(0.50, goalProbability));
 
         if (rand() < goalProbability) {
-          // GOAL!
+          // GOAL! A normal open-play goal is not automatically assisted.
+          // If it is assisted, the assister must be a different player from the scorer.
           if (isHome) homeScore++; else awayScore++;
           atkStats.score++;
           if (shooterStat) {
             shooterStat.goals++;
             shooterStat.rating += 1.4;
           }
-          if (passerStat) {
-            passerStat.assists++;
-            passerStat.rating += 0.7;
+
+          const possibleAssisters = [passer, receiver, ...atkMids, ...atkAtts]
+            .filter((p, index, arr) =>
+              p.player.id !== shooter.player.id &&
+              arr.findIndex(x => x.player.id === p.player.id) === index
+            );
+          const assistedGoal = possibleAssisters.length > 0 && rand() < 0.72;
+          const assister = assistedGoal
+            ? pick(possibleAssisters, 'assister')
+            : undefined;
+          const assisterStat = assister ? playerStatsMap.get(assister.player.id) : undefined;
+          if (assisterStat) {
+            assisterStat.assists++;
+            assisterStat.rating += 0.7;
           }
 
           const goalNetX = isHome ? 98.2 : 1.8;
@@ -1235,8 +1256,8 @@ export function simulateMatch(
             playerId: shooter.player.id,
             playerName: shooter.player.name,
             playerNumber: getPlayerNumber(isHome ? homeStarters : awayStarters, shooter.player.id),
-            assistPlayerId: passer.player.id,
-            assistPlayerName: passer.player.name,
+            assistPlayerId: assister?.player.id,
+            assistPlayerName: assister?.player.name,
             commentary: `⚽ GOAL! ${shooter.player.name} picks out the corner with an unstoppable finish! (${homeScore} - ${awayScore})`,
             ballCoordinates: { x: goalNetX, y: goalNetY },
             ballStartCoordinates: { x: ballX, y: ballY },
@@ -1284,6 +1305,48 @@ export function simulateMatch(
 
     // Step clock forward 45 to 90 seconds for next attacking phase
     currentTotalSeconds += Math.floor(rand() * 45) + 45;
+  }
+
+  // League matches can finish level. Give close, low-margin matches a modest late
+  // equaliser chance instead of systematically forcing a winner.
+  if (!isKnockout && homeScore !== awayScore && Math.abs(homeScore - awayScore) === 1) {
+    const balance = Math.exp(-Math.abs(diff) / 10);
+    const equaliserChance = Math.max(0.12, Math.min(0.30, 0.15 + balance * 0.12));
+    if (rand() < equaliserChance) {
+      const trailingIsHome = homeScore < awayScore;
+      if (trailingIsHome) homeScore++; else awayScore++;
+      const equaliserTeam = trailingIsHome ? homeManager : awayManager;
+      const equaliserStarters = trailingIsHome ? homeStarters : awayStarters;
+      const equaliserAttackers = trailingIsHome ? homeAtts : awayAtts;
+      const equaliserMids = trailingIsHome ? homeMids : awayMids;
+      const scorerPool = [...equaliserAttackers, ...equaliserMids, ...equaliserStarters]
+        .filter((p, index, arr) => arr.findIndex(x => x.player.id === p.player.id) === index);
+      const equaliserScorer = pick(scorerPool, 'late equaliser');
+      const stat = playerStatsMap.get(equaliserScorer.player.id);
+      if (stat) {
+        stat.goals++;
+        stat.shots++;
+        stat.rating += 1.0;
+      }
+      pushEvent({
+        minute: 88 + Math.floor(rand() * 3),
+        second: Math.floor(rand() * 60),
+        type: 'goal',
+        team: trailingIsHome ? 'home' : 'away',
+        playerId: equaliserScorer.player.id,
+        playerName: equaliserScorer.player.name,
+        playerNumber: getPlayerNumber(equaliserStarters, equaliserScorer.player.id),
+        commentary: `⚽ LATE EQUALISER! ${equaliserTeam.name} refuse to lose their grip on the match. (${homeScore} - ${awayScore})`,
+        ballCoordinates: { x: trailingIsHome ? 98 : 2, y: 50 },
+        ballStartCoordinates: { x: trailingIsHome ? 84 : 16, y: 50 },
+        playerCoordinates: generate22PlayerCoordinates(
+          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeTactics, awayTactics, trailingIsHome ? 98 : 2, 50, trailingIsHome ? 'home' : 'away',
+          equaliserScorer.player.id, undefined, 'celebrating'
+        ),
+        momentum: 0,
+      });
+    }
   }
 
   // Knockout Extra Time and Penalty Shootout Check (Requirement 17)
@@ -1451,8 +1514,21 @@ export function simulateMatch(
       return pool.sort((a, b) => b.player.attributes.sho - a.player.attributes.sho);
     };
 
-    const homeTakers = sortTakers(homeStarters, homeManager.roles?.penaltyTakerId);
-    const awayTakers = sortTakers(awayStarters, awayManager.roles?.penaltyTakerId);
+    const homeTakers = sortTakers(homeStarters.filter(s => !sentOffIds.has(s.player.id)), homeRoles.penaltyTakerId);
+    const awayTakers = sortTakers(awayStarters.filter(s => !sentOffIds.has(s.player.id)), awayRoles.penaltyTakerId);
+
+    // All eligible players take one kick before anyone repeats, as required by Law 10.
+    // Goalkeeper handling is represented by the GK's SHO attribute, but GKs are excluded
+    // from the kicking pool by sortTakers above.
+    let penaltyKickIndex = 0;
+    const penaltyEventTime = () => {
+      const totalSeconds = 121 * 60 + penaltyKickIndex * 8;
+      penaltyKickIndex++;
+      return {
+        minute: Math.floor(totalSeconds / 60),
+        second: totalSeconds % 60,
+      };
+    };
 
     // Push Shootout Start Event
     pushEvent({
@@ -1498,8 +1574,7 @@ export function simulateMatch(
       });
 
       pushEvent({
-        minute: 121,
-        second: round * 10,
+        ...penaltyEventTime(),
         type: 'penalty_shootout_kick',
         team: 'home',
         playerId: hTaker.player.id,
@@ -1538,8 +1613,7 @@ export function simulateMatch(
       });
 
       pushEvent({
-        minute: 121,
-        second: round * 10 + 5,
+        ...penaltyEventTime(),
         type: 'penalty_shootout_kick',
         team: 'away',
         playerId: aTaker.player.id,
@@ -1590,8 +1664,7 @@ export function simulateMatch(
       });
 
       pushEvent({
-        minute: 121,
-        second: sdRound * 10,
+        ...penaltyEventTime(),
         type: 'penalty_shootout_kick',
         team: 'home',
         playerId: hTaker.player.id,
@@ -1624,8 +1697,7 @@ export function simulateMatch(
       });
 
       pushEvent({
-        minute: 121,
-        second: sdRound * 10 + 5,
+        ...penaltyEventTime(),
         type: 'penalty_shootout_kick',
         team: 'away',
         playerId: aTaker.player.id,
@@ -1669,8 +1741,7 @@ export function simulateMatch(
       });
 
       pushEvent({
-        minute: 121 + Math.floor(sdRound * 10 / 60),
-        second: (sdRound * 10) % 60,
+        ...penaltyEventTime(),
         type: 'penalty_shootout_kick',
         team: 'home',
         playerId: hTaker.player.id,
@@ -1682,8 +1753,7 @@ export function simulateMatch(
       });
 
       pushEvent({
-        minute: 121 + Math.floor((sdRound * 10 + 5) / 60),
-        second: (sdRound * 10 + 5) % 60,
+        ...penaltyEventTime(),
         type: 'penalty_shootout_kick',
         team: 'away',
         playerId: aTaker.player.id,
