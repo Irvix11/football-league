@@ -8,6 +8,45 @@ function average(values: number[], fallback = 70) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+/** GK-specific quality using the existing GK-mapped attributes:
+ * pac=diving, sho=handling, pas=kicking, dri=reflexes, def=speed, phy=positioning.
+ */
+function goalkeeperQuality(player: SquadPlayerEntry): number {
+  const a = player.player.attributes;
+  return (
+    a.pac * 0.20 +
+    a.sho * 0.18 +
+    a.pas * 0.10 +
+    a.dri * 0.24 +
+    a.def * 0.10 +
+    a.phy * 0.18
+  );
+}
+
+/** Penalty ability deliberately uses more than raw SHO so one stat cannot dominate. */
+function penaltyAbility(player: SquadPlayerEntry): number {
+  const a = player.player.attributes;
+  return a.sho * 0.58 + a.pas * 0.16 + a.dri * 0.16 + a.phy * 0.10;
+}
+
+/** Approximate xG from the current 0-100 pitch coordinates.
+ * Calibrated around real top-flight shot volume/conversion rather than flat goal rolls.
+ */
+function estimateShotXg(ballX: number, ballY: number, isHome: boolean, shooter: SquadPlayerEntry): number {
+  const goalX = isHome ? 105 : 0;
+  const pitchY = (ballY / 100) * 68;
+  const distance = Math.hypot((goalX - (ballX / 100) * 105), pitchY - 34);
+  const anglePenalty = Math.min(0.38, Math.abs(pitchY - 34) / 34 * 0.30);
+  const boxBonus = distance <= 16 ? 0.025 : 0;
+  const shotQuality = shooter.player.attributes.sho * 0.0015 + shooter.player.attributes.dri * 0.00035;
+  const raw = 0.025 + 0.22 * Math.exp(-distance / 17) * (0.98 - anglePenalty) + boxBonus + shotQuality;
+  return clamp(raw, 0.018, 0.42);
+}
+
 interface TeamPower {
   attack: number;
   midfield: number;
@@ -586,8 +625,9 @@ export function simulateMatch(
   const homePower = calculateTeamPower(homeManager);
   const awayPower = calculateTeamPower(awayManager);
 
-  // Modest home advantage: it affects match dynamics/probability, not raw player quality.
-  const homeAdvantage = isKnockout ? 0.5 : 2.75;
+  // Home advantage affects possession, chance creation and defensive confidence,
+  // rather than simply adding a large amount to player ratings.
+  const homeAdvantage = isKnockout ? 1.0 : 2.4;
   const homeTactics = homeManager.tactics;
   const awayTactics = awayManager.tactics;
   const homeRoles = homeManager.roles || { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
@@ -674,7 +714,7 @@ export function simulateMatch(
   let momentum = Number((diff * 3).toFixed(1));
   const homeWeight = Math.exp(Math.max(-8, Math.min(8, (homeEffective + homeAdvantage) / 12)));
   const awayWeight = Math.exp(Math.max(-8, Math.min(8, awayEffective / 12)));
-  const rawDraw = Math.max(0.16, Math.min(0.34, 0.28 - Math.abs(diff) * 0.002));
+  const rawDraw = Math.max(0.20, Math.min(0.36, 0.30 - Math.abs(diff) * 0.0022));
   const nonDraw = 1 - rawDraw;
   const totalWeight = homeWeight + awayWeight;
   const homeWinProbability = Number((nonDraw * (homeWeight / totalWeight) * 100).toFixed(1));
@@ -907,23 +947,32 @@ export function simulateMatch(
     if (atkTactics.mentality === 'Aggressive') turnoverThreshold += 0.02;
     turnoverThreshold += Math.max(0, atkTactics.tempo - 50) * 0.0012;
     turnoverThreshold += Math.max(0, atkTactics.risk - 50) * 0.0015;
-    turnoverThreshold = Math.max(0.30, Math.min(0.62, turnoverThreshold));
+
+    // Extreme pressing/tempo/risk becomes a liability late in the match.
+    // This prevents the "all sliders to 100" exploit.
+    const minuteProgress = clamp((currentTotalSeconds / 60 - 45) / 45, 0, 1);
+    const intensityFatigue =
+      (Math.max(0, atkTactics.pressingIntensity - 60) * 0.0009 +
+       Math.max(0, atkTactics.tempo - 60) * 0.00055 +
+       Math.max(0, atkTactics.risk - 60) * 0.00045) * minuteProgress;
+    turnoverThreshold += intensityFatigue;
+    turnoverThreshold = Math.max(0.28, Math.min(0.58, turnoverThreshold));
 
     // Keep chance volume in a realistic range instead of making most possessions shots.
     const crossChance = Math.max(
-      0.08,
+      0.06,
       Math.min(
-        0.17,
+        0.13,
         0.11 +
           (atkTactics.attackWidth - 50) * 0.001 +
           (atkTactics.style === 'Long Ball' ? 0.03 : 0)
       )
     );
     const shotChance = Math.max(
-      0.15,
+      0.09,
       Math.min(
-        0.25,
-        0.19 +
+        0.17,
+        0.125 +
           (atkTactics.tempo - 50) * 0.0009 +
           (atkTactics.risk - 50) * 0.0008 +
           (isCounterAttacking ? 0.035 : 0)
@@ -937,7 +986,15 @@ export function simulateMatch(
     // ACTION A: Turnover / Tackle / Foul by Defender
     if (actionRoll < turnoverThreshold) {
       const defender = pick(defDefs.length > 0 ? defDefs : defendingStarters);
-      const isFoul = rand() < (defTactics.style === 'Aggressive' ? 0.35 : 0.16);
+      const foulIntensity = clamp(
+        0.13 +
+        (defTactics.style === 'Aggressive' ? 0.12 : 0) +
+        Math.max(0, defTactics.pressingIntensity - 65) * 0.0015 +
+        Math.max(0, (currentTotalSeconds / 60) - 65) * 0.001,
+        0.10,
+        0.30
+      );
+      const isFoul = rand() < foulIntensity;
 
       if (isFoul) {
         defStats.fouls++;
@@ -1188,10 +1245,23 @@ export function simulateMatch(
       const shooterStat = playerStatsMap.get(shooter.player.id);
       if (shooterStat) shooterStat.shots++;
 
-      const shotPower = shooter.player.attributes.sho;
-      const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
-      const gkReflexes = defGK.player.attributes.dri || defGK.player.overall;
-      const isOnTarget = rand() < Math.max(0.18, Math.min(0.90, (shooterQuality / 100) * 0.72 + 0.15));
+      const shooterQuality =
+        shooter.player.attributes.sho * 0.52 +
+        shooter.player.attributes.dri * 0.20 +
+        shooter.player.attributes.pas * 0.10 +
+        shooter.player.attributes.pac * 0.10 +
+        shooter.player.attributes.phy * 0.08;
+      const gkQuality = goalkeeperQuality(defGK);
+      const shotXg = estimateShotXg(ballX, ballY, isHome, shooter);
+
+      // Shot accuracy is driven by finishing/technique, while chance quality is
+      // driven by location and angle. This prevents every shot from the same
+      // generic "edge of the box" probability.
+      const isOnTarget = rand() < clamp(
+        0.30 + shooterQuality * 0.0044 + shotXg * 0.30,
+        0.30,
+        0.68
+      );
 
       if (!isOnTarget) {
         pushEvent({
@@ -1216,16 +1286,22 @@ export function simulateMatch(
         // Low Block cuts goal probability, Possession/Counter increases chance quality
         // Non-penalty conversion is tuned toward realistic match-level scoring.
         let goalProbability =
-          0.145 +
-          (shooterQuality - gkReflexes) * 0.0065 +
-          (atkPower.attack - defPower.defense) * 0.0018;
-        goalProbability = Math.max(0.055, Math.min(0.42, goalProbability));
-        if (defTactics.style === 'Low Block') goalProbability *= 0.72;
-        if (atkTactics.style === 'Possession') goalProbability *= 1.05;
-        if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.14;
-        if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.05;
-        if (atkTactics.mentality === 'Defensive') goalProbability *= 0.94;
-        goalProbability = Math.max(0.045, Math.min(0.50, goalProbability));
+          shotXg *
+          (0.82 + (shooterQuality - 75) * 0.0028) *
+          (1.02 - (gkQuality - 80) * 0.0032);
+
+        // Tactical modifiers change chance quality, but cannot turn a bad chance
+        // into a free goal.
+        if (defTactics.style === 'Low Block') goalProbability *= 0.78;
+        if (atkTactics.style === 'Possession') goalProbability *= 1.03;
+        if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.10;
+        if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.04;
+        if (atkTactics.mentality === 'Defensive') goalProbability *= 0.95;
+        const lateFatigue =
+          clamp((currentTotalSeconds / 60 - 60) / 35, 0, 1) *
+          (Math.max(0, atkTactics.pressingIntensity - 60) * 0.0009);
+        goalProbability *= 1 - lateFatigue;
+        goalProbability = clamp(goalProbability, 0.018, 0.34);
 
         if (rand() < goalProbability) {
           // GOAL! A normal open-play goal is not automatically assisted.
@@ -1272,7 +1348,7 @@ export function simulateMatch(
               homeStarters, awayStarters, homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, goalNetX, goalNetY, currentPossession, shooter.player.id, defGK.player.id, 'celebrating'
             ),
-            chanceQuality: Number((goalProbability * 100).toFixed(1)),
+            chanceQuality: Number((shotXg * 100).toFixed(1)),
             momentum: isHome ? Math.min(100, momentum + 30) : Math.max(-100, momentum - 30),
           });
 
@@ -1388,7 +1464,7 @@ export function simulateMatch(
 
     // Simulate actual extra-time chances in two 15-minute periods.
     const runExtraTimePeriod = (startMinute: number) => {
-      for (let minute = startMinute; minute < startMinute + 15 && homeScore === awayScore; minute += 6) {
+      for (let minute = startMinute; minute < startMinute + 15; minute += 6) {
         const isEtHome = rand() < 0.5;
         const etAtk = isEtHome ? homePower : awayPower;
         const etDef = isEtHome ? awayPower : homePower;
@@ -1396,8 +1472,9 @@ export function simulateMatch(
         const etDefenderGK = isEtHome ? awayGK : homeGK;
         const shooter = pick(etAttackers.length ? etAttackers : (isEtHome ? homeStarters : awayStarters));
         const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
-        const gkQuality = etDefenderGK.player.attributes.dri || etDefenderGK.player.overall;
-        let etGoalProbability = 0.16 + (shooterQuality - gkQuality) * 0.009 + (etAtk.attack - etDef.defense) * 0.003;
+        const gkQuality = goalkeeperQuality(etDefenderGK);
+        const etXg = estimateShotXg(etX, etY, isEtHome, shooter);
+        let etGoalProbability = etXg * (0.90 + (shooterQuality - 75) * 0.0025) * (1.02 - (gkQuality - 80) * 0.003);
         etGoalProbability *= 0.92;
         if ((isEtHome ? homeTactics : awayTactics).mentality === 'Aggressive') etGoalProbability *= 1.07;
         etGoalProbability = Math.max(0.06, Math.min(0.48, etGoalProbability));
