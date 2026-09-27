@@ -10,6 +10,7 @@ interface FormationSelectViewProps {
   managerId: string;
   onSelectFormation: (formation: Formation) => void;
   onBeginAuction: () => void;
+  onMarkDone: () => void;
   onSkipAuctionSolo: () => void;
 }
 
@@ -18,6 +19,7 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
   managerId,
   onSelectFormation,
   onBeginAuction,
+  onMarkDone,
   onSkipAuctionSolo,
 }) => {
   const currentManager = room.managers.find((m) => m.id === managerId);
@@ -34,6 +36,10 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
     ? Math.round(starters.reduce((sum, s) => sum + s.player.overall, 0) / starters.length)
     : 0;
   const teamOvr = currentManager?.teamOverall || 0;
+  const readyIds = room.phaseReadyIds || [];
+  const formationDone = readyIds.includes(managerId);
+  const readyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
+  const allReady = readyCount === room.managers.length;
 
   return (
     <div className="min-h-screen bg-[#040812] text-slate-100 p-4 sm:p-6 md:p-8 flex flex-col justify-between max-w-6xl mx-auto select-none">
@@ -160,7 +166,8 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
       {/* Action Footer */}
       <div className="pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-xs text-slate-400">
-          Selected Formation: <strong className="text-emerald-400">{selectedFormation}</strong>
+          <div>Selected Formation: <strong className="text-emerald-400">{selectedFormation}</strong></div>
+          <div className="mt-1 font-mono font-black text-amber-300">FORMATION READY {readyCount}/{room.managers.length}</div>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -175,14 +182,22 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
             </button>
           )}
 
+          <button
+            onClick={onMarkDone}
+            disabled={formationDone}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all shadow-lg cursor-pointer active:scale-95 ${formationDone ? 'bg-amber-400 text-slate-950 cursor-default' : 'bg-slate-900 border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/10'}`}
+          >
+            <span>{formationDone ? '✓ I\'M DONE' : 'I\'M DONE'}</span>
+          </button>
+
           {/* Host or Solo: Proceed to Auction */}
           {(isHost || isSolo) && (
             <button
               onClick={onBeginAuction}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 transition-all shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4 fill-current" />
-              <span>START LIVE AUCTION</span>
+              <span>{allReady ? 'START LIVE AUCTION' : `WAITING ${readyCount}/${room.managers.length}`}</span>
             </button>
           )}
         </div>
