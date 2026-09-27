@@ -1313,3 +1313,5 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     </div>
   );
 };
+
+// Production redeploy marker: penalty shootout pacing + scorecard (1790528797239)
