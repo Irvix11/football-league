@@ -892,7 +892,8 @@ function nextKnockoutRound(round: 'Round of 16' | 'Quarter-Final' | 'Semi-Final'
 function buildKnockoutFixtures(
   managers: Manager[],
   roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final',
-  matchday: number
+  matchday: number,
+  initialSeeding = false
 ): Fixture[] {
   // The input order is authoritative: league playoffs pass teams in league-table
   // order, and later rounds pass winners/losers in bracket order. Never reseed by OVR.
@@ -905,7 +906,10 @@ function buildKnockoutFixtures(
   const fixtures: Fixture[] = [];
   for (let i = 0; i < bracketSize / 2; i++) {
     const home = slots[i];
-    const away = slots[bracketSize - 1 - i];
+    const awayIndex = initialSeeding
+      ? bracketSize - 1 - i
+      : i * 2 + 1;
+    const away = slots[awayIndex];
     if (!home && !away) continue;
 
     const id = `ko-${matchday}-${i + 1}-${crypto.randomUUID()}`;
@@ -948,7 +952,7 @@ function initializeKnockout(room: GameRoom) {
   const qualifierCount = playoffQualifierCount(seeded.length);
   const firstRound = qualifierCount === 8 ? 'Quarter-Final' : qualifierCount === 4 ? 'Semi-Final' : 'Final';
   const qualifiers = seeded.slice(0, qualifierCount);
-  const fixtures = buildKnockoutFixtures(qualifiers, firstRound, 1);
+  const fixtures = buildKnockoutFixtures(qualifiers, firstRound, 1, true);
   const round: KnockoutRound = {
     roundName: firstRound,
     fixtures,
@@ -986,7 +990,7 @@ function initializeLeaguePlayoffs(room: GameRoom) {
   }
 
   const firstRound = qualifiers === 8 ? 'Quarter-Final' : qualifiers === 4 ? 'Semi-Final' : 'Final';
-  const fixtures = buildKnockoutFixtures(ranked, firstRound, room.currentMatchday + 1);
+  const fixtures = buildKnockoutFixtures(ranked, firstRound, room.currentMatchday + 1, true);
 
   const round: KnockoutRound = {
     roundName: firstRound,
