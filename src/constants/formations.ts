@@ -26,7 +26,7 @@ export interface FormationConfig {
 
 
 // Each manager owns exactly 11 players. The selected formation defines the exact
-// positional category quota for those 11 players; there is no bench or substitute roster.
+// positional category quota for those 11 players.
 export function getFormationStarterCategoryCounts(formation: Formation): Record<PositionCategory, number> {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const counts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
@@ -269,7 +269,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
 } {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const starters = squad.filter(s => s.isStarting);
-  const substitutes: SquadPlayerEntry[] = [];
+
 
   const categoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
   const starterCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
