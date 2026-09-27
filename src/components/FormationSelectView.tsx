@@ -105,7 +105,7 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
             </div>
             <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
               <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/18</div>
+              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/11</div>
             </div>
           </div>
 
@@ -127,7 +127,7 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
               ))}
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Your formation defines the exact 11-player XI quota. Players are auctioned in GK → DEF → MID → ATT order for the required XI slots, then the remaining bench places can be any mix. Your squad is 18 players total (11 starters + 7 substitutes). After the auction, the game auto-fills the best XI using OVR, attributes and positional fit — and you can move outfield players into different roles.
+              Your formation defines the exact 11-player XI quota. Players are auctioned in GK → DEF → MID → ATT order for the required XI slots, Your squad is exactly 11 players. After the auction, the game auto-fills all 11 formation slots using OVR, attributes and positional fit — and you can move any outfield player into a different outfield role.
             </p>
           </div>
         </div>
