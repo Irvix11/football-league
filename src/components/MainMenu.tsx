@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Formation, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
 import { FORMATIONS_CONFIG } from '../constants/formations';
 import { Play, Zap } from 'lucide-react';
@@ -29,6 +29,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [soloFormation, setSoloFormation] = useState<Formation>('4-3-3');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const submitLockRef = useRef(0);
+
+  const canSubmit = () => {
+    const now = Date.now();
+    if (now - submitLockRef.current < 1500) return false;
+    submitLockRef.current = now;
+    return true;
+  };
 
   // Lobby settings states
   const [maxManagers, setMaxManagers] = useState(8);
@@ -43,7 +51,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!managerName.trim()) return;
+    if (!managerName.trim() || !canSubmit()) return;
     const finalBudget = startingBudget === -1 ? (parseInt(customBudget, 10) || 500) : startingBudget;
     onCreateLobby(managerName.trim(), {
       maxManagers,
@@ -59,7 +67,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   const handleJoinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!managerName.trim() || !joinCode.trim()) return;
+    if (!managerName.trim() || !joinCode.trim() || !canSubmit()) return;
     onJoinLobby(joinCode.trim().toUpperCase(), managerName.trim());
   };
 
@@ -154,6 +162,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <input
                   type="text"
                   required
+                  maxLength={24}
+                  autoComplete="nickname"
                   placeholder="e.g. Master Tactician"
                   value={managerName}
                   onChange={(e) => setManagerName(e.target.value)}
@@ -293,6 +303,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   >
                     <option value="League">League Season</option>
                     <option value="Knockout">Knockout Cup</option>
+                    <option value="Champions Cup">Champions Cup</option>
                   </select>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-400 flex items-center">
@@ -369,6 +380,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   type="text"
                   required
                   maxLength={6}
+                  pattern="[A-Za-z0-9]{6}"
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="e.g. EPL892"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
