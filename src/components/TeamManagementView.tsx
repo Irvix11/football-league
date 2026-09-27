@@ -562,7 +562,10 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   <button
                     key={entry.player.id}
                     type="button"
-                    onClick={() => setInspectedPlayer({ entry, isStarter: false })}
+                    onClick={() => {
+                      setSelectedPlayerId(entry.player.id);
+                      setInspectedPlayer({ entry, isStarter: false });
+                    }}
                     className="flex items-center justify-between gap-2 rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-2 text-left hover:border-sky-400/50 transition-all"
                   >
                     <div className="min-w-0">
