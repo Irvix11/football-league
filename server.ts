@@ -1953,13 +1953,25 @@ function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadP
     risk: clampFiniteNumber(tactics.risk, currentTactics.risk, 1, 100),
   } : currentTactics;
 
-  const ownedIds = new Set(manager.squad.map(s => s.player.id));
+  const starterIds = new Set(manager.squad.filter(s => s.isStarting).map(s => s.player.id));
+  const outfieldStarterIds = new Set(
+    manager.squad
+      .filter(s => s.isStarting && getPositionCategory(s.assignedPosition || s.player.position) !== 'GK')
+      .map(s => s.player.id)
+  );
+  const currentRoles = manager.roles || {
+    captainId: '',
+    penaltyTakerId: '',
+    freeKickTakerId: '',
+    cornerTakerId: '',
+  };
   const nextRoles = roles ? {
-    captainId: ownedIds.has(roles.captainId) ? roles.captainId : manager.roles.captainId,
-    penaltyTakerId: ownedIds.has(roles.penaltyTakerId) ? roles.penaltyTakerId : manager.roles.penaltyTakerId,
-    freeKickTakerId: ownedIds.has(roles.freeKickTakerId) ? roles.freeKickTakerId : manager.roles.freeKickTakerId,
-    cornerTakerId: ownedIds.has(roles.cornerTakerId) ? roles.cornerTakerId : manager.roles.cornerTakerId,
-  } : manager.roles;
+    captainId: starterIds.has(roles.captainId) ? roles.captainId : currentRoles.captainId,
+    // Goalkeepers are never valid penalty takers in the default role system.
+    penaltyTakerId: outfieldStarterIds.has(roles.penaltyTakerId) ? roles.penaltyTakerId : currentRoles.penaltyTakerId,
+    freeKickTakerId: outfieldStarterIds.has(roles.freeKickTakerId) ? roles.freeKickTakerId : currentRoles.freeKickTakerId,
+    cornerTakerId: outfieldStarterIds.has(roles.cornerTakerId) ? roles.cornerTakerId : currentRoles.cornerTakerId,
+  } : currentRoles;
 
   return { squad: sanitizedSquad, tactics: nextTactics, roles: nextRoles };
 }
