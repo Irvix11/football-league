@@ -1273,7 +1273,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
 
 // WebSocket Connection Handler
 wss.on('connection', (ws) => {
-  ws.on('message', (messageRaw) => {
+  ws.on('message', async (messageRaw) => {
     try {
       const data = JSON.parse(messageRaw.toString());
       const { type, payload } = data;
