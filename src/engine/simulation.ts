@@ -1595,7 +1595,7 @@ export function simulateMatch(
         : outfield.length > 0
           ? outfield
           : starters;
-      return pool.sort((a, b) => b.player.attributes.sho - a.player.attributes.sho);
+      return pool.sort((a, b) => penaltyAbility(b) - penaltyAbility(a));
     };
 
     const homeTakers = sortTakers(homeStarters.filter(s => !sentOffIds.has(s.player.id)), homeRoles.penaltyTakerId);
@@ -1632,9 +1632,9 @@ export function simulateMatch(
     for (let round = 1; round <= 5; round++) {
       // Home kick
       const hTaker = homeTakers[(round - 1) % homeTakers.length];
-      const hSho = hTaker.player.attributes.sho || 75;
-      const aGkReflex = awayGK.player.attributes.dri || awayGK.player.overall;
-      const hSuccessRate = 0.74 + (hSho - 75) * 0.005 - (aGkReflex - 80) * 0.004;
+      const hSho = penaltyAbility(hTaker);
+      const aGkReflex = goalkeeperQuality(awayGK);
+      const hSuccessRate = clamp(0.76 + (hSho - 80) * 0.0032 - (aGkReflex - 80) * 0.0028, 0.62, 0.91);
       const hRoll = rand();
       let hOutcome: 'goal' | 'saved' | 'missed' = 'goal';
       if (hRoll > hSuccessRate) {
@@ -1671,9 +1671,9 @@ export function simulateMatch(
 
       // Away kick
       const aTaker = awayTakers[(round - 1) % awayTakers.length];
-      const aSho = aTaker.player.attributes.sho || 75;
-      const hGkReflex = homeGK.player.attributes.dri || homeGK.player.overall;
-      const aSuccessRate = 0.74 + (aSho - 75) * 0.005 - (hGkReflex - 80) * 0.004;
+      const aSho = penaltyAbility(aTaker);
+      const hGkReflex = goalkeeperQuality(homeGK);
+      const aSuccessRate = clamp(0.76 + (aSho - 80) * 0.0032 - (hGkReflex - 80) * 0.0028, 0.62, 0.91);
       const aRoll = rand();
       let aOutcome: 'goal' | 'saved' | 'missed' = 'goal';
       if (aRoll > aSuccessRate) {
@@ -1720,13 +1720,13 @@ export function simulateMatch(
       const hTaker = homeTakers[(sdRound - 1) % homeTakers.length];
       const aTaker = awayTakers[(sdRound - 1) % awayTakers.length];
 
-      const hSho = hTaker.player.attributes.sho || hTaker.player.overall || 75;
-      const aSho = aTaker.player.attributes.sho || aTaker.player.overall || 75;
-      const aGkReflex = awayGK.player.attributes.dri || awayGK.player.overall || 80;
-      const hGkReflex = homeGK.player.attributes.dri || homeGK.player.overall || 80;
+      const hSho = penaltyAbility(hTaker);
+      const aSho = penaltyAbility(aTaker);
+      const aGkReflex = goalkeeperQuality(awayGK);
+      const hGkReflex = goalkeeperQuality(homeGK);
 
-      const hSuccessRate = Math.max(0.58, Math.min(0.90, 0.72 + (hSho - 75) * 0.004 - (aGkReflex - 80) * 0.003));
-      const aSuccessRate = Math.max(0.58, Math.min(0.90, 0.72 + (aSho - 75) * 0.004 - (hGkReflex - 80) * 0.003));
+      const hSuccessRate = clamp(0.74 + (hSho - 80) * 0.0028 - (aGkReflex - 80) * 0.0025, 0.62, 0.90);
+      const aSuccessRate = clamp(0.74 + (aSho - 80) * 0.0028 - (hGkReflex - 80) * 0.0025, 0.62, 0.90);
 
       const hOutcome: 'goal' | 'saved' | 'missed' =
         rand() < hSuccessRate ? 'goal' : (rand() < 0.65 ? 'saved' : 'missed');
