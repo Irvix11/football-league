@@ -130,8 +130,8 @@ export type PlayerPool =
 
 export type Era = 'Current' | 'All-Time';
 export type AuctionMode = 'Classic' | 'Blind' | 'Quick';
-export type LeagueType = 'Round Robin' | 'Double Round Robin';
-export type CompetitionFormat = 'League' | 'Knockout' | 'Champions Cup';
+export type LeagueType = 'Double Round Robin';
+export type CompetitionFormat = 'League';
 
 export interface LobbySettings {
   maxManagers: number; // 2-16
