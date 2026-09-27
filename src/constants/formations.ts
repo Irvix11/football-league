@@ -313,8 +313,9 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   }
 
   // Formation slots are exact for the starting XI. The seven bench places are
-  // flexible, so a manager is not blocked merely because their bench contains
-  // more players from one category. Auction rules handle acquisition limits.
+  // intentionally position-flexible: changing from 4-3-3 to 4-1-4-1 must NOT
+  // invalidate an already-purchased squad just because the bench has extra
+  // attackers/defenders. Auction acquisition limits are enforced separately.
   const starterRequirements = getFormationStarterCategoryCounts(formation);
   for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
     const requiredStarters = starterRequirements[cat];
