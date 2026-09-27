@@ -75,8 +75,8 @@ export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
     categoryRequirements: {
       GK: { min: 1, recommended: 1, max: 2 },
       DEF: { min: 4, recommended: 5, max: 7 },
-      MID: { min: 4, recommended: 6, max: 7 },
-      ATT: { min: 2, recommended: 3, max: 5 },
+      MID: { min: 3, recommended: 3, max: 3 },
+      ATT: { min: 3, recommended: 3, max: 3 },
     },
     slots: [
       { index: 0, position: 'GK', category: 'GK', name: 'Goalkeeper', x: 50, y: 10 },
