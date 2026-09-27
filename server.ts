@@ -395,9 +395,9 @@ function publicManagerRef(managerId: string): string {
   return 'p-' + crypto.createHash('sha256').update(managerId).digest('hex').slice(0, 12);
 }
 
-function resolveManagerId(room: GameRoom, suppliedId: unknown): string | null {
+function resolveManagerId(room: GameRoom | undefined, suppliedId: unknown): string | null {
   const value = String(suppliedId || '');
-  if (!value) return null;
+  if (!room || !value) return null;
   if (room.managers.some(m => m.id === value)) return value;
   const match = room.managers.find(m => publicManagerRef(m.id) === value);
   return match?.id || null;
@@ -475,65 +475,56 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = tr
   if (!room) return;
 
   const sockets = roomSockets.get(roomCode) || new Set<WebSocket>();
-
-  // Advance the durable version before cloning/publishing. Otherwise clients can
-  // receive a snapshot whose updatedAt is one tick behind the persisted state,
-  // causing polling to reject a newer server state and making rejoin look stuck.
   room.updatedAt = Date.now();
-
-  // Clone room and enforce the privacy boundary: each client receives its
-  // own real manager ID, while every other manager ID becomes an opaque public ref.
-  const viewerManagerId = [...socketToRoom.entries()]
-    .find(([socket, session]) => socket !== excludeSocket && session.roomCode === roomCode)?.[1]?.managerId;
-  const sanitizedRoom = sanitizeRoomForViewer(room, viewerManagerId);
   const rawSecretBids = blindSecretBids.get(roomCode) || {};
 
-  // Blind Auction privacy boundary: before reveal, send only two clues.
-  if (room.settings.auctionMode === 'Blind' && room.phase === 'auction') {
-    sanitizedRoom.auction.hasSubmittedSecretBid = {};
-    for (const mId of Object.keys(rawSecretBids)) {
-      sanitizedRoom.auction.hasSubmittedSecretBid[mId] = true;
-    }
-
-    const sourcePlayer = room.auction.currentPlayer;
-    if (sourcePlayer && !room.auction.isSold) {
-      sanitizedRoom.auction.currentPlayer = {
-        ...sourcePlayer,
-        id: `blind-${sourcePlayer.id}`,
-        name: 'Mystery Player',
-        club: 'Unknown Club',
-        league: 'Unknown League',
-        nationality: 'Unknown',
-        // Category/position are neutralized too: blind auction clients should only
-        // receive the two scouting attributes below, plus the normal auction price.
-        position: 'ST',
-        category: 'ATT',
-        overall: 0,
-        attributes: { pac: 0, sho: 0, pas: 0, dri: 0, def: 0, phy: 0 },
-        age: 0,
-        preferredFoot: 'Right',
-        alternatePositions: [],
-        marketValue: 0,
-        valueSource: 'Blind Auction',
-        valueVersion: 'hidden',
-        updatedAt: '',
-        blindClues: room.auction.blindClues || [],
-      } as any;
-    }
-  }
-
   if (persist) queueRoomSnapshot(room);
+
   for (const client of sockets) {
-    if (client !== excludeSocket && client.readyState === WebSocket.OPEN) {
-      const viewerId = socketToRoom.get(client)?.managerId;
-      client.send(JSON.stringify({
-        type: 'ROOM_UPDATE',
-        room: sanitizeRoomForViewer(room, viewerId),
-      }));
+    if (client === excludeSocket || client.readyState !== WebSocket.OPEN) continue;
+
+    const viewerId = socketToRoom.get(client)?.managerId;
+    const sanitizedRoom = sanitizeRoomForViewer(room, viewerId);
+
+    // Blind auction privacy is applied after manager-ID sanitization so both
+    // privacy boundaries are guaranteed for every individual recipient.
+    if (room.settings.auctionMode === 'Blind' && room.phase === 'auction') {
+      sanitizedRoom.auction.hasSubmittedSecretBid = {};
+      for (const mId of Object.keys(rawSecretBids)) {
+        sanitizedRoom.auction.hasSubmittedSecretBid[publicManagerRef(mId)] = true;
+      }
+
+      const sourcePlayer = room.auction.currentPlayer;
+      if (sourcePlayer && !room.auction.isSold) {
+        sanitizedRoom.auction.currentPlayer = {
+          ...sourcePlayer,
+          id: `blind-${sourcePlayer.id}`,
+          name: 'Mystery Player',
+          club: 'Unknown Club',
+          league: 'Unknown League',
+          nationality: 'Unknown',
+          position: 'ST',
+          category: 'ATT',
+          overall: 0,
+          attributes: { pac: 0, sho: 0, pas: 0, dri: 0, def: 0, phy: 0 },
+          age: 0,
+          preferredFoot: 'Right',
+          alternatePositions: [],
+          marketValue: 0,
+          valueSource: 'Blind Auction',
+          valueVersion: 'hidden',
+          updatedAt: '',
+          blindClues: room.auction.blindClues || [],
+        } as any;
+      }
     }
+
+    client.send(JSON.stringify({
+      type: 'ROOM_UPDATE',
+      room: sanitizedRoom,
+    }));
   }
 }
-
 function generateLobbyCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -2237,7 +2228,7 @@ wss.on('connection', (ws) => {
               type: 'LOBBY_CREATED',
               roomCode: result.roomCode,
               managerId: result.managerId,
-              room: result.room,
+              room: result.room: sanitizeRoomForViewer(room, result.managerId),
             }));
             break;
           }
@@ -2328,7 +2319,7 @@ wss.on('connection', (ws) => {
             type: 'LOBBY_CREATED',
             roomCode,
             managerId: hostId,
-            room,
+            room: sanitizeRoomForViewer(room, hostId),
           }));
           break;
         }
@@ -2371,7 +2362,7 @@ wss.on('connection', (ws) => {
               type: 'LOBBY_JOINED',
               roomCode: room.code,
               managerId: existing.id,
-              room,
+              room: sanitizeRoomForViewer(room, existing.id),
             }));
             broadcastRoom(room.code);
             return;
@@ -2443,7 +2434,7 @@ wss.on('connection', (ws) => {
             type: 'LOBBY_JOINED',
             roomCode: room.code,
             managerId: newManagerId,
-            room,
+            room: sanitizeRoomForViewer(room, newManagerId),
           }));
           broadcastRoom(room.code);
           break;
@@ -2528,10 +2519,11 @@ wss.on('connection', (ws) => {
 
         // --- 5. KICK PLAYER ---
         case 'KICK_PLAYER': {
-          const { roomCode, resolvedTargetId } = payload;
+          const { roomCode, targetManagerId } = payload;
           const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
           const { room, session } = auth;
+          const resolvedTargetId = resolveManagerId(room, targetManagerId);
           if (!isRoomHost(room, session.managerId) || resolvedTargetId === room.hostId) {
             sendSocketError(ws, 'Only the host can kick another manager.');
             return;
