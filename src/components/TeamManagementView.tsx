@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameRoom, Formation, TacticalStyle, TacticalMentality, SquadPlayerEntry, TeamTactics, TeamRoles, Player, Position } from '../types/football';
-import { FORMATIONS_CONFIG, BENCH_CATEGORY_ALLOCATION, validateSquadFormation, calculatePositionFit, getPositionCategory } from '../constants/formations';
+import { FORMATIONS_CONFIG, validateSquadFormation, calculatePositionFit, getPositionCategory } from '../constants/formations';
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerCard } from './PlayerCard';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
@@ -72,29 +72,8 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
     });
   }
 
-  const bench: SquadPlayerEntry[] = [];
-  for (const category of ['GK', 'DEF', 'MID', 'ATT'] as const) {
-    const needed = BENCH_CATEGORY_ALLOCATION[category];
-    const candidates = remaining
-      .filter(entry => entry.player.category === category)
-      .sort((a, b) => playerLineupScore(b, { category, position: b.player.position }) - playerLineupScore(a, { category, position: a.player.position }) || b.player.overall - a.player.overall);
-    for (const chosen of candidates.slice(0, needed)) {
-      remaining.splice(remaining.findIndex(entry => entry.player.id === chosen.player.id), 1);
-      bench.push({
-        ...chosen,
-        isStarting: false,
-        startingSlotIndex: undefined,
-        benchIndex: bench.length,
-        assignedPosition: chosen.assignedPosition || chosen.player.position,
-      });
-    }
-  }
-
-  if (starters.length !== 11 || bench.length !== 7) return [];
-  return [
-    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11),
-    ...bench,
-  ];
+  return starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
+}
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
@@ -440,7 +419,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/11</div>
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
@@ -569,7 +548,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
             <div className="mt-3 w-full rounded-2xl bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-white/10 p-3 shadow-xl shadow-black/20 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">SQUAD · 11 PLAYERS</span>
-                <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.length}/18</span>
+                <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.length}/11</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
                 {currentManager.squad.map((entry) => (
