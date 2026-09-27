@@ -3523,13 +3523,14 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
       room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
       const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
-    const midpointMatchday = getMidSeasonWindowMatchday(room);
-    const midpointComplete = midpointMatchday > 0 &&
-      matchday === midpointMatchday &&
-      room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
+      const midpointMatchday = getMidSeasonWindowMatchday(room);
+      const midpointComplete =
+        midpointMatchday > 0 &&
+        matchday === midpointMatchday &&
+        room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
 
-    if (midpointComplete && !leagueComplete) openMidSeasonWindow(room);
-    if (leagueComplete) initializeLeaguePlayoffs(room);
+      if (midpointComplete && !leagueComplete) openMidSeasonWindow(room);
+      if (leagueComplete) initializeLeaguePlayoffs(room);
 
       await saveRoomSnapshot(room);
       broadcastRoom(room.code);
