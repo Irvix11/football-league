@@ -189,6 +189,7 @@ export default function App() {
           onPlaceBid={placeBid}
           onSubmitBlindBid={submitBlindBid}
           onMarkDone={markAuctionDone}
+          onLeaveMatch={leaveLobby}
         />
       ) : room.phase === 'team_management' ? (
         <TeamManagementView
