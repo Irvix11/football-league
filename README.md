@@ -73,3 +73,5 @@ Before shipping a release, verify:
 
 
 <!-- deploy: final-zero-price-crash-hardening-2026-09-27 -->
+
+<!-- release: auction-stuck-recovery 2026-09-27 -->
