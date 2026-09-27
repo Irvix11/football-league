@@ -17,8 +17,18 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   onClick,
 }) => {
   const isGK = player.category === 'GK';
+  const isBlindMystery = player.id.startsWith('blind-');
   const isHighOvr = player.overall >= 88;
   const isIcon = player.id.startsWith('fc-icon');
+
+  const blindLabels: Record<string, string> = {
+    pac: 'PACE',
+    sho: 'SHOOTING',
+    pas: 'PASSING',
+    dri: 'DRIBBLING',
+    def: 'DEFENDING',
+    phy: 'PHYSICAL',
+  };
 
   if (size === 'sm') {
     return (
@@ -49,6 +59,39 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         </div>
         <div className="text-right">
           <div className="text-xs font-mono font-bold text-emerald-400">£{player.marketValue}M</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isBlindMystery && size !== 'sm') {
+    return (
+      <div
+        onClick={onClick}
+        className={`relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-950 shadow-2xl ${className}`}
+      >
+        <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] font-black text-amber-400">BLIND AUCTION</div>
+            <div className="font-display font-black text-2xl text-white mt-1">MYSTERY PLAYER</div>
+          </div>
+          <LockIcon />
+        </div>
+        <div className="px-5 py-4 bg-slate-950/50">
+          <div className="text-xs text-slate-400">No name · no OVR · no club · no nationality</div>
+          <div className="text-[10px] text-slate-500 mt-1">Only two attributes are revealed before you bid.</div>
+        </div>
+        <div className="p-5 grid grid-cols-2 gap-3 bg-slate-900/60">
+          {(player.blindClues || []).slice(0, 2).map((clue) => (
+            <div key={clue.key} className="p-4 rounded-xl bg-slate-950/80 border border-amber-500/30 text-center">
+              <div className="text-[10px] text-amber-300 font-black tracking-wider">{blindLabels[clue.key] || clue.key.toUpperCase()}</div>
+              <div className="text-3xl font-black font-mono text-emerald-400 mt-1">{clue.value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="px-5 py-3 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <span className="text-slate-400">Starting Price</span>
+          <span className="font-mono font-black text-amber-400">£{player.startingPrice}M</span>
         </div>
       </div>
     );
