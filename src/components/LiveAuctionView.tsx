@@ -120,7 +120,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           : 'MYSTERY LOT';
   const activeReadyManagers = activeCategory
     ? room.managers.filter((m) => {
-        const required = getFormationSquadCategoryLimits(m.formation)[activeCategory];
+        const required = getFormationStarterCategoryCounts(m.formation)[activeCategory];
         return m.squad.filter((s) => s.player.category === activeCategory).length >= required;
       }).length
     : 0;
@@ -134,12 +134,12 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
   const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
-  const isSquadFull = currentManager.squad.length >= 18;
+  const isSquadFull = currentManager.squad.length >= 11;
   const isWinning = auction.highestBidderId === managerId;
   const readyIds = room.phaseReadyIds || [];
   const auctionDone = readyIds.includes(managerId);
   const auctionReadyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
-  const squadComplete = currentManager.squad.length === 18;
+  const squadComplete = currentManager.squad.length === 11;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
 
@@ -226,7 +226,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">SQUAD</div>
-            <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 18</div>
+            <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 11</div>
           </div>
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
@@ -407,7 +407,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     {/* Bid Action Buttons */}
                     {isSquadFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-amber-400 font-semibold">
-                        Your 18-player squad is full (18/18). You cannot bid on further players.
+                        Your 11-player squad is full (11/11). You cannot bid on further players.
                       </div>
                     ) : isCategoryFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-rose-400 font-semibold">
@@ -643,10 +643,10 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
-              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
             </div>
             {currentManager.squad.length === 0 ? (
-              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 18/18.</div>
+              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 11/11.</div>
             ) : (
               <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
                 {currentManager.squad.map((entry) => (
@@ -708,7 +708,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                         {m.name} {isMe && '(You)'}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        {m.squad.length}/18 Players · OVR {m.teamOverall}
+                        {m.squad.length}/11 Players · OVR {m.teamOverall}
                       </div>
                     </div>
                     <div className="text-right">
