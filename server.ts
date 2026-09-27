@@ -170,6 +170,11 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
 
   const sockets = roomSockets.get(roomCode) || new Set<WebSocket>();
 
+  // Advance the durable version before cloning/publishing. Otherwise clients can
+  // receive a snapshot whose updatedAt is one tick behind the persisted state,
+  // causing polling to reject a newer server state and making rejoin look stuck.
+  room.updatedAt = Date.now();
+
   // Clone room to sanitize blind auction state (never reveal hidden bids)
   const sanitizedRoom = JSON.parse(JSON.stringify(room)) as GameRoom;
   const rawSecretBids = blindSecretBids.get(roomCode) || {};
@@ -216,7 +221,6 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
     }
   }
 
-  room.updatedAt = Date.now();
   queueRoomSnapshot(room);
   const payload = JSON.stringify({
     type: 'ROOM_UPDATE',
