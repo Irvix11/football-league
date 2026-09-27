@@ -286,6 +286,16 @@ export function useGameSocket() {
     send('BEGIN_AUCTION', { roomCode: room.code });
   }, [room, send]);
 
+  const markFormationDone = useCallback(() => {
+    if (!room || !managerId) return;
+    send('FORMATION_READY', { roomCode: room.code, managerId });
+  }, [room, managerId, send]);
+
+  const markAuctionDone = useCallback(() => {
+    if (!room || !managerId) return;
+    send('AUCTION_READY', { roomCode: room.code, managerId });
+  }, [room, managerId, send]);
+
   const skipAuctionSolo = useCallback(() => {
     if (!room) return;
     send('SKIP_AUCTION_SOLO', { roomCode: room.code });
@@ -439,6 +449,8 @@ export function useGameSocket() {
     startGame,
     selectFormation,
     beginAuction,
+    markFormationDone,
+    markAuctionDone,
     skipAuctionSolo,
     placeBid,
     submitBlindBid,
