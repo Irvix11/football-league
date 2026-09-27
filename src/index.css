@@ -222,6 +222,28 @@ table tbody tr:hover {
   background: rgba(255,255,255,0.025);
 }
 
+/* Live match rendering: isolate the pitch and keep moving markers on compositor-friendly layers. */
+.live-pitch-surface {
+  contain: layout paint style;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  touch-action: manipulation;
+}
+
+.live-pitch-surface > div {
+  backface-visibility: hidden;
+}
+
+.live-pitch-surface [class*="will-change-transform"] {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.live-match-clean {
+  contain: layout paint;
+}
+
 /* Live match / pitch surfaces retain their own visual identity. */
 .pitch-pattern {
   background:
