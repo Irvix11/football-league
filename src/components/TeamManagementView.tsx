@@ -28,7 +28,7 @@ function playerLineupScore(entry: SquadPlayerEntry, slot: { position: any; categ
       : slot.category === 'MID'
         ? a.pas * 0.35 + a.dri * 0.25 + a.def * 0.15 + a.sho * 0.15 + a.pac * 0.10
         : a.sho * 0.40 + a.pac * 0.20 + a.dri * 0.25 + a.pas * 0.15;
-  return player.overall * 0.62 + fit * 0.28 + relevant * 0.10;
+  return player.overall * 0.55 + fit * 0.35 + relevant * 0.10;
 }
 
 /**
@@ -50,7 +50,7 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
 
   for (const slot of orderedSlots) {
     const candidates = remaining.filter(entry =>
-      getPositionCategory(entry.assignedPosition || entry.player.position) === slot.category
+      slot.category === 'GK' ? entry.player.category === 'GK' : entry.player.category !== 'GK'
     );
     const pool = candidates.length ? candidates : remaining;
     const chosen = [...pool].sort(
@@ -89,14 +89,13 @@ const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
 
-function allowedPositionsForPlayer(player: Player, starterCategory?: 'GK' | 'DEF' | 'MID' | 'ATT'): Position[] {
-  // Goalkeepers stay GK. Starters may move freely inside the formation category
-  // (e.g. CM -> CAM, CB -> LB, ST -> CF/LW), while bench players may be assigned
-  // any outfield role for later tactical use.
+function allowedPositionsForPlayer(player: Player, _starterCategory?: 'GK' | 'DEF' | 'MID' | 'ATT'): Position[] {
+  // The formation owns the slot; the manager owns the tactical role.
+  // Any outfield player can be assigned to any outfield role. Natural and
+  // alternate positions score highly; unusual roles remain legal but receive
+  // a visible positional-fit penalty and reduce Team OVR.
   if (player.category === 'GK') return ['GK'];
-  const outfield = ALL_POSITIONS.filter((position) => position !== 'GK');
-  if (!starterCategory) return outfield;
-  return outfield.filter((position) => getPositionCategory(position) === starterCategory);
+  return ALL_POSITIONS.filter((position) => position !== 'GK');
 }
 
 function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF' | 'MID' | 'ATT'): Position {
@@ -150,6 +149,13 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
 
   const starters = currentManager.squad.filter((s) => s.isStarting);
   const substitutes = currentManager.squad.filter((s) => !s.isStarting);
+  const getEffectiveOvr = (entry: SquadPlayerEntry, slotPosition: Position) => {
+    const fit = calculatePositionFit(entry.player.position, entry.player.alternatePositions, entry.assignedPosition || slotPosition);
+    const conditionMultiplier = entry.condition.state === 'INJURED' || entry.condition.state === 'SUSPENDED'
+      ? 0.5
+      : entry.condition.state === 'TIRED' || entry.condition.fatigue > 50 ? 0.9 : 1;
+    return Math.round(entry.player.overall * (0.6 + 0.4 * (fit / 100)) * conditionMultiplier);
+  };
 
   // All 7 supported tactical presets
   const TACTICAL_PRESETS: Record<TacticalStyle, TeamTactics> = {
@@ -251,21 +257,14 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const entry = currentManager.squad.find((s) => s.player.id === playerId);
     if (!entry) return;
 
-    const currentCategory = getPositionCategory(entry.assignedPosition || entry.player.position);
     const nextCategory = getPositionCategory(position);
-    if ((currentCategory === 'GK') !== (nextCategory === 'GK')) {
+    if (entry.player.category === 'GK' && nextCategory !== 'GK') {
       setActionError('Goalkeepers can only be assigned to GK.');
       return;
     }
-
-    // A starter must stay inside the category of its formation slot. This still
-    // allows genuine positional switches such as CB→LB, CM→CAM and ST→CF.
-    if (entry.isStarting && entry.startingSlotIndex !== undefined) {
-      const slot = formationConfig.slots.find((s) => s.index === entry.startingSlotIndex);
-      if (slot && slot.category !== nextCategory) {
-        setActionError(`That slot requires a ${slot.category} player. Change the position within ${slot.category} or swap the player.`);
-        return;
-      }
+    if (entry.player.category !== 'GK' && nextCategory === 'GK') {
+      setActionError('Outfield players cannot be assigned to GK.');
+      return;
     }
 
     const updated = currentManager.squad.map((s) =>
