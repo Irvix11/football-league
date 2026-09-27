@@ -42,10 +42,6 @@ export interface Player {
   updatedAt: string;
   /** Present only for a masked Blind Auction player. */
   blindClues?: BlindStatClue[];
-  /** Set when exactly one manager remains who must fill the current positional stage. */
-  forcedWinnerId?: string | null;
-  forcedWinnerName?: string | null;
-  isForcedPurchase?: boolean;
 }
 
 export type Formation = 
@@ -188,6 +184,10 @@ export interface AuctionState {
   hasSubmittedSecretBid?: Record<string, boolean>; // public indicator that a manager submitted
   /** Two server-selected attributes shown before a Blind Auction reveal. */
   blindClues?: BlindStatClue[];
+  /** Set when exactly one manager remains who must fill the current positional stage. */
+  forcedWinnerId?: string | null;
+  forcedWinnerName?: string | null;
+  isForcedPurchase?: boolean;
 }
 
 export type MatchEventType = 
