@@ -2564,30 +2564,39 @@ wss.on('connection', (ws) => {
 
         // --- KNOCKOUT MATCH ---
         case 'RUN_KNOCKOUT_MATCH': {
-          const { roomCode, fixtureId } = payload;
-          const auth = authorizeSocket(ws, roomCode);
-          if (!auth || auth.room.phase !== 'knockout') return;
-          const { room } = auth;
-          const stage = room.knockoutStage;
-          if (!stage) return;
-          const round = stage.rounds[stage.rounds.length - 1];
-          const fix = round.fixtures.find(f => f.id === fixtureId);
-          if (!fix || fix.played) return;
+          try {
+            const { roomCode, managerId, fixtureId } = payload;
+            const auth = authorizeSocket(ws, roomCode, managerId);
+            if (!auth || auth.room.phase !== 'knockout') {
+              sendSocketError(ws, 'Knockout phase is not active for this manager session.');
+              return;
+            }
+            const { room } = auth;
+            const stage = room.knockoutStage;
+            if (!stage) { sendSocketError(ws, 'Knockout stage is unavailable.'); return; }
+            const round = stage.rounds[stage.rounds.length - 1];
+            if (!round) { sendSocketError(ws, 'Knockout round is unavailable.'); return; }
+            const fix = round.fixtures.find(f => f.id === fixtureId);
+            if (!fix) { sendSocketError(ws, 'Fixture not found.'); return; }
+            if (fix.played) { sendSocketError(ws, 'This knockout match has already been played.'); return; }
 
-          const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
-          const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
-          if (!homeMgr || !awayMgr) return;
+            const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+            const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+            if (!homeMgr || !awayMgr) {
+              sendSocketError(ws, 'Unable to load both teams for this fixture.');
+              return;
+            }
 
-          const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
-          Object.assign(fix, result);
-          room.fixtures = round.fixtures;
-          // IMPORTANT: keep the room in the knockout phase while the client
-          // plays the authoritative event timeline in LiveMatchEngine.
-          // The bracket/season advances only after COMPLETE_KNOCKOUT_MATCH.
-          broadcastRoom(room.code);
+            const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+            Object.assign(fix, result);
+            room.fixtures = round.fixtures;
+            broadcastRoom(room.code);
+          } catch (error: any) {
+            console.error('[WS] RUN_KNOCKOUT_MATCH failed:', error);
+            sendSocketError(ws, error?.message || 'Failed to simulate knockout match.');
+          }
           break;
         }
-
         // Advance the bracket only after the 2D live match has reached full-time.
         case 'COMPLETE_KNOCKOUT_MATCH': {
           const { roomCode, fixtureId } = payload;
