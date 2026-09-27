@@ -67,3 +67,6 @@ Before shipping a release, verify:
 
 
 <!-- release trigger: auction-economy-and-formation-fixes 2026-09-27 -->
+
+
+<!-- release trigger: zero-value-and-crash-hardening 2026-09-27 -->
