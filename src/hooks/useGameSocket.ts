@@ -45,7 +45,8 @@ function restoreViewerIdentity(snapshot: GameRoom, viewerId: string | null, view
     homeManagerId: isMine(f.homeManagerName) ? viewerId : f.homeManagerId,
     awayManagerId: isMine(f.awayManagerName) ? viewerId : f.awayManagerId,
     winnerManagerId:
-      f.winnerManagerId && isMine(f.winnerManagerId === viewerId ? viewerName || undefined : undefined)
+      (isMine(f.homeManagerName) && f.winnerManagerId === f.homeManagerId) ||
+      (isMine(f.awayManagerName) && f.winnerManagerId === f.awayManagerId)
         ? viewerId
         : f.winnerManagerId,
   }));
@@ -283,7 +284,7 @@ export function useGameSocket() {
         setRoom(current => {
           if (!current || snapshot.updatedAt >= current.updatedAt) {
             const saved = getSavedSession();
-            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || current.currentManager?.name || null);
+            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || current.managers.find(m => m.id === managerIdRef.current)?.name || null);
           }
           return current;
         });
