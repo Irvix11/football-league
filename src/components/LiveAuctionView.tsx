@@ -568,7 +568,6 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     </form>
                   </div>
                 )}
-                )}
               </div>
             </div>
           ) : (
