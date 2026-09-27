@@ -717,15 +717,13 @@ function advanceAuction(room: GameRoom) {
   if (room.phase !== 'auction') return;
 
   const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
-  // Find players not already owned by any manager in this room
+  // Find players not already owned by any manager in this room.
   const ownedIds = new Set<string>();
   for (const m of room.managers) {
-    for (const s of m.squad) {
-      ownedIds.add(s.player.id);
-    }
+    for (const s of m.squad) ownedIds.add(s.player.id);
   }
 
-  // Check if all managers have complete XI-only squads
+  // Every manager must complete the exact 11-player XI.
   const allFull = room.managers.every(m => m.squad.length >= 11);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
@@ -745,10 +743,11 @@ function advanceAuction(room: GameRoom) {
     return;
   }
 
-  // Stage the auction so every manager completes the same positional block
-  // before the next block begins: GK -> DEF -> MID -> ATT. If a pool does not
-  // contain a player for the earliest required category, skip that empty block
-  // instead of repeatedly presenting an unbuyable player and stalling the auction.
+  // Auction order is a strict positional progression:
+  // GK -> DEF -> MID -> ATT.
+  // A category is not left until every manager has filled that category's
+  // formation quota. Once only ONE manager is still missing that category,
+  // the next suitable player is a forced purchase for that manager.
   const orderedCategories: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
   const neededCategories = orderedCategories.filter(category =>
     room.managers.some(manager => {
@@ -757,19 +756,21 @@ function advanceAuction(room: GameRoom) {
       return count < required;
     })
   );
-  const starterStage = neededCategories.find(category => unowned.some(p =>
-    p.category === category &&
-    room.managers.some(manager => {
-      const required = getFormationSquadCategoryLimits(manager.formation)[category];
-      const count = manager.squad.filter(entry => entry.player.category === category).length;
-      return count < required && manager.budget >= p.startingPrice;
-    })
-  )) || null;
 
-  // Prefer lots that at least one incomplete manager can actually use and afford.
-  // This prevents the auction from cycling forever on a player that nobody can
-  // legally sign because the relevant category is full or their budget is below
-  // the starting price.
+  const starterStage = neededCategories.find(category =>
+    unowned.some(p =>
+      p.category === category &&
+      room.managers.some(manager => {
+        const required = getFormationSquadCategoryLimits(manager.formation)[category];
+        const count = manager.squad.filter(entry => entry.player.category === category).length;
+        return count < required && manager.budget >= p.startingPrice;
+      })
+    )
+  ) || null;
+
+  // Prefer players that can legally be bought by at least one manager in the
+  // active positional stage. This prevents the auction from stalling on a lot
+  // nobody can use or afford.
   const eligibleCandidates = unowned.filter(p =>
     room.managers.some(manager => {
       if (manager.squad.length >= 11 || manager.budget < p.startingPrice) return false;
@@ -784,8 +785,6 @@ function advanceAuction(room: GameRoom) {
     : eligibleCandidates);
 
   if (auctionCandidates.length === 0) {
-    // No remaining lot can be purchased legally. Finish the remaining XI from
-    // the unused pool instead of leaving every client on an endless auction.
     emergencyFillRemainingXI(room, unowned);
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
@@ -794,9 +793,37 @@ function advanceAuction(room: GameRoom) {
     return;
   }
 
-  const nextPlayer = auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)];
+  // If exactly one manager is still missing the active category, choose a
+  // player that manager can afford and mark the lot as a mandatory signing.
+  // The client disables normal bidding and the server awards it at the
+  // starting price when the short forced-purchase timer expires.
+  const stageManagers = starterStage
+    ? room.managers.filter(manager => {
+        const required = getFormationStarterCategoryCounts(manager.formation)[starterStage];
+        const count = manager.squad.filter(entry => entry.player.category === starterStage).length;
+        return count < required && manager.squad.length < 11;
+      })
+    : [];
+
+  const forcedManager = stageManagers.length === 1 ? stageManagers[0] : null;
+  const forcedCandidates = forcedManager
+    ? auctionCandidates.filter(player => forcedManager.budget >= player.startingPrice)
+    : [];
+
+  const nextPlayer = (forcedManager && forcedCandidates.length > 0
+    ? forcedCandidates[Math.floor(Math.random() * forcedCandidates.length)]
+    : auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)]);
+
+  const isForcedPurchase = Boolean(
+    forcedManager &&
+    nextPlayer.category === starterStage &&
+    forcedManager.budget >= nextPlayer.startingPrice
+  );
+
   const isQuick = room.settings.auctionMode === 'Quick';
-  const duration = isQuick ? 8 : (room.settings.auctionMode === 'Blind' ? 15 : 12);
+  const duration = isForcedPurchase
+    ? 4
+    : (isQuick ? 8 : (room.settings.auctionMode === 'Blind' ? 15 : 12));
 
   room.auction = {
     currentPlayerIndex: room.auction.auctionHistory.length + 1,
@@ -813,20 +840,18 @@ function advanceAuction(room: GameRoom) {
     soldPrice: 0,
     auctionHistory: room.auction.auctionHistory,
     blindClues: room.settings.auctionMode === 'Blind' ? createBlindAuctionClues(nextPlayer) : undefined,
+    forcedWinnerId: isForcedPurchase ? forcedManager!.id : null,
+    forcedWinnerName: isForcedPurchase ? forcedManager!.name : null,
+    isForcedPurchase,
   };
 
   blindSecretBids.set(room.code, {});
 
-  // Clear previous timer if any
   if (auctionIntervals.has(room.code)) {
     clearInterval(auctionIntervals.get(room.code)!);
   }
 
   broadcastRoom(room.code);
-
-  // Keep one authoritative ticker per room. The absolute deadline is the
-  // source of truth, so reconnecting to a different Vercel Function instance
-  // can safely resume the countdown instead of freezing at the last snapshot.
   ensureAuctionTicker(room);
 }
 
