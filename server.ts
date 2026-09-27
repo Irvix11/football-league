@@ -87,7 +87,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
     }
 
     const sourcePlayer = room.auction.currentPlayer;
-    if (sourcePlayer && !room.auction.isRevealed) {
+    if (sourcePlayer && !room.auction.isSold) {
       const genericPosition = sourcePlayer.category === 'GK'
         ? 'GK'
         : sourcePlayer.category === 'DEF'
@@ -615,7 +615,6 @@ function advanceAuction(room: GameRoom) {
     soldPrice: 0,
     auctionHistory: room.auction.auctionHistory,
     blindClues: room.settings.auctionMode === 'Blind' ? createBlindAuctionClues(nextPlayer) : undefined,
-    isRevealed: false,
   };
 
   blindSecretBids.set(room.code, {});
@@ -728,10 +727,11 @@ function finalizeAuctionItem(room: GameRoom) {
       finalPrice = highestBid;
     } else {
       winnerId = null;
+      // Use the existing SOLD/reveal state for a short "NO VALID BIDS" reveal.
+      room.auction.isSold = true;
+      room.auction.winnerId = null;
+      room.auction.soldPrice = 0;
     }
-
-    // Reveal the identity after the blind bidding window closes.
-    room.auction.isRevealed = true;
   }
 
   if (winnerId) {
