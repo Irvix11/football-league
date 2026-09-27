@@ -181,8 +181,6 @@ export interface AuctionState {
   hasSubmittedSecretBid?: Record<string, boolean>; // public indicator that a manager submitted
   /** Two server-selected attributes shown before a Blind Auction reveal. */
   blindClues?: BlindStatClue[];
-  /** True once the current blind lot is revealed, even if nobody won it. */
-  isRevealed?: boolean;
 }
 
 export type MatchEventType = 
