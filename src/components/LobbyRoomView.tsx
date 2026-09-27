@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GameRoom, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
+import { GameRoom, LobbySettings, PlayerPool, Era, AuctionMode } from '../types/football';
 import { Crown, Bot, CheckCircle2, Clock, Copy, Check, Settings, UserX, Play, LogOut, ShieldAlert, User } from 'lucide-react';
 import { PhaseReadyTimer } from './PhaseReadyTimer';
 
@@ -35,8 +35,6 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
   const [era, setEra] = useState<Era>(room.settings.era);
   const [auctionMode, setAuctionMode] = useState<AuctionMode>(room.settings.auctionMode);
   const [transfersEnabled, setTransfersEnabled] = useState(room.settings.transfersEnabled);
-  const [leagueType, setLeagueType] = useState<LeagueType>(room.settings.leagueType);
-  const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>(room.settings.competitionFormat || 'League');
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(room.code);
@@ -53,8 +51,6 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
       era,
       auctionMode,
       transfersEnabled,
-      leagueType,
-      competitionFormat,
     });
     setShowEditSettings(false);
   };
@@ -235,7 +231,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-slate-400">Squad Target</span>
-                <span className="font-semibold text-slate-200">11 Starters + 7 Bench (18 Total)</span>
+                <span className="font-semibold text-slate-200">11 Players · Starting XI only</span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-slate-400">Transfers</span>
@@ -243,7 +239,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-slate-400">League Format</span>
-                <span className="font-semibold text-slate-200">{room.settings.competitionFormat === 'Knockout' ? 'Knockout Cup' : room.settings.competitionFormat === 'Champions Cup' ? 'Champions Cup' : 'Double Round Robin · Home + Away'}</span>
+                <span className="font-semibold text-slate-200">Double Round Robin · Home + Away</span>
               </div>
             </div>
           </div>
@@ -404,42 +400,6 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
                     <option value="Classic">Classic Live</option>
                     <option value="Blind">Blind Secret Bids</option>
                     <option value="Quick">Quick Blitz</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                    League Type
-                  </label>
-                  {competitionFormat === 'League' ? (
-                    <div className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
-                      Double Round Robin · Home + Away
-                    </div>
-                  ) : (
-                    <select
-                      value={leagueType}
-                      onChange={(e) => setLeagueType(e.target.value as LeagueType)}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
-                    >
-                      <option value="Round Robin">Round Robin</option>
-                      <option value="Double Round Robin">Double Round Robin</option>
-                    </select>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Competition
-                  </label>
-                  <select
-                    value={competitionFormat}
-                    onChange={(e) => setCompetitionFormat(e.target.value as CompetitionFormat)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
-                  >
-                    <option value="League">League Season</option>
-                    <option value="Knockout">Knockout Cup</option>
-                    <option value="Champions Cup">Champions Cup</option>
                   </select>
                 </div>
               </div>
