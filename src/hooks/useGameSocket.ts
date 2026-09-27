@@ -243,16 +243,46 @@ export function useGameSocket() {
 
   const resumeLobby = useCallback((session: SavedSession) => {
     if (!session?.roomCode || !session?.managerId) return;
+    const roomCode = session.roomCode.trim().toUpperCase();
     saveSession(session);
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('JOIN_LOBBY', {
-        roomCode: session.roomCode.trim().toUpperCase(),
-        managerName: session.managerName,
-        reconnectId: session.managerId,
+
+    // Vercel deployments can move a WebSocket reconnect to a different
+    // Function instance. Check the durable snapshot first so stale local
+    // sessions are handled cleanly instead of looping on "Lobby not found".
+    fetch('/api/room/' + encodeURIComponent(roomCode), { cache: 'no-store' })
+      .then((response) => {
+        if (response.status === 404) {
+          saveSession(null);
+          setRoom(null);
+          setManagerId(null);
+          managerIdRef.current = null;
+          setErrorMessage('That saved lobby has expired. Create a new lobby.');
+          return;
+        }
+        if (!response.ok) throw new Error('snapshot check failed');
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          send('JOIN_LOBBY', {
+            roomCode,
+            managerName: session.managerName,
+            reconnectId: session.managerId,
+          });
+        } else {
+          setErrorMessage('Connecting to game server...');
+        }
+      })
+      .catch(() => {
+        // The WebSocket path remains authoritative if the snapshot endpoint
+        // is temporarily unavailable.
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          send('JOIN_LOBBY', {
+            roomCode,
+            managerName: session.managerName,
+            reconnectId: session.managerId,
+          });
+        } else {
+          setErrorMessage('Connecting to game server...');
+        }
       });
-    } else {
-      setErrorMessage('Connecting to game server...');
-    }
   }, [saveSession, send]);
 
   const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
