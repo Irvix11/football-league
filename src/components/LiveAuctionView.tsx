@@ -81,7 +81,6 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
   const formationConfig = FORMATIONS_CONFIG[currentManager.formation] || FORMATIONS_CONFIG['4-3-3'];
   const starterCategoryCounts = getFormationStarterCategoryCounts(currentManager.formation);
-  const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
   // The auction itself is staged globally: GK -> DEF -> MID -> ATT for the
   // exact starting XI only.
