@@ -386,14 +386,29 @@ export function useGameSocket() {
   }, [room, managerId, send]);
 
   const runKnockoutMatch = useCallback(async (fixtureId: string) => {
-    if (!room) return;
+    if (!room || !managerId) return;
+    setIsSimulating(true);
     setSimulationError(null);
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, fixtureId });
-    } else {
-      setSimulationError('Connection lost. Reconnect before starting the knockout match.');
+    try {
+      const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}/run-knockout-match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ managerId, fixtureId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Failed to start the knockout match.');
+      if (data?.room) setRoom(data.room as GameRoom);
+      // Keep the WebSocket path in sync for other connected players.
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, fixtureId });
+      }
+    } catch (error: any) {
+      setSimulationError(error?.message || 'Failed to start the knockout match.');
+    } finally {
+      setIsSimulating(false);
     }
-  }, [room, send]);
+  }, [room, managerId, send]);
 
   const completeKnockoutMatch = useCallback(async (fixtureId: string) => {
     if (!room) return;
@@ -403,18 +418,28 @@ export function useGameSocket() {
   }, [room, send]);
 
   const runMatchday = useCallback(async (matchday: number) => {
-    if (!room) return;
+    if (!room || !managerId) return;
     setIsSimulating(true);
     setSimulationError(null);
     sound.playWhistle();
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('RUN_MATCHDAY', { roomCode: room.code, matchday });
-      window.setTimeout(() => setIsSimulating(false), 350);
-    } else {
+    try {
+      const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}/run-matchday`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ managerId, matchday }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Failed to start the match.');
+      if (data?.room) setRoom(data.room as GameRoom);
+      // If the socket is alive, broadcast the same action to other connected clients.
+      // Do not do this from the initiating client because it would simulate the fixture twice.
+    } catch (error: any) {
+      setSimulationError(error?.message || 'Failed to start the match. Check your connection and try again.');
+    } finally {
       setIsSimulating(false);
-      setSimulationError('Connection lost. Reconnect before simulating a matchday.');
     }
-  }, [room, send]);
+  }, [room, managerId]);
 
   const proceedToNextMatchday = useCallback(async (nextMatchday: number) => {
     if (!room) return;
