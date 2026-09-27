@@ -948,6 +948,10 @@ export function simulateMatch(
     turnoverThreshold += Math.max(0, atkTactics.tempo - 50) * 0.0012;
     turnoverThreshold += Math.max(0, atkTactics.risk - 50) * 0.0015;
 
+    // Home sides get a small contextual edge in ball retention; it is deliberately
+    // small enough that team/player quality still dominates.
+    turnoverThreshold += isHome ? -0.012 : 0.012;
+
     // Extreme pressing/tempo/risk becomes a liability late in the match.
     // This prevents the "all sliders to 100" exploit.
     const minuteProgress = clamp((currentTotalSeconds / 60 - 45) / 45, 0, 1);
@@ -1296,6 +1300,7 @@ export function simulateMatch(
         if (atkTactics.style === 'Possession') goalProbability *= 1.03;
         if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.10;
         if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.04;
+        goalProbability *= isHome ? 1.035 : 0.985;
         if (atkTactics.mentality === 'Defensive') goalProbability *= 0.95;
         const lateFatigue =
           clamp((currentTotalSeconds / 60 - 60) / 35, 0, 1) *
