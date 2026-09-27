@@ -49,6 +49,15 @@ const get = (r: Row, ...names: string[]) => {
 const num = (r: Row, ...names: string[]) => Number(get(r, ...names));
 const clean = (value: string) => value.trim();
 
+// FC27 exports often contain a player's short/display name in quotes inside
+// their full legal name, e.g. Alejandro "Álex Baena" Baena Rodríguez.
+// The quoted value is the clean in-game display name, so prefer it.
+const cleanPlayerName = (value: string) => {
+  const trimmed = clean(value);
+  const quoted = trimmed.match(/"([^"]+)"/);
+  return quoted?.[1]?.trim() || trimmed;
+};
+
 const positions = new Set(['GK','CB','LB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF']);
 const normalizePosition = (value: string) => {
   const tokens = value.toUpperCase().split(/[^A-Z]+/).filter(Boolean);
@@ -69,7 +78,7 @@ for (const row of parseCsv(await readInput(input))) {
 
   const rawPosition = clean(get(row, 'position', 'primary_position', 'POS', 'Position'));
   const position = normalizePosition(rawPosition);
-  const name = clean(get(row, 'name', 'short_name', 'PLAYER', 'Player'));
+  const name = cleanPlayerName(get(row, 'name', 'short_name', 'PLAYER', 'Player'));
   const id = clean(get(row, 'id', 'player_id', 'PLAYER_ID', 'Player ID')) ||
     `fc27-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
