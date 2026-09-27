@@ -1667,9 +1667,20 @@ wss.on('connection', (ws) => {
           const { room } = auth;
           if (room.phase !== 'formation_select') return;
 
+          const supportedFormations = Object.keys(FORMATIONS_CONFIG) as Formation[];
+          if (!supportedFormations.includes(formation as Formation)) {
+            sendSocketError(ws, 'That formation is not supported.');
+            return;
+          }
+
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
-            manager.formation = formation;
+            manager.formation = formation as Formation;
+            // Formation selection happens before the squad exists, so changing it
+            // never carries over stale positional validation from another formation.
+            manager.confirmedTeam = false;
+            manager.squad = [];
+            manager.teamOverall = 0;
             broadcastRoom(room.code);
           }
           break;
