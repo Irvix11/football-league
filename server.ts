@@ -364,15 +364,12 @@ function playerSlotScore(player: any, slot: any): number {
 
 function autoFillManagerLineup(manager: Manager) {
   const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
-  const allPlayers = manager.squad.map(entry => entry.player);
-  if (allPlayers.length < 11) return;
+  if (manager.squad.length < 11) return;
 
-  const remaining = [...allPlayers];
+  const allEntries = [...manager.squad];
+  const remaining = [...allEntries];
   const starters: SquadPlayerEntry[] = [];
 
-  // Fill exactly 11 formation slots with the best available players.
-  // Natural/alternate position fit matters, but any outfield player can be assigned
-  // to any outfield slot. The assigned position is editable later.
   const orderedSlots = [...config.slots].sort((a, b) => {
     if (a.category === 'GK') return -1;
     if (b.category === 'GK') return 1;
@@ -382,29 +379,39 @@ function autoFillManagerLineup(manager: Manager) {
   });
 
   for (const slot of orderedSlots) {
-    const candidates = remaining.filter(p =>
-      slot.category === 'GK' ? p.category === 'GK' : p.category !== 'GK'
+    const candidates = remaining.filter(entry =>
+      slot.category === 'GK' ? entry.player.category === 'GK' : entry.player.category !== 'GK'
     );
     const pool = candidates.length ? candidates : remaining;
     const chosen = [...pool]
-      .sort((x, y) => playerSlotScore(y, slot) - playerSlotScore(x, slot) || y.overall - x.overall)[0];
+      .sort((a, b) => playerSlotScore(b.player, slot) - playerSlotScore(a.player, slot) || b.player.overall - a.player.overall)[0];
     if (!chosen) continue;
 
-    remaining.splice(remaining.findIndex(p => p.id === chosen.id), 1);
-    const existing = manager.squad.find(s => s.player.id === chosen.id);
+    remaining.splice(remaining.findIndex(e => e.player.id === chosen.player.id), 1);
     starters.push({
-      player: chosen,
+      ...chosen,
       isStarting: true,
       startingSlotIndex: slot.index,
+      benchIndex: undefined,
       assignedPosition: slot.position,
-      condition: existing?.condition || createFitCondition(),
+      condition: chosen.condition || createFitCondition(),
     });
   }
 
-  manager.squad = starters.sort((x, y) => (x.startingSlotIndex ?? 99) - (y.startingSlotIndex ?? 99));
+  const bench = remaining.slice(0, 7).map((entry, index) => ({
+    ...entry,
+    isStarting: false,
+    startingSlotIndex: undefined,
+    benchIndex: index,
+    assignedPosition: entry.assignedPosition || entry.player.position,
+    condition: entry.condition || createFitCondition(),
+  }));
+
+  manager.squad = [...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)), ...bench];
   manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
-  manager.roles = setupManagerRoles(manager.squad);
+  manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
 }
+
 function generateValidSquad(formation: Formation, availablePool: any[]): SquadPlayerEntry[] {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const shuffled = [...availablePool].sort(() => Math.random() - 0.5);
