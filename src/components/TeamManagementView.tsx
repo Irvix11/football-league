@@ -548,7 +548,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
             <div className="mt-3 w-full rounded-2xl bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-white/10 p-3 shadow-xl shadow-black/20 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">SQUAD · 11 PLAYERS</span>
-                <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.length}/18</span>
+                <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.length}/11</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
                 {currentManager.squad.map((entry) => (
