@@ -399,10 +399,6 @@ export function useGameSocket() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Failed to start the knockout match.');
       if (data?.room) setRoom(data.room as GameRoom);
-      // Keep the WebSocket path in sync for other connected players.
-      if (socketRef.current?.readyState === WebSocket.OPEN) {
-        send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, fixtureId });
-      }
     } catch (error: any) {
       setSimulationError(error?.message || 'Failed to start the knockout match.');
     } finally {
