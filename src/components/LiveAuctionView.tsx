@@ -408,7 +408,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                           <div className="mt-2 text-lg font-black text-white">You must sign this player.</div>
                           <div className="mt-1 text-xs text-slate-300">
                             You are the last manager missing a {player?.category || 'position'} slot.
-                            The player will be signed for the starting price.
+                            The player will be signed automatically at the market price.
                           </div>
                         </>
                       ) : (
@@ -423,8 +423,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                       )}
                     </div>
                     <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-black">Mandatory price</span>
-                      <span className="font-mono font-black text-emerald-400">£{player?.startingPrice || auction.currentBid}M</span>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-black">Market price</span>
+                      <span className="font-mono font-black text-emerald-400">£{auction.forcedPurchasePrice ?? player?.marketValue ?? auction.currentBid ?? 1}M</span>
                     </div>
                   </div>
                 ) : !isBlind ? (
