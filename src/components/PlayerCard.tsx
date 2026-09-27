@@ -49,7 +49,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xs font-mono font-bold text-emerald-400">£{player.marketValue}M</div>
+          <div className="text-xs font-mono font-black text-amber-400">{player.overall} OVR</div>
         </div>
       </div>
     );
@@ -170,16 +170,10 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         )}
       </div>
 
-      {/* Valuation Footer */}
+      {/* Auction price only — market value is intentionally hidden. */}
       <div className="px-4 py-2.5 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs">
-        <div>
-          <span className="text-slate-400">Market Value: </span>
-          <span className="font-mono font-bold text-white">£{player.marketValue}M</span>
-        </div>
-        <div>
-          <span className="text-slate-400">Starting Price: </span>
-          <span className="font-mono font-bold text-amber-400">£{player.startingPrice}M</span>
-        </div>
+        <span className="text-slate-400">Auction Starting Price</span>
+        <span className="font-mono font-bold text-amber-400">£{player.startingPrice}M</span>
       </div>
     </div>
   );
