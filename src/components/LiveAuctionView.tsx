@@ -134,12 +134,12 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
   const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
-  const isSquadFull = currentManager.squad.length >= 11;
+  const isSquadFull = currentManager.squad.length >= 18;
   const isWinning = auction.highestBidderId === managerId;
   const readyIds = room.phaseReadyIds || [];
   const auctionDone = readyIds.includes(managerId);
   const auctionReadyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
-  const squadComplete = currentManager.squad.length === 11;
+  const squadComplete = currentManager.squad.length === 18;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
 
@@ -628,7 +628,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
               <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
             </div>
             {currentManager.squad.length === 0 ? (
-              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 11/11.</div>
+              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 18/18.</div>
             ) : (
               <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
                 {currentManager.squad.map((entry) => (
