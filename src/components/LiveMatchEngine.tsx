@@ -329,16 +329,16 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       }
 
       // 4. Event completion check (Requirements 4, 5: Goal Pause Mechanic)
-      if (progress >= 1 && isPlaying && !goalOverlay && !halfTimeOverlay && !fullTimeOverlay) {
+      if (progress >= 1 && isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
         // Did the active event just finish a GOAL?
         if (currentEvent?.type === 'goal') {
-          // Ball is in net! Clock stops, overlay appears, match stays paused!
-          setIsPlaying(false);
-
+          // Goal overlay is visual-only. Do not pause the match timeline.
+          // The next event starts immediately so goal announcements never stall
+          // the live 2D simulation.
           const teamName = currentEvent.team === 'home' ? fixture.homeManagerName : fixture.awayManagerName;
           const currentSc = currentEvent.currentScore || {
-            home: currentEvent.team === 'home' ? currentScore.home : currentScore.home,
-            away: currentEvent.team === 'away' ? currentScore.away : currentScore.away,
+            home: currentScore.home,
+            away: currentScore.away,
           };
 
           setGoalOverlay({
@@ -352,17 +352,18 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             score: currentSc,
           });
 
-          // Overlay automatically disappears after 2.8s; match automatically resumes!
           if (goalTimerRef.current) clearTimeout(goalTimerRef.current);
           goalTimerRef.current = setTimeout(() => {
             setGoalOverlay(null);
             setCameraOffset({ x: 0, y: 0, scale: 1 });
-            if (currentEventIndex < events.length - 1) {
-              setCurrentEventIndex(prev => prev + 1);
-              setIsPlaying(true);
-            }
-          }, Math.max(800, 2800 / playbackSpeed));
+          }, Math.max(500, 1200 / playbackSpeed));
 
+          if (currentEventIndex < events.length - 1) {
+            setCurrentEventIndex(prev => prev + 1);
+            setIsPlaying(true);
+          } else {
+            setIsPlaying(false);
+          }
           return;
         }
 
