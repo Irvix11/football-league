@@ -996,7 +996,7 @@ function advanceAuction(room: GameRoom) {
 
   const forcedManager = stageManagers.length === 1 ? stageManagers[0] : null;
   const forcedCandidates = forcedManager
-    ? auctionCandidates.filter(player => forcedManager.budget >= player.startingPrice)
+    ? auctionCandidates.filter(player => forcedManager.budget >= Math.max(1, Number(player.marketValue) || 1))
     : [];
 
   const selectedPlayer = (forcedManager && forcedCandidates.length > 0
@@ -1006,13 +1006,14 @@ function advanceAuction(room: GameRoom) {
   // leaking into the live auction after a reconnect or old room snapshot.
   const nextPlayer = {
     ...selectedPlayer,
-    startingPrice: 0,
+    startingPrice: 1,
   };
 
+  const forcedMarketPrice = Math.max(1, Number(nextPlayer.marketValue) || 1);
   const isForcedPurchase = Boolean(
     forcedManager &&
     nextPlayer.category === starterStage &&
-    forcedManager.budget >= nextPlayer.startingPrice
+    forcedManager.budget >= forcedMarketPrice
   );
 
   const isQuick = room.settings.auctionMode === 'Quick';
@@ -1248,7 +1249,7 @@ function finalizeAuctionItem(room: GameRoom) {
     ? room.auction.forcedWinnerId || null
     : room.auction.highestBidderId;
   let finalPrice = room.auction.isForcedPurchase
-    ? player.startingPrice
+    ? Math.max(1, Number(player.marketValue) || 1)
     : room.auction.currentBid;
 
   // Handle blind auction secret bids. Forced lots bypass secret bidding because
@@ -2406,6 +2407,43 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        // --- 5. DELETE LOBBY (HOST ONLY) ---
+        case 'DELETE_LOBBY': {
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth) {
+            sendSocketError(ws, 'Unauthorized lobby deletion.');
+            return;
+          }
+
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can delete this lobby.');
+            return;
+          }
+
+          const auctionTimer = auctionIntervals.get(room.code);
+          if (auctionTimer) clearInterval(auctionTimer);
+          auctionIntervals.delete(room.code);
+          clearPhaseReadyTimer(room);
+          blindSecretBids.delete(room.code);
+
+          const sockets = roomSockets.get(room.code) || new Set<WebSocket>();
+          rooms.delete(room.code);
+          roomSockets.delete(room.code);
+
+          for (const client of sockets) {
+            socketToRoom.delete(client);
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({ type: 'LOBBY_DELETED', message: 'Lobby deleted by host.' }));
+              client.close();
+            }
+          }
+
+          await deleteRoomSnapshot(room.code);
+          break;
+        }
+
         // --- 5. KICK PLAYER ---
         case 'KICK_PLAYER': {
           const { roomCode, targetManagerId } = payload;
@@ -2663,8 +2701,8 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if (!Number.isFinite(bidAmount) || bidAmount <= 0) {
-            sendSocketError(ws, 'Invalid bid amount.');
+          if (!Number.isFinite(bidAmount) || bidAmount < 1) {
+            sendSocketError(ws, 'Bid must be at least £1M.');
             return;
           }
           const minBid = room.auction.highestBidderId ? room.auction.currentBid + 1 : room.auction.currentBid;
