@@ -1468,28 +1468,110 @@ export function simulateMatch(
       });
     }
 
-    // Sudden death if tied after 5 kicks
+    // Sudden death: one kick each until the score is no longer level.
+    // Unlike the old implementation, we stop immediately when the second kick
+    // of a round makes the scores different. This keeps the stored kick-by-kick
+    // score and the final fixture score perfectly consistent.
     let sdRound = 6;
-    while (hPens === aPens && sdRound <= 51) {
-      const hTaker = homeTakers[(sdRound - 1) % homeTakers.length];
-      const hRoll = rand();
-      const hOutcome: 'goal' | 'saved' | 'missed' = hRoll < 0.72 ? 'goal' : 'saved';
-      if (hOutcome === 'goal') hPens++;
+    const MAX_SUDDEN_DEATH_ROUNDS = 20;
 
+    while (hPens === aPens && sdRound <= MAX_SUDDEN_DEATH_ROUNDS) {
+      const hTaker = homeTakers[(sdRound - 1) % homeTakers.length];
       const aTaker = awayTakers[(sdRound - 1) % awayTakers.length];
-      const aRoll = rand();
-      const aOutcome: 'goal' | 'saved' | 'missed' = aRoll < 0.72 ? 'goal' : 'saved';
-      if (aOutcome === 'goal') aPens++;
+
+      const hSho = hTaker.player.attributes.sho || hTaker.player.overall || 75;
+      const aSho = aTaker.player.attributes.sho || aTaker.player.overall || 75;
+      const aGkReflex = awayGK.player.attributes.dri || awayGK.player.overall || 80;
+      const hGkReflex = homeGK.player.attributes.dri || homeGK.player.overall || 80;
+
+      const hSuccessRate = Math.max(0.58, Math.min(0.90, 0.72 + (hSho - 75) * 0.004 - (aGkReflex - 80) * 0.003));
+      const aSuccessRate = Math.max(0.58, Math.min(0.90, 0.72 + (aSho - 75) * 0.004 - (hGkReflex - 80) * 0.003));
+
+      const hOutcome: 'goal' | 'saved' | 'missed' =
+        rand() < hSuccessRate ? 'goal' : (rand() < 0.65 ? 'saved' : 'missed');
+      if (hOutcome === 'goal') hPens++;
 
       penaltyShootout.push({
         round: sdRound,
         team: 'home',
         takerId: hTaker.player.id,
         takerName: hTaker.player.name,
-        takerNumber: sdRound,
+        takerNumber: getPlayerNumber(homeStarters, hTaker.player.id),
         outcome: hOutcome,
         scoreAfter: { home: hPens, away: aPens },
-        commentary: `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} ${hOutcome === 'goal' ? 'SCORES!' : 'MISSES!'}`,
+        commentary: hOutcome === 'goal'
+          ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} SCORES! Ice-cold from the spot.`
+          : hOutcome === 'saved'
+            ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} is DENIED by ${awayGK.player.name}!`
+            : `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} misses the target!`,
+      });
+
+      pushEvent({
+        minute: 121,
+        second: sdRound * 10,
+        type: 'penalty_shootout_kick',
+        team: 'home',
+        playerId: hTaker.player.id,
+        playerName: hTaker.player.name,
+        commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
+        ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
+        ballStartCoordinates: { x: 88.5, y: 50 },
+        momentum,
+      });
+
+      // If the first kick puts one side ahead, the second kick is still taken
+      // because the round must be shown as a complete pair in this simulation.
+      const aOutcome: 'goal' | 'saved' | 'missed' =
+        rand() < aSuccessRate ? 'goal' : (rand() < 0.65 ? 'saved' : 'missed');
+      if (aOutcome === 'goal') aPens++;
+
+      penaltyShootout.push({
+        round: sdRound,
+        team: 'away',
+        takerId: aTaker.player.id,
+        takerName: aTaker.player.name,
+        takerNumber: getPlayerNumber(awayStarters, aTaker.player.id),
+        outcome: aOutcome,
+        scoreAfter: { home: hPens, away: aPens },
+        commentary: aOutcome === 'goal'
+          ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} SCORES! Pressure handled.`
+          : aOutcome === 'saved'
+            ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} is SAVED by ${homeGK.player.name}!`
+            : `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} misses!`,
+      });
+
+      pushEvent({
+        minute: 121,
+        second: sdRound * 10 + 5,
+        type: 'penalty_shootout_kick',
+        team: 'away',
+        playerId: aTaker.player.id,
+        playerName: aTaker.player.name,
+        commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
+        ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
+        ballStartCoordinates: { x: 11.5, y: 50 },
+        momentum,
+      });
+
+      sdRound++;
+    }
+
+    // Deterministic safety net. It is represented by real kick records so the
+    // UI scorecard, scoreAfter values, and fixture winner can never disagree.
+    if (hPens === aPens) {
+      const hTaker = homeTakers[(sdRound - 1) % homeTakers.length];
+      const aTaker = awayTakers[(sdRound - 1) % awayTakers.length];
+
+      hPens++;
+      penaltyShootout.push({
+        round: sdRound,
+        team: 'home',
+        takerId: hTaker.player.id,
+        takerName: hTaker.player.name,
+        takerNumber: getPlayerNumber(homeStarters, hTaker.player.id),
+        outcome: 'goal',
+        scoreAfter: { home: hPens, away: aPens },
+        commentary: `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} SCORES the decisive kick!`,
       });
 
       penaltyShootout.push({
@@ -1497,34 +1579,15 @@ export function simulateMatch(
         team: 'away',
         takerId: aTaker.player.id,
         takerName: aTaker.player.name,
-        takerNumber: sdRound,
-        outcome: aOutcome,
+        takerNumber: getPlayerNumber(awayStarters, aTaker.player.id),
+        outcome: 'missed',
         scoreAfter: { home: hPens, away: aPens },
-        commentary: `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} ${aOutcome === 'goal' ? 'SCORES!' : 'MISSES!'}`,
+        commentary: `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} misses — shootout over!`,
       });
-
-      sdRound++;
-    }
-
-    // Guarantee a decisive winner in knockout
-    if (hPens === aPens) {
-      hPens++; // tie breaker
     }
 
     homePenaltyScore = hPens;
     awayPenaltyScore = aPens;
-    // The random shootout normally resolves quickly. Keep a deterministic
-    // safety net so an extreme sequence can never leave a knockout fixture
-    // without a winner.
-    if (hPens === aPens) {
-      const homePenaltyPower = average(homeTakers.slice(0, 5).map(t => t.player.attributes.sho || t.player.overall));
-      const awayPenaltyPower = average(awayTakers.slice(0, 5).map(t => t.player.attributes.sho || t.player.overall));
-      if (homePenaltyPower === awayPenaltyPower) hPens++;
-      else if (homePenaltyPower > awayPenaltyPower) hPens++;
-      else aPens++;
-    }
-
-    winnerManagerId = hPens > aPens ? homeManager.id : awayManager.id;
   }
 
     }
