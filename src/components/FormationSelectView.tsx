@@ -4,6 +4,7 @@ import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts } from '../constan
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
 import { FastForward, Play, Bot, User } from 'lucide-react';
+import { PhaseReadyTimer } from './PhaseReadyTimer';
 
 interface FormationSelectViewProps {
   room: GameRoom;
@@ -166,7 +167,8 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
       {/* Action Footer */}
       <div className="pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-xs text-slate-400">
-          <div>Selected Formation: <strong className="text-emerald-400">{selectedFormation}</strong></div>
+          <PhaseReadyTimer room={room} label="AUTO-START AUCTION" accent="amber" />
+          <div className="mt-2">Selected Formation: <strong className="text-emerald-400">{selectedFormation}</strong></div>
           <div className="mt-1 font-mono font-black text-amber-300">FORMATION READY {readyCount}/{room.managers.length}</div>
         </div>
 
