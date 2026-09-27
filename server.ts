@@ -337,7 +337,7 @@ function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTab
   return newTable;
 }
 
-// Automatic 18-player squad generator for Skip Auction or Bot Setup
+// Automatic 11-player XI generator for Skip Auction or Bot Setup
 function createFitCondition(): SquadPlayerEntry['condition'] {
   return {
     state: 'FIT',
@@ -1649,7 +1649,7 @@ wss.on('connection', (ws) => {
           if (bot) {
             const ownedByHuman = new Set((human?.squad || []).map(s => s.player.id));
             const botPool = pool.filter(p => !ownedByHuman.has(p.id));
-            bot.squad = generateValidSquad(bot.formation, botPool.length >= 18 ? botPool : pool);
+            bot.squad = generateValidSquad(bot.formation, botPool.length >= 11 ? botPool : pool);
             bot.teamOverall = calculateTeamOverall(bot.formation, bot.squad);
             bot.roles = setupManagerRoles(bot.squad.filter(s => s.isStarting));
             bot.confirmedTeam = true;
