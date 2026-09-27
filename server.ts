@@ -820,6 +820,10 @@ function simulateBotBids(room: GameRoom) {
 
   const bots = room.managers.filter(m => m.isBot && m.squad.length < 11);
   for (const bot of bots) {
+    // A bidder never needs to outbid itself. This also prevents bots from
+    // unnecessarily draining their own budget near the end of a lot.
+    if (room.auction.highestBidderId === bot.id) continue;
+
     // Check if bot can afford
     const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + 2 : room.auction.currentBid;
     if (bot.budget < minNextBid) continue;
@@ -2220,6 +2224,11 @@ wss.on('connection', (ws) => {
 
           if (manager.budget < bidAmount) {
             ws.send(JSON.stringify({ type: 'ERROR', message: `Insufficient budget (£${manager.budget}M available).` }));
+            return;
+          }
+
+          if (room.auction.highestBidderId === manager.id) {
+            sendSocketError(ws, 'You are already the highest bidder.');
             return;
           }
 
