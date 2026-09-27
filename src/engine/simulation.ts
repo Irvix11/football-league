@@ -465,6 +465,47 @@ function generate22PlayerCoordinates(
   return resolveCollisionSeparation(coords, activeAction === 'passing' ? targetPlayerId : activePlayerId);
 }
 
+const DEFAULT_MATCH_TACTICS = {
+  style: 'Balanced' as const,
+  mentality: 'Balanced' as const,
+  defensiveLine: 50,
+  pressingIntensity: 50,
+  attackWidth: 50,
+  tempo: 50,
+  risk: 50,
+};
+
+function normalizeManagerForMatch(manager: Manager): Manager {
+  const squad = Array.isArray(manager.squad) ? manager.squad : [];
+  const normalizedSquad = squad.map((entry) => ({
+    ...entry,
+    isStarting: Boolean(entry.isStarting),
+    condition: entry.condition || {
+      state: 'FIT' as const,
+      fatigue: 0,
+      injuryMatchesLeft: 0,
+      yellowCards: 0,
+      redCards: 0,
+      suspensionMatchesLeft: 0,
+    },
+    assignedPosition: entry.assignedPosition || entry.player?.position,
+    player: {
+      ...entry.player,
+      alternatePositions: entry.player?.alternatePositions || [],
+    },
+  }));
+
+  // Older saved rooms can predate tactics/condition persistence. Match simulation
+  // should remain playable instead of crashing on those snapshots.
+  return {
+    ...manager,
+    formation: manager.formation || '4-3-3',
+    tactics: manager.tactics || DEFAULT_MATCH_TACTICS,
+    squad: normalizedSquad,
+    teamOverall: manager.teamOverall || calculateTeamOverall(manager.formation || '4-3-3', normalizedSquad),
+  };
+}
+
 export function simulateMatch(
   homeManager: Manager,
   awayManager: Manager,
@@ -474,7 +515,7 @@ export function simulateMatch(
   isKnockout = false,
   roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final'
 ): Fixture {
-  const seed = customSeed || (Date.now() ^ (matchday * 1337));
+  homeManager = normalizeManagerForMatch(homeManager);\n  awayManager = normalizeManagerForMatch(awayManager);\n  const seed = customSeed || (Date.now() ^ (matchday * 1337));
   const rand = createPrng(seed);
 
   const homeStarters = homeManager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
