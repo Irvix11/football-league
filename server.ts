@@ -2228,7 +2228,7 @@ wss.on('connection', (ws) => {
               type: 'LOBBY_CREATED',
               roomCode: result.roomCode,
               managerId: result.managerId,
-              room: result.room: sanitizeRoomForViewer(room, result.managerId),
+              room: sanitizeRoomForViewer(result.room, result.managerId),
             }));
             break;
           }
@@ -2528,7 +2528,6 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Only the host can kick another manager.');
             return;
           }
-          const resolvedTargetId = resolveManagerId(room, resolvedTargetId);
           const target = resolvedTargetId ? room.managers.find(m => m.id === resolvedTargetId) : undefined;
           if (!target || target.isHost) {
             sendSocketError(ws, 'That manager cannot be kicked.');
