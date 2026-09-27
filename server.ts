@@ -228,6 +228,126 @@ const blindSecretBids = new Map<string, Record<string, number>>();
 // Active countdown intervals: roomCode -> NodeJS.Timeout
 const auctionIntervals = new Map<string, NodeJS.Timeout>();
 
+// 30-second readiness timers are persisted as absolute deadlines so a Vercel
+// instance hop can resume the same countdown instead of resetting it.
+const phaseReadyTimers = new Map<string, NodeJS.Timeout>();
+const PHASE_READY_SECONDS = 30;
+
+function clearPhaseReadyTimer(room: GameRoom) {
+  const timer = phaseReadyTimers.get(room.code);
+  if (timer) clearTimeout(timer);
+  phaseReadyTimers.delete(room.code);
+  room.phaseReadyDeadline = undefined;
+}
+
+function allManagersReady(room: GameRoom) {
+  return room.managers.length >= 2 && room.managers.every(m => m.isReady || m.isBot);
+}
+
+function allFormationReady(room: GameRoom) {
+  const ready = new Set(room.phaseReadyIds || []);
+  return room.managers.length >= 2 && room.managers.every(m => m.isBot || ready.has(m.id));
+}
+
+function allTeamsConfirmed(room: GameRoom) {
+  return room.managers.length >= 2 && room.managers.every(m => m.confirmedTeam || m.isBot);
+}
+
+function enterFormationSelect(room: GameRoom) {
+  clearPhaseReadyTimer(room);
+  room.phase = 'formation_select';
+  room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+  room.managers.forEach(m => { m.confirmedTeam = false; });
+  room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+  ensurePhaseReadyTicker(room);
+}
+
+function beginAuctionFromFormation(room: GameRoom) {
+  clearPhaseReadyTimer(room);
+  room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+  room.phase = 'auction';
+  advanceAuction(room);
+}
+
+function enterTeamManagement(room: GameRoom) {
+  clearPhaseReadyTimer(room);
+  room.phase = 'team_management';
+  room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+  room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+  ensurePhaseReadyTicker(room);
+}
+
+function enterLeague(room: GameRoom) {
+  clearPhaseReadyTimer(room);
+  room.fixtures = generateLeagueFixtures(room.managers);
+  room.currentMatchday = 1;
+  room.totalMatchdays = Math.max(...room.fixtures.map(f => f.matchday), 1);
+  room.leagueTable = calculateInitialTable(room.managers);
+  room.phase = 'league';
+}
+
+function ensurePhaseReadyTicker(room: GameRoom) {
+  if (!room.phaseReadyDeadline) return;
+  if (!['lobby', 'formation_select', 'team_management'].includes(room.phase)) {
+    clearPhaseReadyTimer(room);
+    return;
+  }
+  if (phaseReadyTimers.has(room.code)) return;
+
+  const delay = Math.max(0, room.phaseReadyDeadline - Date.now());
+  const timer = setTimeout(() => {
+    phaseReadyTimers.delete(room.code);
+    try {
+      const current = rooms.get(room.code);
+      if (!current || !current.phaseReadyDeadline) return;
+      if (Date.now() < current.phaseReadyDeadline) {
+        ensurePhaseReadyTicker(current);
+        return;
+      }
+
+      if (current.phase === 'lobby') {
+        if (current.managers.length < 2) {
+          current.phaseReadyDeadline = undefined;
+          broadcastRoom(current.code);
+          return;
+        }
+        // Timer is the safety net: managers who did not press READY are still
+        // allowed into the game so a single AFK player cannot block everyone.
+        current.managers.forEach(m => { if (!m.isBot) m.isReady = true; });
+        enterFormationSelect(current);
+        broadcastRoom(current.code);
+        return;
+      }
+
+      if (current.phase === 'formation_select') {
+        current.phaseReadyIds = current.managers.map(m => m.id);
+        beginAuctionFromFormation(current);
+        broadcastRoom(current.code);
+        return;
+      }
+
+      if (current.phase === 'team_management') {
+        const pool = getPlayersForLobby(current.settings.playerPool, current.settings.era);
+        const owned = new Set(current.managers.flatMap(m => m.squad.map(s => s.player.id)));
+        emergencyFillRemainingXI(current, pool.filter(p => !owned.has(p.id)));
+        current.managers.forEach(manager => {
+          if (manager.squad.length >= 11) {
+            autoFillManagerLineup(manager);
+            manager.confirmedTeam = true;
+          }
+        });
+        if (allTeamsConfirmed(current)) enterLeague(current);
+        else current.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+        broadcastRoom(current.code);
+      }
+    } catch (error) {
+      console.error('[PHASE TIMER] auto-start failed:', error);
+    }
+  }, delay);
+
+  phaseReadyTimers.set(room.code, timer);
+}
+
 // Persist room snapshots without turning the auction countdown into a database
 // write storm. Broadcasts can be frequent; durable state only needs the latest
 // snapshot a few times per second. The timer always captures the newest room state
@@ -786,8 +906,7 @@ function advanceAuction(room: GameRoom) {
   const allFull = room.managers.every(m => m.squad.length >= 11);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
-    room.phase = 'team_management';
-    room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+    enterTeamManagement(room);
     broadcastRoom(room.code);
     return;
   }
@@ -796,8 +915,7 @@ function advanceAuction(room: GameRoom) {
   if (unowned.length === 0) {
     emergencyFillRemainingXI(room, unowned);
     room.managers.forEach(autoFillManagerLineup);
-    room.phase = 'team_management';
-    room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+    enterTeamManagement(room);
     broadcastRoom(room.code);
     return;
   }
@@ -1954,6 +2072,32 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
   return { roomCode, managerId: hostId, room };
 }
 
+function repairManagersForMatch(room: GameRoom) {
+  const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
+  let owned = new Set(room.managers.flatMap(m => m.squad.map(s => s.player.id)));
+
+  // Only repair genuinely corrupted legacy/reconnect states. A valid custom XI is
+  // never replaced, so tactical changes cannot mysteriously revert before a match.
+  for (const manager of room.managers) {
+    if (manager.squad.length < 11) {
+      emergencyFillRemainingXI(room, pool.filter(p => !owned.has(p.id)));
+      owned = new Set(room.managers.flatMap(m => m.squad.map(s => s.player.id)));
+      break;
+    }
+  }
+
+  for (const manager of room.managers) {
+    const starters = manager.squad.filter(s => s.isStarting).length;
+    const validation = manager.squad.length === 11
+      ? validateSquadFormation(manager.formation, manager.squad)
+      : { isValid: false };
+    if (manager.squad.length === 11 && (!validation.isValid || starters !== 11)) {
+      autoFillManagerLineup(manager);
+    }
+    manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
+  }
+}
+
 // WebSocket Connection Handler
 wss.on('connection', (ws) => {
   let messageWindowStartedAt = Date.now();
@@ -2100,6 +2244,10 @@ wss.on('connection', (ws) => {
             room = await loadRoomSnapshot(normalizedRoomCode) || undefined;
             if (room) {
               if (normalizeRoomToXI(room)) await saveRoomSnapshot(room);
+              if (['lobby', 'formation_select', 'team_management'].includes(room.phase) && !room.phaseReadyDeadline && room.managers.length >= 2) {
+                room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+                ensurePhaseReadyTicker(room);
+              }
               rooms.set(normalizedRoomCode, room);
             }
           }
@@ -2117,7 +2265,8 @@ wss.on('connection', (ws) => {
             // A reconnect may land on a fresh Vercel Function instance. Resume
             // the in-memory ticker from the persisted absolute deadline.
             ensureAuctionTicker(room);
-            if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
+            ensurePhaseReadyTicker(room);
+            if (!roomSockets.has(room)) roomSockets.set(room.code, new Set());
             roomSockets.get(room.code)!.add(ws);
             socketToRoom.set(ws, { roomCode: room.code, managerId: existing.id });
             ws.send(JSON.stringify({
@@ -2183,6 +2332,10 @@ wss.on('connection', (ws) => {
 
           room.managers.push(newManager);
           room.leagueTable = calculateInitialTable(room.managers);
+          if (room.managers.length >= 2 && room.phase === 'lobby' && !room.phaseReadyDeadline) {
+            room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+            ensurePhaseReadyTicker(room);
+          }
 
           if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
           roomSockets.get(room.code)!.add(ws);
@@ -2343,9 +2496,7 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          room.phase = 'formation_select';
-          room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
-          room.managers.forEach(m => { m.confirmedTeam = false; });
+          enterFormationSelect(room);
           broadcastRoom(room.code);
           break;
         }
@@ -2389,6 +2540,9 @@ wss.on('connection', (ws) => {
           const ready = new Set(room.phaseReadyIds || []);
           ready.add(managerId);
           room.phaseReadyIds = [...ready];
+          if (allFormationReady(room)) {
+            beginAuctionFromFormation(room);
+          }
           broadcastRoom(room.code);
           break;
         }
@@ -2418,9 +2572,7 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
-          room.phase = 'auction';
-          advanceAuction(room);
+          beginAuctionFromFormation(room);
           break;
         }
 
@@ -2704,14 +2856,7 @@ wss.on('connection', (ws) => {
           // Check if all confirmed
           const allConfirmed = room.managers.every(m => m.confirmedTeam);
           if (allConfirmed) {
-            {
-              room.fixtures = generateLeagueFixtures(room.managers);
-              room.currentMatchday = 1;
-              const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
-              room.totalMatchdays = maxMd;
-              room.leagueTable = calculateInitialTable(room.managers);
-              room.phase = 'league';
-            }
+            enterLeague(room);
           }
 
           broadcastRoom(room.code);
@@ -2828,6 +2973,7 @@ wss.on('connection', (ws) => {
 
           // Run exactly one fixture per action so its authoritative event
           // timeline can be watched in the 2D Live Match Engine.
+          repairManagersForMatch(room);
           const fix = currentFixtures[0];
           const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
           const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
@@ -2860,6 +3006,7 @@ wss.on('connection', (ws) => {
             initializeLeaguePlayoffs(room);
           }
 
+          await saveRoomSnapshot(room);
           broadcastRoom(room.code);
           break;
           } catch (error: any) {
@@ -3137,6 +3284,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     const fix = room.fixtures.find(f => f.matchday === matchday && !f.played);
     if (!fix) return res.status(409).json({ error: 'This matchday is already complete.' });
 
+    repairManagersForMatch(room);
     const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
     const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
     if (!homeMgr || !awayMgr) return res.status(409).json({ error: 'Unable to load both teams for this fixture.' });
@@ -3154,6 +3302,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     if (midpointComplete && !leagueComplete) openMidSeasonWindow(room);
     if (leagueComplete) initializeLeaguePlayoffs(room);
 
+    await saveRoomSnapshot(room);
     broadcastRoom(room.code);
     return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
   } catch (error: any) {
@@ -3240,8 +3389,9 @@ app.get('/api/room/:code', async (req, res) => {
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
   // HTTP polling can be the first request after a serverless instance changes.
-  // Resume the auction clock before returning the durable snapshot.
+  // Resume absolute auction and phase-readiness clocks after a cold start.
   ensureAuctionTicker(room);
+  ensurePhaseReadyTicker(room);
   const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
   if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction' && !snapshot.auction.isSold) {
     // Keep the REST snapshot behind the same privacy boundary as WebSocket
