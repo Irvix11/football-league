@@ -1972,7 +1972,7 @@ wss.on('connection', (ws) => {
             if (room.settings.competitionFormat !== 'League') {
               initializeKnockout(room);
             } else {
-              room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
+              room.fixtures = generateLeagueFixtures(room.managers, 'Double Round Robin');
               room.currentMatchday = 1;
               const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
               room.totalMatchdays = maxMd;
@@ -2067,8 +2067,15 @@ wss.on('connection', (ws) => {
           Object.assign(fix, result);
           room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
-          // Stay in the league phase until every fixture has been watched.
+          // The league is always a double round robin. Once the final league
+          // fixture is completed, immediately build the correct playoff bracket:
+          // 2-5 teams -> Final, 6-9 -> top 4 Semi-Finals, 10-16 -> top 8 Quarter-Finals.
+          const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
           room.currentMatchday = targetMatchday;
+          if (leagueComplete) {
+            initializeLeaguePlayoffs(room);
+          }
+
           broadcastRoom(room.code);
           break;
         }
@@ -2230,7 +2237,7 @@ wss.on('connection', (ws) => {
           if (room.settings.competitionFormat !== 'League') {
             initializeKnockout(room);
           } else {
-            room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
+            room.fixtures = generateLeagueFixtures(room.managers, 'Double Round Robin');
             room.currentMatchday = 1;
             room.leagueTable = calculateInitialTable(room.managers);
             room.phase = 'league';
