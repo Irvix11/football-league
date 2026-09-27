@@ -419,29 +419,22 @@ export function useGameSocket() {
     send('COMPLETE_KNOCKOUT_MATCH', { roomCode: room.code, managerId, fixtureId });
   }, [room, managerId, send]);
 
-  const runMatchday = useCallback(async (matchday: number) => {
+  const runMatchday = useCallback((matchday: number) => {
     if (!room || !managerId) return;
-    setIsSimulating(true);
-    setSimulationError(null);
-    sound.playWhistle();
-    try {
-      const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}/run-matchday`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ managerId, matchday }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error || 'Failed to start the match.');
-      if (data?.room) setRoom(data.room as GameRoom);
-      // If the socket is alive, broadcast the same action to other connected clients.
-      // Do not do this from the initiating client because it would simulate the fixture twice.
-    } catch (error: any) {
-      setSimulationError(error?.message || 'Failed to start the match. Check your connection and try again.');
-    } finally {
-      setIsSimulating(false);
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      setSimulationError('Connection lost. Reconnect before starting the match.');
+      return;
     }
-  }, [room, managerId]);
+
+    // Matchday simulation now uses the same authoritative WebSocket instance as
+    // knockout matches. This prevents a Vercel REST request from landing on a
+    // different serverless instance with a stale room snapshot.
+    setSimulationError(null);
+    isSimulatingRef.current = true;
+    setIsSimulating(true);
+    sound.playWhistle();
+    send('RUN_MATCHDAY', { roomCode: room.code, managerId, matchday });
+  }, [room, managerId, send]);
 
   const proceedToNextMatchday = useCallback(async (nextMatchday: number) => {
     if (!room) return;
