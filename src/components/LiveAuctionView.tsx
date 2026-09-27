@@ -81,6 +81,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
   const formationConfig = FORMATIONS_CONFIG[currentManager.formation] || FORMATIONS_CONFIG['4-3-3'];
   const starterCategoryCounts = getFormationStarterCategoryCounts(currentManager.formation);
+  const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
   // The auction itself is staged globally: GK -> DEF -> MID -> ATT for the
   // exact starting XI only.
@@ -612,7 +613,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
-              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
             </div>
             {currentManager.squad.length === 0 ? (
               <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately.</div>
