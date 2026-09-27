@@ -1027,11 +1027,18 @@ function finalizeAuctionItem(room: GameRoom) {
   // and prevents a late client message from reopening/changing the auction.
   room.auction.isSold = true;
 
-  let winnerId = room.auction.highestBidderId;
-  let finalPrice = room.auction.currentBid;
+  // A forced positional lot has no bidding: the only remaining manager
+  // who still needs this category must receive the player at the starting price.
+  let winnerId = room.auction.isForcedPurchase
+    ? room.auction.forcedWinnerId || null
+    : room.auction.highestBidderId;
+  let finalPrice = room.auction.isForcedPurchase
+    ? player.startingPrice
+    : room.auction.currentBid;
 
-  // Handle blind auction secret bids
-  if (room.settings.auctionMode === 'Blind') {
+  // Handle blind auction secret bids. Forced lots bypass secret bidding because
+  // the recipient is already determined by the positional quota.
+  if (room.settings.auctionMode === 'Blind' && !room.auction.isForcedPurchase) {
     const bids = blindSecretBids.get(room.code) || {};
     let highestBid = 0;
     let winningManagers: string[] = [];
