@@ -30,37 +30,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
-
-async function callOpenRouter(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>) {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error('OPENROUTER_API_KEY is not configured');
-
-  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://football-league-nine.vercel.app',
-      'X-Title': 'Football Auction League',
-    },
-    body: JSON.stringify({
-      model: OPENROUTER_MODEL,
-      messages,
-      temperature: 0.4,
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`OpenRouter request failed (${response.status}): ${detail.slice(0, 500)}`);
-  }
-
-  return response.json() as Promise<any>;
-}
-
-
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
