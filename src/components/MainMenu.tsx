@@ -126,7 +126,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </header>
 
       {/* Main Center Content */}
-      <main className="relative z-10 max-w-4xl mx-auto w-full my-auto py-10 sm:py-14 flex flex-col items-center text-center">
+      <main className="relative z-10 max-w-5xl mx-auto w-full my-auto py-7 sm:py-12 flex flex-col items-center text-center">
         {/* Reconnect Banner if saved session exists */}
         {savedSession && (
           <div className="mb-6 w-full max-w-md p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/30 backdrop-blur-md flex items-center justify-between shadow-lg">
@@ -151,20 +151,27 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
         {/* Mandatory Title/Branding: FOOTBALL / AUCTION / LEAGUE */}
         <div className="flex flex-col items-center mb-6 leading-none">
-          <h1 className="font-display font-black text-5xl sm:text-7xl md:text-8xl tracking-tight text-white uppercase drop-shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
+          <h1 className="font-display font-black text-4xl sm:text-6xl md:text-7xl tracking-tight text-white uppercase drop-shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
             FOOTBALL
           </h1>
-          <div className="font-display font-black text-5xl sm:text-7xl md:text-8xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300 uppercase py-1">
+          <div className="font-display font-black text-4xl sm:text-6xl md:text-7xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300 uppercase py-1">
             AUCTION
           </div>
-          <div className="font-display font-black text-5xl sm:text-7xl md:text-8xl tracking-tight text-slate-200 uppercase">
+          <div className="font-display font-black text-4xl sm:text-6xl md:text-7xl tracking-tight text-slate-200 uppercase">
             LEAGUE
           </div>
         </div>
 
-        <p className="max-w-xl text-slate-400 text-xs sm:text-sm md:text-base leading-relaxed mb-10 px-4">
-          Draft world-class stars in high-stakes live auctions, engineer dynamic tactical formations, and lead your squad to glory in broadcast-grade 2D live matchdays.
+        <p className="max-w-2xl text-slate-400 text-xs sm:text-sm md:text-base leading-relaxed mb-5 px-4">
+          Draft world-class stars, build an 18-player squad, tune your tactics, and play through live animated matchdays.
         </p>
+        <div className="mb-8 flex flex-wrap justify-center gap-2.5 px-3">
+          {['LIVE AUCTION', '18 PLAYER SQUADS', '2–16 MANAGERS', '2D MATCH ENGINE'].map((label) => (
+            <span key={label} className="rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-[9px] font-black tracking-[0.16em] text-slate-400 shadow-lg shadow-black/10 backdrop-blur-xl">
+              {label}
+            </span>
+          ))}
+        </div>
 
         {/* 3 Main Action Buttons with SOLO PLAY visually prominent */}
         <div className="w-full max-w-2xl flex flex-col gap-4 px-2">
@@ -174,7 +181,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               setActiveModal('solo');
               setManagerName(savedSession?.managerName || '');
             }}
-            className="group relative p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-400 via-teal-400 to-emerald-500 border border-emerald-200/70 hover:border-white/80 text-slate-950 transition-all duration-300 shadow-2xl shadow-emerald-500/20 hover:shadow-emerald-400/30 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer flex items-center justify-between overflow-hidden"
+            className="group relative p-5 sm:p-6 rounded-[1.75rem] bg-gradient-to-br from-emerald-400/95 via-teal-400/95 to-emerald-500/95 border border-emerald-200/70 hover:border-white/80 text-slate-950 transition-all duration-300 shadow-2xl shadow-emerald-500/20 hover:shadow-emerald-400/30 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer flex items-center justify-between overflow-hidden"
           >
             <div className="flex items-center gap-4 text-left">
               <div className="w-12 h-12 rounded-xl bg-slate-950 text-emerald-400 flex items-center justify-center font-black shadow-md group-hover:scale-105 transition-transform">
@@ -203,7 +210,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 setActiveModal('create');
                 setManagerName(savedSession?.managerName || '');
               }}
-              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.045] backdrop-blur-2xl border border-white/10 hover:border-emerald-300/35 hover:bg-white/[0.065] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
+              className="group relative p-4 sm:p-5 rounded-[1.5rem] bg-white/[0.045] backdrop-blur-2xl border border-white/10 hover:border-emerald-300/35 hover:bg-white/[0.065] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
