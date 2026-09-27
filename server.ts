@@ -44,7 +44,7 @@ const wss = new WebSocketServer({
     if (allowedWsOrigins.length > 0) return allowedWsOrigins.includes(origin);
     if (!origin) return false;
     const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
-    const protocol = forwardedProto || (req.socket.encrypted ? 'https' : 'http');
+    const protocol = forwardedProto || ((req.socket as any).encrypted ? 'https' : 'http');
     return origin === `${protocol}://${req.headers.host}`;
   },
 });
