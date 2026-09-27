@@ -2825,21 +2825,46 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        // --- LEAVE ROOM ---
+        // --- LEAVE ROOM / MATCH ---
         case 'LEAVE_ROOM': {
           const { roomCode, managerId } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth) return;
           const { room, session } = auth;
+          const leavingId = session.managerId;
+          const canLeaveActiveMatch = room.phase === 'formation_select' || room.phase === 'auction';
+          const canLeaveLobby = room.phase === 'lobby';
+
+          if (!canLeaveLobby && !canLeaveActiveMatch) {
+            sendSocketError(ws, 'You can only leave before the season starts or during the auction.');
+            return;
+          }
+
+          const wasHost = room.hostId === leavingId;
           const sockets = roomSockets.get(room.code);
           if (sockets) sockets.delete(ws);
           socketToRoom.delete(ws);
 
-          if (session.managerId !== room.hostId && room.phase === 'lobby') {
-            room.managers = room.managers.filter(m => m.id !== session.managerId);
-            room.leagueTable = calculateInitialTable(room.managers);
-            broadcastRoom(room.code);
+          // Remove the manager from the authoritative room state. During an active
+          // auction this is important: leaving only on the client would leave a
+          // ghost bidder in the server state and could block the auction stage.
+          removeManagerFromRoom(room, leavingId);
+
+          // If the host leaves before the league begins, promote another manager
+          // so the remaining lobby/match is still controllable.
+          if (wasHost && room.managers.length > 0) {
+            const replacement = room.managers.find(m => !m.isBot) || room.managers[0];
+            room.hostId = replacement.id;
+            room.managers.forEach(m => { m.isHost = m.id === replacement.id; });
           }
+
+          if (room.phase === 'lobby') {
+            room.leagueTable = calculateInitialTable(room.managers);
+          }
+
+          room.updatedAt = Date.now();
+          await saveRoomSnapshot(room);
+          broadcastRoom(room.code);
           break;
         }
 
