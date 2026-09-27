@@ -124,11 +124,33 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const [scorePulse, setScorePulse] = useState<'home' | 'away' | null>(null);
   const [penaltyIndex, setPenaltyIndex] = useState(0);
   const [showPenaltyShootout, setShowPenaltyShootout] = useState(false);
+  // Penalty shootouts deliberately use a slow, broadcast-style reveal sequence.
+  // The result is hidden until the kicker/keeper animation has played out.
+  const [penaltyRevealStage, setPenaltyRevealStage] = useState<'walkup' | 'strike' | 'result'>('walkup');
 
   const penaltySequence = fixture.penaltyShootout || [];
   const currentPenalty = penaltySequence[penaltyIndex];
   const completedPenalties = penaltySequence.slice(0, penaltyIndex);
   const penaltyIsOver = penaltyIndex >= penaltySequence.length && penaltySequence.length > 0;
+
+  // Keep every penalty slow and tense: walk-up -> strike -> result.
+  // This effect intentionally ignores playback speed so penalties can never be rushed.
+  useEffect(() => {
+    if (!showPenaltyShootout || !currentPenalty || penaltyIsOver) return;
+
+    setPenaltyRevealStage('walkup');
+    const strikeTimer = window.setTimeout(() => {
+      setPenaltyRevealStage('strike');
+    }, 1800);
+    const resultTimer = window.setTimeout(() => {
+      setPenaltyRevealStage('result');
+    }, 3600);
+
+    return () => {
+      window.clearTimeout(strikeTimer);
+      window.clearTimeout(resultTimer);
+    };
+  }, [showPenaltyShootout, penaltyIndex, currentPenalty?.id, penaltyIsOver]);
 
   // Interactive Player Inspection Tooltip (Tap on player)
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedPlayerState | null>(null);
@@ -177,6 +199,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     setShowStatsModal(false);
     setPenaltyIndex(0);
     setShowPenaltyShootout(false);
+    setPenaltyRevealStage('walkup');
     setIsPlaying(true);
     setScorePulse(null);
     setInspectedPlayer(null);
@@ -402,6 +425,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
               // Knockout shootouts should flow straight into the visual spot-kick
               // sequence instead of hiding it behind another confirmation screen.
               setPenaltyIndex(0);
+              setPenaltyRevealStage('walkup');
               setShowPenaltyShootout(true);
               setFullTimeOverlay(false);
             } else {
@@ -830,31 +854,96 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           )}
 
           {showPenaltyShootout && fixture.wentToPenalties && (
-            <div className="absolute inset-0 z-40 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="w-full max-w-2xl rounded-3xl bg-slate-900/95 border border-amber-400/30 shadow-2xl overflow-hidden">
+            <div className="absolute inset-0 z-40 flex items-center justify-center p-3 sm:p-5 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-500">
+              <div className="w-full max-w-3xl rounded-3xl bg-slate-900/98 border border-amber-400/30 shadow-[0_25px_100px_rgba(0,0,0,.65)] overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
                   <div>
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-amber-400 font-black">Penalty Shootout</div>
-                    <h2 className="font-display font-black text-xl sm:text-2xl mt-1">PLAYERS FROM THE SPOT</h2>
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-amber-400 font-black">Penalty Shootout</div>
+                    <h2 className="font-display font-black text-xl sm:text-2xl mt-1">NO RUSH. ONE KICK AT A TIME.</h2>
                   </div>
-                  <div className="font-mono text-xs text-slate-400">{Math.min(penaltyIndex + 1, penaltySequence.length)}/{penaltySequence.length}</div>
+                  <div className="font-mono text-xs text-slate-400">
+                    KICK {Math.min(penaltyIndex + 1, penaltySequence.length)} / {penaltySequence.length}
+                  </div>
                 </div>
 
-                <div className="mx-5 mt-5 relative h-56 sm:h-64 rounded-2xl overflow-hidden border border-slate-700 bg-[radial-gradient(circle_at_center,_#14532d_0%,_#052e16_65%,_#022c22_100%)]">
+                {/* Persistent 5-kick scorecard with ticks/crosses */}
+                <div className="px-5 pt-5">
+                  <div className="rounded-2xl bg-black/30 border border-slate-800 p-4">
+                    <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest text-emerald-400 font-black truncate">{fixture.homeManagerName}</div>
+                        <div className="flex gap-2 mt-3 flex-wrap">
+                          {Array.from({ length: Math.max(5, Math.ceil(penaltySequence.length / 2)) }).map((_, i) => {
+                            const kick = completedPenalties.find(p => p.team === 'home' && p.round === i + 1);
+                            return (
+                              <div key={i} className="w-8 h-8 rounded-full border border-slate-700 bg-slate-950 flex items-center justify-center text-sm font-black">
+                                {kick ? (kick.outcome === 'goal'
+                                  ? <span className="text-emerald-400">✓</span>
+                                  : <span className="text-rose-400">×</span>)
+                                  : <span className="text-slate-700">•</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="text-center px-2">
+                        <div className="text-3xl sm:text-4xl font-mono font-black text-white tabular-nums">
+                          {completedPenalties.filter(p => p.outcome === 'goal' && p.team === 'home').length}
+                          <span className="text-slate-600 mx-2">—</span>
+                          {completedPenalties.filter(p => p.outcome === 'goal' && p.team === 'away').length}
+                        </div>
+                        <div className="text-[8px] uppercase tracking-[0.25em] text-slate-500 mt-1">LIVE SHOOTOUT</div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase tracking-widest text-sky-400 font-black truncate">{fixture.awayManagerName}</div>
+                        <div className="flex gap-2 mt-3 flex-wrap justify-end">
+                          {Array.from({ length: Math.max(5, Math.ceil(penaltySequence.length / 2)) }).map((_, i) => {
+                            const kick = completedPenalties.find(p => p.team === 'away' && p.round === i + 1);
+                            return (
+                              <div key={i} className="w-8 h-8 rounded-full border border-slate-700 bg-slate-950 flex items-center justify-center text-sm font-black">
+                                {kick ? (kick.outcome === 'goal'
+                                  ? <span className="text-emerald-400">✓</span>
+                                  : <span className="text-rose-400">×</span>)
+                                  : <span className="text-slate-700">•</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mx-5 mt-5 relative h-64 sm:h-72 rounded-2xl overflow-hidden border border-slate-700 bg-[radial-gradient(circle_at_center,_#14532d_0%,_#052e16_65%,_#022c22_100%)]">
                   <div className="absolute inset-0 opacity-30 bg-[linear-gradient(90deg,transparent_49.5%,rgba(255,255,255,.8)_50%,transparent_50.5%)]" />
-                  <div className="absolute left-1/2 top-2 bottom-2 w-32 -translate-x-1/2 border border-white/50 rounded-b-[55%]" />
-                  <div className="absolute left-1/2 top-2 -translate-x-1/2 w-24 h-12 border-x border-b border-white/60" />
-                  <div className="absolute left-1/2 top-5 -translate-x-1/2 w-16 h-10 border-2 border-white/70 rounded-sm bg-slate-900/20">
+                  <div className="absolute left-1/2 top-2 bottom-2 w-40 -translate-x-1/2 border border-white/50 rounded-b-[55%]" />
+                  <div className="absolute left-1/2 top-2 -translate-x-1/2 w-28 h-14 border-x border-b border-white/60" />
+                  <div className="absolute left-1/2 top-5 -translate-x-1/2 w-20 h-12 border-2 border-white/70 rounded-sm bg-slate-900/20">
                     <div className="absolute inset-0 border border-white/20" />
                   </div>
 
-                  <div className="absolute left-1/2 top-9 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] animate-bounce">🧤</div>
+                  <div className="absolute top-3 left-3 px-3 py-1.5 rounded-lg bg-black/50 border border-white/10 text-[9px] uppercase tracking-widest text-white/70 font-black">
+                    {penaltyRevealStage === 'walkup' ? 'THE KICKER STEPS UP' : penaltyRevealStage === 'strike' ? 'THE STRIKE' : 'THE VERDICT'}
+                  </div>
+
+                  <div className="absolute left-1/2 top-10 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] transition-transform duration-1000">
+                    🧤
+                  </div>
 
                   {currentPenalty && (
                     <>
-                      <div className="absolute left-1/2 bottom-7 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] animate-pulse">🧍</div>
+                      <div className="absolute left-1/2 bottom-9 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)]">
+                        🧍
+                      </div>
                       <div
-                        className={`absolute left-1/2 bottom-20 -translate-x-1/2 text-xl transition-all duration-700 ${currentPenalty.outcome === 'goal' ? 'translate-y-[-100px] scale-125' : currentPenalty.outcome === 'saved' ? 'translate-x-[38px] translate-y-[-55px]' : 'translate-x-[-45px] translate-y-[-65px] rotate-12'}`}
+                        className={[
+                          'absolute left-1/2 bottom-20 -translate-x-1/2 text-xl transition-all',
+                          penaltyRevealStage === 'walkup' ? 'opacity-0 scale-50' : '',
+                          penaltyRevealStage === 'strike' ? 'opacity-100 duration-[1400ms] ' + (currentPenalty.outcome === 'goal' ? 'translate-y-[-95px] scale-150' : currentPenalty.outcome === 'saved' ? 'translate-x-[45px] translate-y-[-55px] scale-125' : 'translate-x-[-55px] translate-y-[-65px] rotate-12 scale-125') : '',
+                          penaltyRevealStage === 'result' ? 'opacity-100 ' + (currentPenalty.outcome === 'goal' ? 'translate-y-[-95px] scale-150' : currentPenalty.outcome === 'saved' ? 'translate-x-[45px] translate-y-[-55px] scale-125' : 'translate-x-[-55px] translate-y-[-65px] rotate-12 scale-125') : ''
+                        ].join(' ')}
                       >
                         ⚽
                       </div>
@@ -863,72 +952,60 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                       </div>
                     </>
                   )}
-
-                  <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-black/40 text-[9px] uppercase tracking-widest text-white/70 font-black">
-                    LIVE · PENALTY {Math.min(penaltyIndex + 1, penaltySequence.length)}
-                  </div>
                 </div>
 
-                <div className="p-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-4 items-center">
-                  <div className="rounded-2xl bg-slate-950 border border-emerald-500/20 p-4 text-center">
-                    <div className="text-[10px] uppercase tracking-widest text-emerald-400 font-black">{fixture.homeManagerName}</div>
-                    <div className="mt-3 text-3xl">⚽</div>
-                    <div className="mt-2 font-display font-black text-sm">{currentPenalty?.team === 'home' ? currentPenalty.takerName : 'Home taker'}</div>
-                    {currentPenalty?.team === 'home' && <div className="text-[10px] text-slate-500">#{currentPenalty.takerNumber}</div>}
-                  </div>
-
-                  <div className="text-center">
-                    <div className="text-3xl font-mono font-black text-white">
-                      {fixture.homePenaltyScore ?? 0} — {fixture.awayPenaltyScore ?? 0}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-widest text-slate-500 mt-1">Shootout</div>
-                  </div>
-
-                  <div className="rounded-2xl bg-slate-950 border border-sky-500/20 p-4 text-center">
-                    <div className="text-[10px] uppercase tracking-widest text-sky-400 font-black">{fixture.awayManagerName}</div>
-                    <div className="mt-3 text-3xl">⚽</div>
-                    <div className="mt-2 font-display font-black text-sm">{currentPenalty?.team === 'away' ? currentPenalty.takerName : 'Away taker'}</div>
-                    {currentPenalty?.team === 'away' && <div className="text-[10px] text-slate-500">#{currentPenalty.takerNumber}</div>}
-                  </div>
-                </div>
-
-                {currentPenalty && !penaltyIsOver ? (
-                  <div className="px-5 pb-5">
+                <div className="p-5">
+                  {currentPenalty && !penaltyIsOver ? (
                     <div className="rounded-2xl bg-black/30 border border-slate-800 p-4 text-center">
-                      <div className="text-xs text-slate-400">{currentPenalty.takerName} steps up...</div>
-                      <div className="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-amber-400 animate-pulse" style={{width: '100%'}} />
+                      <div className="text-xs text-slate-400">
+                        {penaltyRevealStage === 'walkup'
+                          ? currentPenalty.takerName + ' walks to the spot...'
+                          : penaltyRevealStage === 'strike'
+                            ? 'HE TAKES THE KICK...'
+                            : currentPenalty.commentary}
                       </div>
-                      <div className={`mt-3 text-sm font-display font-black uppercase ${currentPenalty.outcome === 'goal' ? 'text-emerald-400' : currentPenalty.outcome === 'saved' ? 'text-rose-400' : 'text-amber-300'}`}>
+
+                      <div className="mt-4 flex items-center justify-center gap-2">
+                        <span className={`h-2 w-2 rounded-full ${penaltyRevealStage !== 'walkup' ? 'bg-amber-400' : 'bg-slate-700'}`} />
+                        <span className={`h-2 w-2 rounded-full ${penaltyRevealStage === 'result' ? 'bg-amber-400' : 'bg-slate-700'}`} />
+                        <span className={`h-2 w-2 rounded-full ${penaltyRevealStage === 'result' ? 'bg-emerald-400' : 'bg-slate-700'}`} />
+                      </div>
+
+                      <div className={`mt-4 text-sm font-display font-black uppercase transition-opacity duration-500 ${penaltyRevealStage === 'result' ? 'opacity-100' : 'opacity-0'} ${currentPenalty.outcome === 'goal' ? 'text-emerald-400' : currentPenalty.outcome === 'saved' ? 'text-rose-400' : 'text-amber-300'}`}>
                         {currentPenalty.outcome === 'goal' ? 'GOAL' : currentPenalty.outcome === 'saved' ? 'SAVED BY THE KEEPER' : 'MISSED'}
                       </div>
-                      <div className="mt-1 text-xs text-slate-400">{currentPenalty.commentary}</div>
+
+                      <button
+                        type="button"
+                        disabled={penaltyRevealStage !== 'result'}
+                        onClick={() => {
+                          setPenaltyRevealStage('walkup');
+                          setPenaltyIndex(i => Math.min(i + 1, penaltySequence.length));
+                        }}
+                        className="w-full mt-4 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-display font-black text-xs uppercase tracking-wider active:scale-[.99] transition-all"
+                      >
+                        {penaltyIndex + 1 < penaltySequence.length ? 'NEXT KICK' : 'SHOW RESULT'}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setPenaltyIndex(i => Math.min(i + 1, penaltySequence.length))}
-                      className="w-full mt-4 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs uppercase tracking-wider active:scale-[.99]"
-                    >
-                      {penaltyIndex + 1 < penaltySequence.length ? 'NEXT KICK' : 'SHOW RESULT'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="px-5 pb-5 text-center">
-                    <div className="text-emerald-400 font-display font-black uppercase">Shootout complete</div>
-                    <div className="text-slate-300 text-sm mt-1">{fixture.winnerManagerId === fixture.homeManagerId ? fixture.homeManagerName : fixture.awayManagerName} wins on penalties.</div>
-                    <button
-                      type="button"
-                      onClick={() => setShowPenaltyShootout(false)}
-                      className="mt-4 px-6 py-2.5 rounded-xl bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase"
-                    >
-                      CONTINUE
-                    </button>
-                  </div>
-                )}
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-emerald-400 font-display font-black uppercase">Shootout complete</div>
+                      <div className="text-slate-300 text-sm mt-1">
+                        {fixture.winnerManagerId === fixture.homeManagerId ? fixture.homeManagerName : fixture.awayManagerName} wins on penalties.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPenaltyShootout(false)}
+                        className="mt-4 px-6 py-2.5 rounded-xl bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase"
+                      >
+                        CONTINUE
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
-
           {/* ========================================================================= */}
           {/* 6. COMPACT GLASS HALF-TIME OVERLAY (Requirement 15)                       */}
           {/* ========================================================================= */}
