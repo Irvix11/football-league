@@ -269,8 +269,6 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
 } {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const starters = squad.filter(s => s.isStarting);
-
-
   const categoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
   const starterCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
 
@@ -289,21 +287,8 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   const errors: string[] = [];
   const missingPositions: string[] = [];
 
-  // IMPORTANT: formation category caps are AUCTION acquisition limits only.
-  // Once players are owned, their assigned positions are flexible and bench composition
-  // must never invalidate the squad. Only the 11 starting slots are structurally checked.
-  // This prevents errors such as "too many ATT players" when switching 4-3-3 -> 4-1-4-1.
-  if (starters.length !== 11) {
-    errors.push(`Need exactly 11 starters (currently ${starters.length})`);
-  }
-  if (squad.length !== 11) {
-    errors.push("Need exactly 11 players (currently " + squad.length + ")");
-  }
-
-  // Formation slots are exact for the starting XI. The seven bench places are
-  // intentionally position-flexible: changing from 4-3-3 to 4-1-4-1 must NOT
-  // invalidate an already-purchased squad just because the bench has extra
-  // attackers/defenders. Auction acquisition limits are enforced separately.
+  // Formation category caps are auction acquisition limits. Once the XI is owned,
+  // assigned positions are flexible and are scored for positional fit.
   const starterRequirements = getFormationStarterCategoryCounts(formation);
   // Formation structure is determined by the slot each starter occupies.
   // Players may be assigned to different football positions and take a
@@ -329,7 +314,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   return {
     isValid: errors.length === 0 && starters.length === 11 && squad.length === 11,
     startersCount: starters.length,
-    substitutesCount: substitutes.length,
+    substitutesCount: 0,
     totalCount: squad.length,
     missingPositions,
     categoryCounts,
