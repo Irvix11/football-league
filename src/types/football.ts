@@ -398,6 +398,8 @@ export interface GameRoom {
   transferOffers: TransferOffer[];
   /** Explicit phase readiness for formation/auction/team setup. */
   phaseReadyIds?: string[];
+  /** Absolute deadline for the current 30-second auto-ready phase timer. */
+  phaseReadyDeadline?: number;
   /** True when the season is paused for the mid-season management/transfer window. */
   transferWindowOpen?: boolean;
   /** Matchday after which the mid-season window opened. */
