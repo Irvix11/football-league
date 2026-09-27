@@ -103,7 +103,10 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
         club: 'Unknown Club',
         league: 'Unknown League',
         nationality: 'Unknown',
-        position: genericPosition,
+        // Category/position are neutralized too: blind auction clients should only
+        // receive the two scouting attributes below, plus the normal auction price.
+        position: 'ST',
+        category: 'ATT',
         overall: 0,
         attributes: { pac: 0, sho: 0, pas: 0, dri: 0, def: 0, phy: 0 },
         age: 0,
