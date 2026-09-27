@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Formation, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
+import { Formation, LobbySettings, PlayerPool, Era, AuctionMode } from '../types/football';
 import { FORMATIONS_CONFIG } from '../constants/formations';
 import { Play, Zap } from 'lucide-react';
 import ResponsiveHeroBanner from './ui/responsive-hero-banner';
@@ -46,8 +46,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [era, setEra] = useState<Era>('Current');
   const [auctionMode, setAuctionMode] = useState<AuctionMode>('Classic');
   const [transfersEnabled, setTransfersEnabled] = useState(true);
-  const [leagueType, setLeagueType] = useState<LeagueType>('Round Robin');
-  const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>('League');
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +58,6 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       era,
       auctionMode,
       transfersEnabled,
-      leagueType,
-      competitionFormat,
     });
   };
 
@@ -275,41 +271,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                    League Format
-                  </label>
-                  <select
-                    value={leagueType}
-                    onChange={(e) => setLeagueType(e.target.value as LeagueType)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
-                  >
-                    <option value="Round Robin">Round Robin (1x)</option>
-                    <option value="Double Round Robin">Double Round Robin (2x)</option>
-                  </select>
-                </div>
               </div>
 
-              {/* Competition Format */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                    Competition
-                  </label>
-                  <select
-                    value={competitionFormat}
-                    onChange={(e) => setCompetitionFormat(e.target.value as CompetitionFormat)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
-                  >
-                    <option value="League">League Season</option>
-                    <option value="Knockout">Knockout Cup</option>
-                    <option value="Champions Cup">Champions Cup</option>
-                  </select>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-400 flex items-center">
-                  {competitionFormat === 'Knockout'
-                    ? 'Bracket: Round of 16 → Quarter-Final → Semi-Final → Final, with extra time and penalties.'
-                    : 'Round-robin standings with matchdays and a final league table.'}
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <div className="text-xs font-black uppercase tracking-wider text-emerald-400">League Format</div>
+                <div className="mt-1 text-sm font-bold text-slate-100">Double Round Robin</div>
+                <div className="mt-1 text-[11px] text-slate-400">
+                  Every manager plays every other manager twice — once home and once away.
+                  Playoffs are automatic based on the number of managers.
                 </div>
               </div>
 
