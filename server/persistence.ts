@@ -1,4 +1,4 @@
-import type { GameRoom } from './src/types/football.js';
+import type { GameRoom } from '../src/types/football.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wcumaftqouolnuoxgryj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_BpPGMfqBjsdtskvRtp0IOQ_lgwG1dVQ';
