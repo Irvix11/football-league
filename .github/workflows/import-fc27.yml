@@ -1,0 +1,31 @@
+name: Import FC27 80+ players
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  import-fc27:
+    if: !contains(github.event.head_commit.message, 'chore: update FC27 generated players')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run import:fc27:remote
+      - name: Commit generated FC27 database
+        run: |
+          if git diff --quiet -- src/data/fc27.generated.ts; then
+            echo "FC27 database is already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/fc27.generated.ts
+          git commit -m "chore: update FC27 generated players"
+          git push
