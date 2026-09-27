@@ -301,7 +301,10 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   const errors: string[] = [];
   const missingPositions: string[] = [];
 
-  // A completed team is always 11 starters + 7 substitutes.
+  // IMPORTANT: formation category caps are AUCTION acquisition limits only.
+  // Once players are owned, their assigned positions are flexible and bench composition
+  // must never invalidate the squad. Only the 11 starting slots are structurally checked.
+  // This prevents errors such as "too many ATT players" when switching 4-3-3 -> 4-1-4-1.
   if (starters.length !== 11) {
     errors.push(`Need exactly 11 starters (currently ${starters.length})`);
   }
