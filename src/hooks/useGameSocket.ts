@@ -107,15 +107,40 @@ export function useGameSocket() {
             break;
 
           case 'ERROR':
-            // A saved session can outlive an in-memory Vercel instance. Clear only
-            // genuinely expired rooms; ordinary gameplay errors should keep the session.
+            // Reconnects can land on a different Vercel Function instance. Give the
+            // durable snapshot one HTTP retry before deciding that a saved room is gone.
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
-              saveSession(null);
-              managerIdRef.current = null;
-              setRoom(null);
-              setManagerId(null);
+              const saved = getSavedSession();
+              if (saved) {
+                fetch('/api/room/' + encodeURIComponent(saved.roomCode), { cache: 'no-store' })
+                  .then((response) => {
+                    if (response.ok) {
+                      setErrorMessage(null);
+                      if (socketRef.current?.readyState === WebSocket.OPEN) {
+                        socketRef.current.send(JSON.stringify({
+                          type: 'JOIN_LOBBY',
+                          payload: {
+                            roomCode: saved.roomCode,
+                            managerName: saved.managerName,
+                            reconnectId: saved.managerId,
+                          }
+                        }));
+                      }
+                      return;
+                    }
+                    saveSession(null);
+                    managerIdRef.current = null;
+                    setRoom(null);
+                    setManagerId(null);
+                    setErrorMessage(message);
+                  })
+                  .catch(() => setErrorMessage(message));
+              } else {
+                setErrorMessage(message);
+              }
+            } else {
+              setErrorMessage(message);
             }
-            setErrorMessage(message);
             setTimeout(() => setErrorMessage(null), 5000);
             break;
         }
