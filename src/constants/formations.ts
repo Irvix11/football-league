@@ -317,9 +317,16 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   // invalidate an already-purchased squad just because the bench has extra
   // attackers/defenders. Auction acquisition limits are enforced separately.
   const starterRequirements = getFormationStarterCategoryCounts(formation);
+  // Formation structure is determined by the slot each starter occupies.
+  // Players may be assigned to different football positions and take a
+  // positional-fit penalty; the assigned position does not change the slot's
+  // DEF/MID/ATT structure.
   for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
     const requiredStarters = starterRequirements[cat];
-    const currentStarters = starterCategoryCounts[cat] || 0;
+    const currentStarters = starters.filter((entry) => {
+      const slot = config.slots.find((s) => s.index === entry.startingSlotIndex);
+      return (slot?.category || getEntryAssignedCategory(entry)) === cat;
+    }).length;
     if (currentStarters !== requiredStarters) {
       const diff = requiredStarters - currentStarters;
       if (diff > 0) {
