@@ -1436,6 +1436,9 @@ wss.on('connection', (ws) => {
 
           if (type === 'START_SOLO_GAME' || isSolo) {
             const result = createSoloGameRoom(managerName || 'Solo Manager', soloFormation);
+            // Persist the initial solo room before returning it so a browser refresh
+            // or Vercel function hop can recover the saved session.
+            await saveRoomSnapshot(result.room);
             if (!roomSockets.has(result.roomCode)) {
               roomSockets.set(result.roomCode, new Set());
             }
