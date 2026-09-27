@@ -38,3 +38,6 @@ npm run smoke
 The checked-in `src/data/players.ts` file is a small development dataset and is **not** the complete EA SPORTS FC 27 database. The game is structured so a properly licensed/authorized FC 27 data import can replace it without changing the auction or simulation engine.
 
 EA SPORTS FC 27's official ratings database is maintained by EA: https://www.ea.com/games/ea-sports-fc/ratings
+
+
+<!-- production-deploy-trigger -->
