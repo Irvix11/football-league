@@ -29,6 +29,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+
+async function callOpenRouter(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>) {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error('OPENROUTER_API_KEY is not configured');
+
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://football-league-nine.vercel.app',
+      'X-Title': 'Football Auction League',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages,
+      temperature: 0.4,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`OpenRouter request failed (${response.status}): ${detail.slice(0, 500)}`);
+  }
+
+  return response.json() as Promise<any>;
+}
+
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -2540,6 +2572,30 @@ app.post('/api/solo-game', (req, res) => {
   } catch (err: any) {
     console.error('Error creating solo game:', err);
     res.status(500).json({ error: err.message || 'Failed to create solo game' });
+  }
+});
+
+
+// Server-side AI endpoint. The API key never reaches the browser.
+app.post('/api/ai/advice', async (req, res) => {
+  try {
+    const prompt = String(req.body?.prompt || '').trim();
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    const result = await callOpenRouter([
+      {
+        role: 'system',
+        content: 'You are the tactical assistant for Football Auction League. Give concise, practical football-management advice. Do not invent player data that is not supplied by the user.',
+      },
+      { role: 'user', content: prompt },
+    ]);
+
+    const content = result?.choices?.[0]?.message?.content;
+    if (!content) return res.status(502).json({ error: 'OpenRouter returned no assistant response' });
+    return res.json({ content });
+  } catch (error: any) {
+    console.error('[AI] OpenRouter error:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'AI request failed' });
   }
 });
 
