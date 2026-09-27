@@ -136,17 +136,9 @@ export function useGameSocket() {
       setIsConnected(true);
       setErrorMessage(null);
 
-      const saved = getSavedSession();
-      if (saved) {
-        ws.send(JSON.stringify({
-          type: 'JOIN_LOBBY',
-          payload: {
-            roomCode: saved.roomCode,
-            managerName: saved.managerName,
-            reconnectId: saved.managerId,
-          }
-        }));
-      }
+      // Reconnect is intentionally user-confirmed. A stale saved credential must
+      // never silently re-enter a lobby, especially after the manager was kicked.
+      // The main menu exposes an explicit "Rejoin" action instead.
     };
 
     ws.onmessage = (event) => {
@@ -155,6 +147,27 @@ export function useGameSocket() {
         const { type, room: newRoom, managerId: assignedId, message, amount } = data;
 
         switch (type) {
+          case 'KICKED':
+            // A kicked manager must never be auto-reconnected by the browser's
+            // WebSocket retry loop. Clear the credential and require a fresh,
+            // explicit join from the user.
+            intentionalCloseRef.current = true;
+            saveSession(null);
+            managerIdRef.current = null;
+            setRoom(null);
+            setManagerId(null);
+            setErrorMessage('You were removed from this game by the host. Rejoin manually with a new lobby code.');
+            break;
+
+          case 'LOBBY_DELETED':
+            intentionalCloseRef.current = true;
+            saveSession(null);
+            managerIdRef.current = null;
+            setRoom(null);
+            setManagerId(null);
+            setErrorMessage('This lobby was deleted by the host.');
+            break;
+
           case 'LOBBY_CREATED':
           case 'LOBBY_JOINED': {
             setRoom(restoreViewerIdentity(newRoom, assignedId, null));
