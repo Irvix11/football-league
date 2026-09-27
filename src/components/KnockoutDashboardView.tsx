@@ -43,8 +43,10 @@ export const KnockoutDashboardView: React.FC<KnockoutDashboardViewProps> = ({
     : round?.roundName === 'Quarter-Final'
       ? 'Semi-Final'
       : round?.roundName === 'Semi-Final'
-        ? 'Final'
-        : null;
+        ? 'Third-Place Match'
+        : round?.roundName === 'Third-Place'
+          ? 'Final'
+          : null;
 
   const renderFixture = (fixture: Fixture) => {
     const isUserMatch = fixture.homeManagerId === managerId || fixture.awayManagerId === managerId;
@@ -84,9 +86,9 @@ export const KnockoutDashboardView: React.FC<KnockoutDashboardViewProps> = ({
             <Trophy className="w-3.5 h-3.5" /> KNOCKOUT CUP
           </div>
           <h1 className="font-display font-black text-2xl sm:text-3xl uppercase mt-1">
-            {round?.roundName || 'Knockout'}
+            {round?.roundName === 'Third-Place' ? 'THIRD-PLACE MATCH' : (round?.roundName || 'Knockout')}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">Single elimination · Extra time · Penalty shootouts</p>
+          <p className="text-xs text-slate-500 mt-1">League playoffs · Extra time · Penalty shootouts</p>
         </div>
         <div className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
           {fixtures.filter(f => f.played).length}/{fixtures.length} matches complete
