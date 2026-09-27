@@ -1146,7 +1146,7 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  */
 export function getAuctionStartingPrice(player: Player): number {
   const overall = Math.max(80, Math.min(99, Number(player.overall) || 80));
-  return Math.max(5, Math.min(100, Math.round(8 + (overall - 80) * 5)));
+  return 0;
 }
 
 /**
