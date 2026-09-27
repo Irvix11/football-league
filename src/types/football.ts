@@ -96,7 +96,8 @@ export interface SquadPlayerEntry {
   player: Player;
   isStarting: boolean;
   startingSlotIndex?: number; // 0-10 for starters
-  benchIndex?: number; // 0-6 for substitutes
+  /** Deprecated: retained for saved-room compatibility; XI-only squads never use it. */
+  benchIndex?: number;
   assignedPosition?: Position;
   condition: PlayerCondition;
 }
