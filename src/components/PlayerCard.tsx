@@ -3,9 +3,7 @@ import { Player } from '../types/football';
 
 function BlindLockIcon() {
   return (
-    <div className="w-11 h-11 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-300 text-xl font-black">
-      ?
-    </div>
+    <div className="w-11 h-11 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-300 text-xl font-black">?</div>
   );
 }
 
@@ -29,12 +27,8 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   const isHighOvr = player.overall >= 88;
 
   const blindLabels: Record<string, string> = {
-    pac: 'PACE',
-    sho: 'SHOOTING',
-    pas: 'PASSING',
-    dri: 'DRIBBLING',
-    def: 'DEFENDING',
-    phy: 'PHYSICAL',
+    pac: 'PACE', sho: 'SHOOTING', pas: 'PASSING',
+    dri: 'DRIBBLING', def: 'DEFENDING', phy: 'PHYSICAL',
   };
   const isIcon = player.id.startsWith('fc-icon');
 
@@ -74,10 +68,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
 
   if (isBlindMystery && size !== 'sm') {
     return (
-      <div
-        onClick={onClick}
-        className={`relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-950 shadow-2xl ${className}`}
-      >
+      <div onClick={onClick} className={`relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-950 shadow-2xl ${className}`}>
         <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
           <div>
             <div className="text-[10px] uppercase tracking-[0.2em] font-black text-amber-400">BLIND AUCTION</div>
