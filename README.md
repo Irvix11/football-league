@@ -62,3 +62,5 @@ Before shipping a release, verify:
 3. Vercel deployment is **READY**
 4. Production runtime logs show no new errors
 5. A fresh browser can create/join a lobby, reconnect, run an auction, confirm an 11-player XI, simulate a match, and complete a knockout match
+
+<!-- release: 2026-09-27 production-hardening -->
