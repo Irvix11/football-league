@@ -70,3 +70,6 @@ Before shipping a release, verify:
 
 
 <!-- release trigger: zero-value-and-crash-hardening 2026-09-27 -->
+
+
+<!-- deploy: final-zero-price-crash-hardening-2026-09-27 -->
