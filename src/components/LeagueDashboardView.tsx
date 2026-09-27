@@ -124,6 +124,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
     const requestedP = targetMgr?.squad.find((s) => s.player.id === requestedPlayerId)?.player;
 
     if (offeredP && requestedP && targetMgr) {
+      if (offeredCash < 0 || offeredCash > currentManager.budget) return;
       onProposeTransfer({
         fromManagerId: currentManager.id,
         fromManagerName: currentManager.name,
@@ -137,6 +138,10 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
         matchday: currentMatchday,
       });
       setShowTransferModal(false);
+      setTargetManagerId('');
+      setOfferedPlayerId('');
+      setRequestedPlayerId('');
+      setOfferedCash(0);
     }
   };
 
@@ -144,7 +149,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   const awayManager = room.managers.find((m) => m.id === activeFixture?.awayManagerId);
 
   return (
-    <div className="min-h-screen bg-[#040812] text-slate-100 p-3 sm:p-5 md:p-6 pb-24 lg:pb-8 flex flex-col justify-between max-w-7xl mx-auto select-none">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0e1d1b_0%,#040812_45%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 pb-24 lg:pb-8 flex flex-col justify-between max-w-7xl mx-auto select-none">
       {/* Top Header: MATCHDAY X as visual anchor */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
         <div>
@@ -579,7 +584,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
       {/* --- TRANSFERS MODAL --- */}
       {showTransferModal && currentManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl my-8">
+          <div className="relative w-full max-w-lg p-6 rounded-3xl bg-slate-900/95 border border-white/10 shadow-2xl shadow-black/40 my-8 backdrop-blur-xl">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
               <h2 className="font-display font-black text-xl text-slate-100 uppercase tracking-wide">PROPOSE TRANSFER SWAP</h2>
               <button
@@ -608,6 +613,37 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                 ))}
               </div>
             )}
+
+            {room.transferOffers.filter(o => o.fromManagerId === managerId && o.status === 'pending').length > 0 && (
+              <div className="mb-4 p-3 rounded-2xl bg-sky-500/5 border border-sky-400/20">
+                <div className="text-[10px] uppercase tracking-widest font-black text-sky-300 mb-2">Outgoing · Awaiting Response</div>
+                <div className="space-y-1.5">
+                  {room.transferOffers.filter(o => o.fromManagerId === managerId && o.status === 'pending').map((offer) => (
+                    <div key={offer.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2">
+                      <div className="text-[10px] text-slate-300">
+                        <span className="font-bold">{offer.offeredPlayerName}</span>
+                        {offer.offeredCash > 0 && <span className="text-amber-300"> + £{offer.offeredCash}M</span>}
+                        <span className="text-slate-500"> → {offer.requestedPlayerName} · {offer.toManagerName}</span>
+                      </div>
+                      <span className="text-[9px] font-mono text-amber-300">PENDING</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mb-4 p-3 rounded-2xl bg-slate-950/70 border border-white/5">
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-amber-300">
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                Transfer rules
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-2 text-[9px] text-slate-500">
+                <span>• Opens every 5th matchday</span>
+                <span>• Player-for-player + cash</span>
+                <span>• Both squads stay within formation limits</span>
+                <span>• Budgets are updated atomically</span>
+              </div>
+            </div>
 
             <form onSubmit={handleSendTransfer} className="space-y-4 text-left">
               <div>
