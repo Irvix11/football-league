@@ -826,6 +826,35 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   <div className="font-mono text-xs text-slate-400">{Math.min(penaltyIndex + 1, penaltySequence.length)}/{penaltySequence.length}</div>
                 </div>
 
+                <div className="mx-5 mt-5 relative h-56 sm:h-64 rounded-2xl overflow-hidden border border-slate-700 bg-[radial-gradient(circle_at_center,_#14532d_0%,_#052e16_65%,_#022c22_100%)]">
+                  <div className="absolute inset-0 opacity-30 bg-[linear-gradient(90deg,transparent_49.5%,rgba(255,255,255,.8)_50%,transparent_50.5%)]" />
+                  <div className="absolute left-1/2 top-2 bottom-2 w-32 -translate-x-1/2 border border-white/50 rounded-b-[55%]" />
+                  <div className="absolute left-1/2 top-2 -translate-x-1/2 w-24 h-12 border-x border-b border-white/60" />
+                  <div className="absolute left-1/2 top-5 -translate-x-1/2 w-16 h-10 border-2 border-white/70 rounded-sm bg-slate-900/20">
+                    <div className="absolute inset-0 border border-white/20" />
+                  </div>
+
+                  <div className="absolute left-1/2 top-9 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] animate-bounce">🧤</div>
+
+                  {currentPenalty && (
+                    <>
+                      <div className="absolute left-1/2 bottom-7 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] animate-pulse">🧍</div>
+                      <div
+                        className={`absolute left-1/2 bottom-20 -translate-x-1/2 text-xl transition-all duration-700 ${currentPenalty.outcome === 'goal' ? 'translate-y-[-100px] scale-125' : currentPenalty.outcome === 'saved' ? 'translate-x-[38px] translate-y-[-55px]' : 'translate-x-[-45px] translate-y-[-65px] rotate-12'}`}
+                      >
+                        ⚽
+                      </div>
+                      <div className="absolute left-1/2 bottom-2 -translate-x-1/2 text-[9px] font-mono text-white/80 uppercase tracking-wider whitespace-nowrap">
+                        #{currentPenalty.takerNumber} {currentPenalty.takerName}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-black/40 text-[9px] uppercase tracking-widest text-white/70 font-black">
+                    LIVE · PENALTY {Math.min(penaltyIndex + 1, penaltySequence.length)}
+                  </div>
+                </div>
+
                 <div className="p-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-4 items-center">
                   <div className="rounded-2xl bg-slate-950 border border-emerald-500/20 p-4 text-center">
                     <div className="text-[10px] uppercase tracking-widest text-emerald-400 font-black">{fixture.homeManagerName}</div>
