@@ -343,12 +343,11 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   }).length;
   if (assignedGkCount > 1) errors.push('Only one starting goalkeeper is allowed.');
 
-  const squadLimits = getFormationSquadCategoryLimits(formation);
-  for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
-    if (categoryCounts[cat] > squadLimits[cat]) {
-      errors.push(`Too many ${cat} players for ${formation} (maximum ${squadLimits[cat]} in the 18-player squad)`);
-    }
-  }
+  // Formation category limits are enforced by the auction engine when players
+  // are purchased. Once the 18-player squad is assembled, managers may switch
+  // formations and use any outfield players in any outfield role. The only hard
+  // formation requirement here is the 11 starting slots.
+  // Positional fit / Effective OVR accounts for out-of-position play.
 
   return {
     isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 7 && squad.length === 18,
