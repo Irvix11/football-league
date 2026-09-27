@@ -3189,7 +3189,13 @@ wss.on('connection', (ws) => {
           }
           room.phase = 'season_end';
           room.awards = calculateSeasonAwards(room);
-          broadcastRoom(room.code);
+
+          // Season results are shown to currently connected players, but the
+          // completed game is deliberately not persisted. There is no reason
+          // to retain finished games and this also prevents stale rooms from
+          // reappearing after a server restart.
+          broadcastRoom(room.code, undefined, false);
+          void deleteRoomSnapshot(room.code);
           break;
         }
 
