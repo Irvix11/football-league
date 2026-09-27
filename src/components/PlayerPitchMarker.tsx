@@ -9,6 +9,7 @@ interface PlayerPitchMarkerProps {
   isHighlighted?: boolean;
   isSubTarget?: boolean;
   fitPercentage?: number;
+  effectiveOverall?: number;
   size?: 'sm' | 'md' | 'lg';
   onClick?: () => void;
   className?: string;
@@ -55,6 +56,7 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
   isHighlighted = false,
   isSubTarget = false,
   fitPercentage,
+  effectiveOverall,
   size = 'md',
   onClick,
   className = '',
@@ -162,7 +164,7 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
               : 'bg-slate-900 text-slate-200 border-slate-700'
           } ${sizeClasses.ovrBadge}`}
         >
-          {player.overall}
+          {effectiveOverall ?? player.overall}
         </span>
 
         {/* Position Badge on top-left (e.g. ST, CB) */}
@@ -193,10 +195,16 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
         </div>
       </div>
 
-      {/* Position Fit indicator if fit is provided */}
-      {typeof fitPercentage === 'number' && fitPercentage < 80 && (
-        <span className="absolute -bottom-3 text-[8px] font-mono font-bold text-amber-400 bg-slate-950/90 px-1 rounded border border-slate-800">
-          {fitPercentage}%
+      {/* Natural / alternate / out-of-position indicator */}
+      {typeof fitPercentage === 'number' && (
+        <span className={`absolute -bottom-3 text-[8px] font-mono font-black bg-slate-950/95 px-1.5 rounded border ${
+          fitPercentage >= 90
+            ? 'text-emerald-400 border-emerald-500/30'
+            : fitPercentage >= 70
+            ? 'text-amber-400 border-amber-500/30'
+            : 'text-rose-400 border-rose-500/30'
+        }`}>
+          {fitPercentage >= 90 ? 'NATURAL' : fitPercentage >= 70 ? 'ALT' : 'OOP'} · {fitPercentage}%
         </span>
       )}
     </button>
