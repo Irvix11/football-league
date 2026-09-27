@@ -1701,7 +1701,7 @@ wss.on('connection', (ws) => {
           }
 
           if (manager.squad.length >= 11) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 11-player squad is already full (18/11 players).' }));
+            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 11-player squad is already full (11/11 players).' }));
             return;
           }
 
