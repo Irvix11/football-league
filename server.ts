@@ -682,7 +682,7 @@ function advanceAuction(room: GameRoom) {
     }
   }
 
-  // Check if all managers have complete XI-only squads
+  // Check if all managers have complete 18-player squads
   const allFull = room.managers.every(m => m.squad.length >= 18);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
@@ -843,7 +843,7 @@ function simulateBotBids(room: GameRoom) {
   const currentPl = room.auction.currentPlayer;
   if (!currentPl) return;
 
-  const bots = room.managers.filter(m => m.isBot && m.squad.length < 11);
+  const bots = room.managers.filter(m => m.isBot && m.squad.length < 18);
   for (const bot of bots) {
     // A bidder never needs to outbid itself. This also prevents bots from
     // unnecessarily draining their own budget near the end of a lot.
@@ -948,7 +948,7 @@ function finalizeAuctionItem(room: GameRoom) {
     if (
       winner &&
       winner.budget >= finalPrice &&
-      winner.squad.length < 11 &&
+      winner.squad.length < 18 &&
       winnerLimits &&
       winnerCategoryCount < winnerLimits[player.category]
     ) {
@@ -996,7 +996,7 @@ function finalizeAuctionItem(room: GameRoom) {
 
   // Transition to next player after 3.5 seconds
   setTimeout(() => {
-    if (room.managers.every(m => m.squad.length >= 11)) {
+    if (room.managers.every(m => m.squad.length >= 18)) {
       room.managers.forEach(autoFillManagerLineup);
     }
     advanceAuction(room);
@@ -2210,7 +2210,7 @@ wss.on('connection', (ws) => {
           if (bot) {
             const ownedByHuman = new Set((human?.squad || []).map(s => s.player.id));
             const botPool = pool.filter(p => !ownedByHuman.has(p.id));
-            bot.squad = generateValidSquad(bot.formation, botPool.length >= 11 ? botPool : pool);
+            bot.squad = generateValidSquad(bot.formation, botPool.length >= 18 ? botPool : pool);
             bot.teamOverall = calculateTeamOverall(bot.formation, bot.squad);
             bot.roles = setupManagerRoles(bot.squad.filter(s => s.isStarting));
             bot.confirmedTeam = true;
@@ -2329,8 +2329,8 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Insufficient budget for secret bid.');
             return;
           }
-          if (manager.squad.length >= 11) {
-            sendSocketError(ws, 'Your 11-player squad is already full (11/11 players).');
+          if (manager.squad.length >= 18) {
+            sendSocketError(ws, 'Your 18-player squad is already full (18/18 players).');
             return;
           }
           const blindLimits = getFormationSquadCategoryLimits(manager.formation);
@@ -2370,7 +2370,7 @@ wss.on('connection', (ws) => {
           for (const entry of manager.squad) counts[entry.player.category] += 1;
           const complete = manager.squad.length === 18 && (['GK','DEF','MID','ATT'] as PositionCategory[]).every(cat => counts[cat] >= getFormationStarterCategoryCounts(manager.formation)[cat]);
           if (!complete) {
-            sendSocketError(ws, 'Finish your 11-player squad before pressing I\'M DONE.');
+            sendSocketError(ws, 'Finish your 18-player squad before pressing I\'M DONE.');
             return;
           }
           const ready = new Set(room.phaseReadyIds || []);
@@ -2844,7 +2844,7 @@ app.get('/api/players', (req, res) => {
   res.json(getPlayersForLobby(pool, era));
 });
 
-// Dedicated Solo Game endpoint (instantly generates 11-player squads and navigates to Team Management)
+// Dedicated Solo Game endpoint (instantly generates 18-player squads and navigates to Team Management)
 app.post('/api/solo-game', (req, res) => {
   try {
     const { managerName, formation } = req.body || {};
