@@ -1,5 +1,5 @@
 import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult } from '../types/football.js';
-import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory } from '../constants/formations.js';
+import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory, calculatePositionFit } from '../constants/formations.js';
 
 /**
  * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
