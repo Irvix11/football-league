@@ -135,6 +135,11 @@ function createPrng(seed: number) {
   };
 }
 
+function getPlayerNumber(starters: SquadPlayerEntry[], playerId: string): number {
+  const index = starters.findIndex(entry => entry.player.id === playerId);
+  return index >= 0 ? index + 1 : 9;
+}
+
 /**
  * Resolves overlapping players so they maintain visual distance while preserving tactical shape.
  * Enforces minimum visual distance so midfield and clustered zones remain completely readable.
@@ -622,7 +627,7 @@ export function simulateMatch(
     team: 'home',
     playerId: homeKicker.player.id,
     playerName: homeKicker.player.name,
-    playerNumber: 9,
+    playerNumber: getPlayerNumber(homeStarters, homeKicker.player.id),
     targetPlayerId: homeMidReceiver.player.id,
     targetPlayerName: homeMidReceiver.player.name,
     commentary: `Referee blows the whistle and we are underway! ${homeKicker.player.name} touches off to ${homeMidReceiver.player.name}.`,
@@ -948,7 +953,7 @@ export function simulateMatch(
           team: isHome ? 'home' : 'away',
           playerId: striker.player.id,
           playerName: striker.player.name,
-          playerNumber: 9,
+          playerNumber: getPlayerNumber(isHome ? homeStarters : awayStarters, striker.player.id),
           assistPlayerId: winger.player.id,
           assistPlayerName: winger.player.name,
           commentary: `⚽ GOAL! ${striker.player.name} powers a magnificent header into the back of the net from ${winger.player.name}'s pin-point cross! (${homeScore} - ${awayScore})`,
@@ -1072,7 +1077,7 @@ export function simulateMatch(
             team: isHome ? 'home' : 'away',
             playerId: shooter.player.id,
             playerName: shooter.player.name,
-            playerNumber: 9,
+            playerNumber: getPlayerNumber(isHome ? homeStarters : awayStarters, shooter.player.id),
             assistPlayerId: passer.player.id,
             assistPlayerName: passer.player.name,
             commentary: `⚽ GOAL! ${shooter.player.name} picks out the corner with an unstoppable finish! (${homeScore} - ${awayScore})`,
@@ -1189,7 +1194,7 @@ export function simulateMatch(
             team: isEtHome ? 'home' : 'away',
             playerId: shooter.player.id,
             playerName: shooter.player.name,
-            playerNumber: 9,
+            playerNumber: getPlayerNumber(isEtHome ? homeStarters : awayStarters, shooter.player.id),
             commentary: `⚽ EXTRA-TIME GOAL! ${shooter.player.name} finds the breakthrough! (${homeScore} - ${awayScore})`,
             ballCoordinates: { x: etX, y: etY },
             ballStartCoordinates: { x: 50, y: 50 },
