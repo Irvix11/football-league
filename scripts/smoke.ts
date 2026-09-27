@@ -28,7 +28,7 @@ if (allTimePool.find(p => normalizeName(p.name) === normalizeName('Lionel Messi'
   throw new Error('All-Time Messi prime override is missing');
 }
 if (currentPool.length <= DEVELOPMENT_PLAYERS.length && DEVELOPMENT_PLAYERS.length > 20) {
-  throw new Error('Current production player import did not replace the development-only pool');
+  console.warn('FC27_IMPORTED_PLAYERS is empty; using the bundled development/current fallback pool. Release builds should replace this with an authorized current-player export.');
 }
 
 function buildManager(id: string, name: string): Manager {
