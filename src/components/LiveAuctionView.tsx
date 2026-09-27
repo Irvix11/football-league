@@ -312,17 +312,19 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <PlayerCard player={player} size="lg" />
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-sky-400/20 bg-sky-400/5 px-3 py-2">
-                      <div className="text-[9px] uppercase tracking-wider text-sky-300/70 font-black">MARKET VALUE</div>
-                      <div className="font-mono font-black text-sky-300">£{player.marketValue}M</div>
+                  <>
+                    <PlayerCard player={player} size="lg" />
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-sky-400/20 bg-sky-400/5 px-3 py-2">
+                        <div className="text-[9px] uppercase tracking-wider text-sky-300/70 font-black">MARKET VALUE</div>
+                        <div className="font-mono font-black text-sky-300">£{player.marketValue}M</div>
+                      </div>
+                      <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2">
+                        <div className="text-[9px] uppercase tracking-wider text-amber-300/70 font-black">STARTING PRICE</div>
+                        <div className="font-mono font-black text-amber-300">£{player.startingPrice}M</div>
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2">
-                      <div className="text-[9px] uppercase tracking-wider text-amber-300/70 font-black">STARTING PRICE</div>
-                      <div className="font-mono font-black text-amber-300">£{player.startingPrice}M</div>
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
 
