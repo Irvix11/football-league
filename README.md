@@ -49,4 +49,7 @@ EA SPORTS FC 27's official ratings database is maintained by EA: https://www.ea.
 <!-- deployment trigger: knockout websocket fix -->
 
 
-<!-- force-deploy-2026-09-27-knockout -->
+
+
+
+<!-- force-deploy-1790506910945 -->
