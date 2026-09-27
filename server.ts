@@ -1083,16 +1083,58 @@ function executeTransferOffer(room: GameRoom, offer: TransferOffer): boolean {
   const sender = room.managers.find(m => m.id === offer.fromManagerId);
   const target = room.managers.find(m => m.id === offer.toManagerId);
   if (!sender || !target || sender.id === target.id) return false;
-  if (offer.offeredCash < 0 || offer.offeredCash > sender.budget) return false;
+  if (!Number.isFinite(offer.offeredCash) || offer.offeredCash < 0 || offer.offeredCash > sender.budget) return false;
 
   const senderIndex = sender.squad.findIndex(s => s.player.id === offer.offeredPlayerId);
   const targetIndex = target.squad.findIndex(s => s.player.id === offer.requestedPlayerId);
   if (senderIndex < 0 || targetIndex < 0) return false;
 
+  // Keep the operation atomic: validate both resulting squads before committing.
+  const senderBefore = JSON.parse(JSON.stringify(sender.squad)) as SquadPlayerEntry[];
+  const targetBefore = JSON.parse(JSON.stringify(target.squad)) as SquadPlayerEntry[];
+  const senderBudgetBefore = sender.budget;
+  const targetBudgetBefore = target.budget;
+  const senderRolesBefore = sender.roles;
+  const targetRolesBefore = target.roles;
+
   const senderPlayer = sender.squad[senderIndex].player;
   const targetPlayer = target.squad[targetIndex].player;
-  sender.squad[senderIndex] = { ...sender.squad[senderIndex], player: targetPlayer };
-  target.squad[targetIndex] = { ...target.squad[targetIndex], player: senderPlayer };
+
+  sender.squad[senderIndex] = {
+    ...sender.squad[senderIndex],
+    player: targetPlayer,
+    assignedPosition: sender.squad[senderIndex].isStarting
+      ? (sender.squad[senderIndex].assignedPosition || targetPlayer.position)
+      : (sender.squad[senderIndex].assignedPosition || targetPlayer.position),
+  };
+  target.squad[targetIndex] = {
+    ...target.squad[targetIndex],
+    player: senderPlayer,
+    assignedPosition: target.squad[targetIndex].assignedPosition || senderPlayer.position,
+  };
+
+  // Never leave a goalkeeper assigned to an outfield role (or vice versa).
+  for (const manager of [sender, target]) {
+    manager.squad = manager.squad.map(entry => {
+      if (entry.player.category === 'GK') return { ...entry, assignedPosition: 'GK' };
+      if (!entry.assignedPosition || entry.assignedPosition === 'GK') {
+        return { ...entry, assignedPosition: entry.player.position };
+      }
+      return entry;
+    });
+  }
+
+  const senderValidation = validateSquadFormation(sender.formation, sender.squad);
+  const targetValidation = validateSquadFormation(target.formation, target.squad);
+  if (!senderValidation.isValid || !targetValidation.isValid) {
+    sender.squad = senderBefore;
+    target.squad = targetBefore;
+    sender.budget = senderBudgetBefore;
+    target.budget = targetBudgetBefore;
+    sender.roles = senderRolesBefore;
+    target.roles = targetRolesBefore;
+    return false;
+  }
 
   sender.budget -= offer.offeredCash;
   target.budget += offer.offeredCash;
