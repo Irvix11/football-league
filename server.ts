@@ -2161,7 +2161,11 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Only the lobby host can change settings.');
             return;
           }
-          room.settings = sanitizeLobbySettings(settings, room.settings);
+          const sanitizedSettings = sanitizeLobbySettings(settings, room.settings);
+          room.settings = {
+            ...sanitizedSettings,
+            maxManagers: Math.max(room.managers.length, sanitizedSettings.maxManagers),
+          };
           // Apply budget adjustments to managers
           for (const m of room.managers) {
             m.budget = room.settings.startingBudget;
@@ -2277,6 +2281,11 @@ wss.on('connection', (ws) => {
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
             sendSocketError(ws, 'Only the host can start the game.');
+            return;
+          }
+
+          if (room.managers.length < 2) {
+            sendSocketError(ws, 'At least 2 managers are required. Use Solo Play for a one-manager game.');
             return;
           }
 
@@ -2651,7 +2660,7 @@ wss.on('connection', (ws) => {
             if (room.settings.competitionFormat !== 'League') {
               initializeKnockout(room);
             } else {
-              room.fixtures = generateLeagueFixtures(room.managers, 'Double Round Robin');
+              room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
               room.currentMatchday = 1;
               const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
               room.totalMatchdays = maxMd;
@@ -3024,7 +3033,7 @@ wss.on('connection', (ws) => {
           if (room.settings.competitionFormat !== 'League') {
             initializeKnockout(room);
           } else {
-            room.fixtures = generateLeagueFixtures(room.managers, 'Double Round Robin');
+            room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
             room.currentMatchday = 1;
             room.leagueTable = calculateInitialTable(room.managers);
             room.phase = 'league';
