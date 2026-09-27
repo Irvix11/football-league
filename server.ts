@@ -173,21 +173,33 @@ const blindSecretBids = new Map<string, Record<string, number>>();
 // Active countdown intervals: roomCode -> NodeJS.Timeout
 const auctionIntervals = new Map<string, NodeJS.Timeout>();
 
-// Serialize snapshot writes per room. Auction ticks can broadcast every second;
-// without a queue, slower Supabase requests can finish out of order and overwrite
-// a newer snapshot with an older one, which makes rejoin/polling appear to roll back.
+// Persist room snapshots without turning the auction countdown into a database
+// write storm. Broadcasts can be frequent; durable state only needs the latest
+// snapshot a few times per second. The timer always captures the newest room state
+// when it fires, so reconnects never overwrite a fresh snapshot with an older one.
 const persistenceQueues = new Map<string, Promise<void>>();
+const persistenceTimers = new Map<string, NodeJS.Timeout>();
 
 function queueRoomSnapshot(room: GameRoom) {
-  const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
-  const previous = persistenceQueues.get(room.code) || Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(() => saveRoomSnapshot(snapshot))
-    .catch((error) => {
-      console.error('[persistence] queued room save failed:', error);
-    });
-  persistenceQueues.set(room.code, next);
+  const code = room.code;
+  if (persistenceTimers.has(code)) return;
+
+  persistenceTimers.set(code, setTimeout(() => {
+    persistenceTimers.delete(code);
+
+    const latest = rooms.get(code);
+    if (!latest) return;
+
+    const snapshot = JSON.parse(JSON.stringify(latest)) as GameRoom;
+    const previous = persistenceQueues.get(code) || Promise.resolve();
+    const next = previous
+      .catch(() => {})
+      .then(() => saveRoomSnapshot(snapshot))
+      .catch((error) => {
+        console.error('[persistence] queued room save failed:', error);
+      });
+    persistenceQueues.set(code, next);
+  }, 350));
 }
 
 function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
@@ -214,14 +226,6 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
 
     const sourcePlayer = room.auction.currentPlayer;
     if (sourcePlayer && !room.auction.isSold) {
-      const genericPosition = sourcePlayer.category === 'GK'
-        ? 'GK'
-        : sourcePlayer.category === 'DEF'
-          ? 'CB'
-          : sourcePlayer.category === 'MID'
-            ? 'CM'
-            : 'ST';
-
       sanitizedRoom.auction.currentPlayer = {
         ...sourcePlayer,
         id: `blind-${sourcePlayer.id}`,
@@ -864,6 +868,8 @@ function ensureAuctionTicker(room: GameRoom) {
     room.auction.auctionEndsAt = Date.now() + Math.max(0, room.auction.secondsRemaining) * 1000;
   }
 
+  let lastBroadcastRemaining = -1;
+
   const timer = setInterval(() => {
     const currentR = rooms.get(room.code);
     if (!currentR || currentR.phase !== 'auction' || currentR.auction.isSold) {
@@ -875,6 +881,7 @@ function ensureAuctionTicker(room: GameRoom) {
 
     const deadline = currentR.auction.auctionEndsAt || Date.now();
     const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    const remainingChanged = remaining !== currentR.auction.secondsRemaining;
     currentR.auction.secondsRemaining = remaining;
 
     // Bots participate in every auction mode. Blind-mode bots submit private
@@ -894,7 +901,13 @@ function ensureAuctionTicker(room: GameRoom) {
       return;
     }
 
-    broadcastRoom(currentR.code);
+    // The browser derives the live countdown from auctionEndsAt, so the server
+    // only needs to broadcast once per displayed second. This dramatically
+    // reduces WebSocket traffic and snapshot writes without changing timing.
+    if (remainingChanged || lastBroadcastRemaining !== remaining) {
+      lastBroadcastRemaining = remaining;
+      broadcastRoom(currentR.code);
+    }
   }, 250);
 
   auctionIntervals.set(room.code, timer);
