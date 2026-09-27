@@ -1204,13 +1204,45 @@ function finalizeAuctionItem(room: GameRoom) {
 
   broadcastRoom(room.code);
 
-  // Transition to next player after 3.5 seconds
+  // IMPORTANT: do not rely on a long-lived serverless timer to move the auction.
+  // Vercel can suspend the function after the response, which previously left
+  // rooms permanently stuck on the SOLD / NO VALID BIDS screen.
+  const finishedPlayerId = player.id;
   setTimeout(() => {
-    if (room.managers.every(m => m.squad.length >= 11)) {
-      room.managers.forEach(autoFillManagerLineup);
+    try {
+      const currentRoom = rooms.get(room.code);
+      if (!currentRoom || currentRoom.phase !== 'auction') return;
+
+      // Never let an old finalization timer overwrite a newer auction lot.
+      if (currentRoom.auction.currentPlayer?.id !== finishedPlayerId || !currentRoom.auction.isSold) {
+        return;
+      }
+
+      if (currentRoom.managers.every(m => m.squad.length >= 11)) {
+        currentRoom.managers.forEach(autoFillManagerLineup);
+      }
+
+      advanceAuction(currentRoom);
+    } catch (error) {
+      console.error('[AUCTION] Failed to advance after finalization:', error);
+
+      // Last-resort recovery: fill remaining XI slots and leave the auction
+      // instead of trapping every player on a dead SOLD screen.
+      try {
+        const currentRoom = rooms.get(room.code);
+        if (!currentRoom || currentRoom.phase !== 'auction') return;
+        const pool = getPlayersForLobby(currentRoom.settings.playerPool, currentRoom.settings.era);
+        const owned = new Set(currentRoom.managers.flatMap(m => m.squad.map(s => s.player.id)));
+        emergencyFillRemainingXI(currentRoom, pool.filter(p => !owned.has(p.id)));
+        currentRoom.managers.forEach(autoFillManagerLineup);
+        currentRoom.phase = 'team_management';
+        currentRoom.phaseReadyIds = currentRoom.managers.filter(m => m.isBot).map(m => m.id);
+        broadcastRoom(currentRoom.code);
+      } catch (recoveryError) {
+        console.error('[AUCTION] Emergency recovery failed:', recoveryError);
+      }
     }
-    advanceAuction(room);
-  }, 3500);
+  }, 1200);
 }
 
 // Calculate season awards from recorded fixture stats
