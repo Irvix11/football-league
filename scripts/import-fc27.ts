@@ -104,8 +104,25 @@ for (const row of parseCsv(await readInput(input))) {
     .map(position => normalizePosition(position))
     .filter(position => positions.has(position) && position !== normalizePosition(rawPosition));
 
-  const marketValue = num(row, 'market_value_m', 'marketValue', 'value_m', 'Value');
-  const startingPrice = num(row, 'starting_price_m', 'startingPrice', 'auction_start_m');
+  const suppliedMarketValue = num(row, 'market_value_m', 'marketValue', 'value_m', 'Value');
+  const suppliedStartingPrice = num(row, 'starting_price_m', 'startingPrice', 'auction_start_m');
+
+  // The public ratings snapshot does not provide a verified transfer-market value.
+  // Use a deterministic in-game market model instead of displaying £0 or pretending
+  // the model is an official EA market value. Higher OVRs rise non-linearly; age gives
+  // a small career-stage adjustment. These values are only used for auction balancing.
+  const age = num(row, 'age', 'Age');
+  const ageFactor = age > 30 ? 0.78 : age > 27 ? 0.9 : age > 22 ? 1 : 1.12;
+  const modeledMarketValue = Math.max(
+    5,
+    Math.min(350, Math.round(5 * Math.pow(1.18, Math.max(0, overall - 70)) * ageFactor))
+  );
+  const marketValue = Number.isFinite(suppliedMarketValue) && suppliedMarketValue > 0
+    ? suppliedMarketValue
+    : modeledMarketValue;
+  const startingPrice = Number.isFinite(suppliedStartingPrice) && suppliedStartingPrice > 0
+    ? suppliedStartingPrice
+    : Math.max(5, Math.round(marketValue * 0.42));
 
   const player = {
     id, name,
@@ -116,12 +133,12 @@ for (const row of parseCsv(await readInput(input))) {
     category: category(position),
     overall,
     attributes,
-    age: num(row, 'age', 'Age'),
+    age,
     preferredFoot: get(row, 'preferred_foot', 'preferredFoot', 'Foot') === 'Left' ? 'Left' : 'Right',
     alternatePositions: [...new Set(alternatePositions)],
     marketValue: Number.isFinite(marketValue) ? marketValue : 0,
     startingPrice: Number.isFinite(startingPrice) ? startingPrice : Math.max(1, Math.round((overall - 70) * 1.5)),
-    valueSource: clean(get(row, 'market_value_source', 'valueSource')) || (remoteInput ? 'FC27 public ratings snapshot; auction value derived from OVR' : 'Authorized FC27 import'),
+    valueSource: clean(get(row, 'market_value_source', 'valueSource')) || (remoteInput ? 'FC27 public ratings snapshot; deterministic in-game market model' : 'Authorized FC27 import'),
     valueVersion: clean(get(row, 'market_value_version', 'valueVersion')) || 'FC27-2026-09',
     updatedAt: clean(get(row, 'updated_at', 'updatedAt')) || new Date().toISOString(),
   };
