@@ -440,7 +440,7 @@ export function simulateMatch(
   matchday: number,
   customSeed?: number,
   isKnockout = false,
-  roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final'
+  roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final'
 ): Fixture {
   const seed = customSeed || (Date.now() ^ (matchday * 1337));
   const rand = createPrng(seed);
