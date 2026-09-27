@@ -94,3 +94,5 @@ Before shipping a release, verify:
 
 <!-- production deploy trigger 2026-09-28 -->
 <!-- production deploy trigger 2026-09-28 hybrid-sim -->
+
+<!-- force production deployment 2026-09-28-fix -->
