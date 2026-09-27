@@ -68,18 +68,10 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
     });
   }
 
-  const bench = remaining.slice(0, 7).map((entry, index) => ({
-    ...entry,
-    isStarting: false,
-    startingSlotIndex: undefined,
-    benchIndex: index,
-    assignedPosition: entry.assignedPosition || entry.player.position,
-  }));
-
-  return [
-    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11),
-    ...bench,
-  ];
+  // This game uses an XI-only roster: there is no bench.
+  return starters
+    .sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99))
+    .slice(0, 11);
 }
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
@@ -391,7 +383,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/11</div>
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
