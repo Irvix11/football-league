@@ -164,7 +164,64 @@ function isRoomHost(room: GameRoom, managerId: string) {
 }
 
 function newId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`;
+  return prefix + '-' + crypto.randomUUID();
+}
+
+const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation[]);
+const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
+const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
+const SUPPORTED_AUCTION_MODES = new Set(['Classic', 'Blind', 'Quick'] as const);
+const SUPPORTED_LEAGUE_TYPES = new Set(['Round Robin', 'Double Round Robin'] as const);
+const SUPPORTED_COMPETITIONS = new Set(['League', 'Knockout', 'Champions Cup'] as const);
+
+function clampFiniteNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
+}
+
+function sanitizeManagerName(value: unknown, fallback = 'Manager') {
+  const clean = String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24);
+  return clean || fallback;
+}
+
+function sanitizeLobbySettings(raw: Partial<LobbySettings> | null | undefined, base?: LobbySettings): LobbySettings {
+  const fallback: LobbySettings = base || {
+    maxManagers: 8,
+    startingBudget: 500,
+    playerPool: 'Global',
+    era: 'Current',
+    auctionMode: 'Classic',
+    transfersEnabled: true,
+    leagueType: 'Round Robin',
+    competitionFormat: 'League',
+  };
+
+  const maxManagers = Math.round(clampFiniteNumber(raw?.maxManagers, fallback.maxManagers, 2, 16));
+  const startingBudget = Math.round(clampFiniteNumber(raw?.startingBudget, fallback.startingBudget, 100, 5000));
+  const playerPool = SUPPORTED_PLAYER_POOLS.has(raw?.playerPool as any) ? raw!.playerPool! : fallback.playerPool;
+  const era = SUPPORTED_ERAS.has(raw?.era as any) ? raw!.era! : fallback.era;
+  const auctionMode = SUPPORTED_AUCTION_MODES.has(raw?.auctionMode as any) ? raw!.auctionMode! : fallback.auctionMode;
+  const competitionFormat = SUPPORTED_COMPETITIONS.has(raw?.competitionFormat as any)
+    ? raw!.competitionFormat!
+    : fallback.competitionFormat || 'League';
+  const leagueType = competitionFormat === 'League'
+    ? 'Double Round Robin'
+    : (SUPPORTED_LEAGUE_TYPES.has(raw?.leagueType as any) ? raw!.leagueType! : fallback.leagueType);
+
+  return {
+    maxManagers,
+    startingBudget,
+    playerPool,
+    era,
+    auctionMode,
+    transfersEnabled: typeof raw?.transfersEnabled === 'boolean' ? raw.transfersEnabled : fallback.transfersEnabled,
+    leagueType,
+    competitionFormat,
+  };
 }
 
 // Secret bids for blind auction: roomCode -> Record<managerId, number>
@@ -1573,6 +1630,7 @@ function advanceKnockoutRound(room: GameRoom) {
 }
 
 function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadPlayerEntry[], formation: Formation, tactics: any, roles: any) {
+  if (!SUPPORTED_FORMATIONS.has(formation)) return null;
   if (!Array.isArray(incomingSquad) || incomingSquad.length !== manager.squad.length) return null;
 
   const existingById = new Map(manager.squad.map(entry => [entry.player.id, entry]));
@@ -1597,15 +1655,24 @@ function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadP
 
   const allowedStyles = new Set(['Balanced', 'Possession', 'High Press', 'Counter Attack', 'Low Block', 'Long Ball', 'Aggressive']);
   const allowedMentalities = new Set(['Balanced', 'Defensive', 'Aggressive']);
+  const currentTactics = manager.tactics || {
+    style: 'Balanced',
+    mentality: 'Balanced',
+    defensiveLine: 50,
+    pressingIntensity: 50,
+    attackWidth: 50,
+    tempo: 50,
+    risk: 50,
+  };
   const nextTactics = tactics ? {
-    style: allowedStyles.has(tactics.style) ? tactics.style : manager.tactics.style,
-    mentality: allowedMentalities.has(tactics.mentality) ? tactics.mentality : manager.tactics.mentality || 'Balanced',
-    defensiveLine: Math.max(1, Math.min(100, Number(tactics.defensiveLine ?? manager.tactics.defensiveLine))),
-    pressingIntensity: Math.max(1, Math.min(100, Number(tactics.pressingIntensity ?? manager.tactics.pressingIntensity))),
-    attackWidth: Math.max(1, Math.min(100, Number(tactics.attackWidth ?? manager.tactics.attackWidth))),
-    tempo: Math.max(1, Math.min(100, Number(tactics.tempo ?? manager.tactics.tempo))),
-    risk: Math.max(1, Math.min(100, Number(tactics.risk ?? manager.tactics.risk))),
-  } : manager.tactics;
+    style: allowedStyles.has(tactics.style) ? tactics.style : currentTactics.style,
+    mentality: allowedMentalities.has(tactics.mentality) ? tactics.mentality : currentTactics.mentality || 'Balanced',
+    defensiveLine: clampFiniteNumber(tactics.defensiveLine, currentTactics.defensiveLine, 1, 100),
+    pressingIntensity: clampFiniteNumber(tactics.pressingIntensity, currentTactics.pressingIntensity, 1, 100),
+    attackWidth: clampFiniteNumber(tactics.attackWidth, currentTactics.attackWidth, 1, 100),
+    tempo: clampFiniteNumber(tactics.tempo, currentTactics.tempo, 1, 100),
+    risk: clampFiniteNumber(tactics.risk, currentTactics.risk, 1, 100),
+  } : currentTactics;
 
   const ownedIds = new Set(manager.squad.map(s => s.player.id));
   const nextRoles = roles ? {
@@ -1740,7 +1807,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
 
   const humanManager: Manager = {
     id: hostId,
-    name: managerName.trim() || 'Solo Manager',
+    name: sanitizeManagerName(managerName, 'Solo Manager'),
     isHost: true,
     isBot: false,
     isReady: true,
@@ -1888,16 +1955,18 @@ wss.on('connection', (ws) => {
 
           const roomCode = generateLobbyCode();
           const hostId = newId('mgr');
+          const safeName = sanitizeManagerName(managerName, 'Host Manager');
+          const settings = sanitizeLobbySettings(requestedSettings);
 
           const hostManager: Manager = {
             id: hostId,
-            name: managerName || 'Host Manager',
+            name: safeName,
             isHost: true,
             isBot: false,
             isReady: true,
-            budget: Math.max(100, Math.min(5000, Number.isFinite(Number(requestedSettings?.startingBudget)) ? Number(requestedSettings.startingBudget) : 500)),
-            initialBudget: Math.max(100, Math.min(5000, Number.isFinite(Number(requestedSettings?.startingBudget)) ? Number(requestedSettings.startingBudget) : 500)),
-            formation: soloFormation || '4-3-3',
+            budget: settings.startingBudget,
+            initialBudget: settings.startingBudget,
+            formation: SUPPORTED_FORMATIONS.has(soloFormation as Formation) ? soloFormation as Formation : '4-3-3',
             tactics: {
               style: 'Balanced',
               mentality: 'Balanced',
@@ -1926,25 +1995,6 @@ wss.on('connection', (ws) => {
             managers.push(botManager);
           }
 
-          const requestedMaxManagers = Number(requestedSettings?.maxManagers ?? 8);
-          const requestedBudget = Number(requestedSettings?.startingBudget ?? 500);
-          const settings: LobbySettings = {
-            maxManagers: Math.max(2, Math.min(16, Number.isFinite(requestedMaxManagers) ? requestedMaxManagers : 8)),
-            startingBudget: Math.max(100, Math.min(5000, Number.isFinite(requestedBudget) ? requestedBudget : 500)),
-            playerPool: requestedSettings?.playerPool || 'Global',
-            era: requestedSettings?.era || 'Current',
-            auctionMode: requestedSettings?.auctionMode || 'Classic',
-            transfersEnabled: requestedSettings?.transfersEnabled !== false,
-            leagueType: requestedSettings?.competitionFormat === 'League'
-              ? 'Double Round Robin'
-              : (requestedSettings?.leagueType || 'Round Robin'),
-            competitionFormat: requestedSettings?.competitionFormat === 'Knockout'
-              ? 'Knockout'
-              : requestedSettings?.competitionFormat === 'Champions Cup'
-              ? 'Champions Cup'
-              : 'League',
-          };
-
           const room: GameRoom = {
             code: roomCode,
             hostId,
@@ -1953,7 +2003,7 @@ wss.on('connection', (ws) => {
             managers,
             auction: {
               currentPlayerIndex: 0,
-              totalPlayersInPool: DEVELOPMENT_PLAYERS.length,
+              totalPlayersInPool: getPlayersForLobby(settings.playerPool, settings.era).length,
               currentPlayer: null,
               currentBid: 0,
               highestBidderId: null,
@@ -2044,15 +2094,12 @@ wss.on('connection', (ws) => {
           }
 
           // Check duplicate name
-          if (!managerName?.trim()) {
+          const safeManagerName = sanitizeManagerName(managerName, '');
+          if (!safeManagerName) {
             sendSocketError(ws, 'Manager name is required.');
             return;
           }
-          if (managerName.trim().length > 24) {
-            sendSocketError(ws, 'Manager name must be 24 characters or fewer.');
-            return;
-          }
-          if (room.managers.some(m => m.name.toLowerCase() === managerName.trim().toLowerCase())) {
+          if (room.managers.some(m => m.name.toLowerCase() === safeManagerName.toLowerCase())) {
             ws.send(JSON.stringify({ type: 'ERROR', message: 'A manager with this name is already in the lobby.' }));
             return;
           }
@@ -2060,7 +2107,7 @@ wss.on('connection', (ws) => {
           const newManagerId = newId('mgr');
           const newManager: Manager = {
             id: newManagerId,
-            name: managerName || `Manager ${room.managers.length + 1}`,
+            name: safeManagerName,
             isHost: false,
             isBot: false,
             isReady: false,
@@ -2114,17 +2161,7 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Only the lobby host can change settings.');
             return;
           }
-          const safeMaxManagers = Math.max(2, Math.min(16, Number(settings?.maxManagers ?? room.settings.maxManagers)));
-          const safeBudget = Math.max(100, Math.min(5000, Number(settings?.startingBudget ?? room.settings.startingBudget)));
-          room.settings = {
-            ...room.settings,
-            ...settings,
-            maxManagers: safeMaxManagers,
-            startingBudget: safeBudget,
-            leagueType: (settings?.competitionFormat ?? room.settings.competitionFormat) === 'League'
-              ? 'Double Round Robin'
-              : (settings?.leagueType ?? room.settings.leagueType),
-          };
+          room.settings = sanitizeLobbySettings(settings, room.settings);
           // Apply budget adjustments to managers
           for (const m of room.managers) {
             m.budget = room.settings.startingBudget;
