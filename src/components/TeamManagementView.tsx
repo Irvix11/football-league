@@ -68,23 +68,9 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
     });
   }
 
-  const starterIds = new Set(starters.map(s => s.player.id));
-  const bench = remaining
-    .filter(entry => !starterIds.has(entry.player.id))
-    .sort((a, b) => b.player.overall - a.player.overall)
-    .slice(0, 7)
-    .map((entry, index) => ({
-      ...entry,
-      isStarting: false,
-      startingSlotIndex: undefined,
-      benchIndex: index,
-      assignedPosition: entry.player.category === 'GK' ? 'GK' : (entry.assignedPosition || entry.player.position),
-    }));
-
-  return [
-    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
-    ...bench,
-  ].slice(0, 18);
+  return starters
+    .sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99))
+    .slice(0, 11);
 }
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
@@ -426,11 +412,11 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/11</div>
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
-                TEAM BUILDER uses OVR + attributes + positional fit. Auto-fill picks the best XI and keeps 7 substitutes. You can swap starters with the bench and assign any outfield position; Effective OVR updates instantly.
+                TEAM BUILDER uses OVR + attributes + positional fit. Auto-fill picks the best XI. You can move any outfield player to another outfield role; Effective OVR and Team OVR update instantly.
               </p>
               <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-mono font-black">
                 <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">NATURAL 90–100</span>
