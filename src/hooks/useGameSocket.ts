@@ -407,11 +407,21 @@ export function useGameSocket() {
   }, [room, managerId, send]);
 
   const completeKnockoutMatch = useCallback(async (fixtureId: string) => {
-    if (!room) return;
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('COMPLETE_KNOCKOUT_MATCH', { roomCode: room.code, fixtureId });
+    if (!room || !managerId) return;
+    try {
+      const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}/complete-knockout-match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ managerId, fixtureId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Failed to continue the knockout round.');
+      if (data?.room) setRoom(data.room as GameRoom);
+    } catch (error: any) {
+      setSimulationError(error?.message || 'Failed to continue the knockout round.');
     }
-  }, [room, send]);
+  }, [room, managerId]);
 
   const runMatchday = useCallback(async (matchday: number) => {
     if (!room || !managerId) return;
