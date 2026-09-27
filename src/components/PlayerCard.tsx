@@ -1,6 +1,14 @@
 import React from 'react';
 import { Player } from '../types/football';
 
+function LockIcon() {
+  return (
+    <div className="w-11 h-11 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-300 text-xl font-black">
+      ?
+    </div>
+  );
+}
+
 interface PlayerCardProps {
   player: Player;
   size?: 'sm' | 'md' | 'lg';
