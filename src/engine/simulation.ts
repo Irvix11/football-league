@@ -625,6 +625,7 @@ export function simulateMatch(
   }
 
   const events: MatchEvent[] = [];
+  const sentOffIds = new Set<string>();
   let homeScore = 0;
   let awayScore = 0;
 
@@ -802,16 +803,16 @@ export function simulateMatch(
     const isHome: boolean = currentPossession === 'home';
     const attackingTeam = isHome ? homeManager : awayManager;
     const defendingTeam = isHome ? awayManager : homeManager;
-    const attackingStarters = isHome ? homeStarters : awayStarters;
-    const defendingStarters = isHome ? awayStarters : homeStarters;
+    const attackingStarters = (isHome ? homeStarters : awayStarters).filter(s => !sentOffIds.has(s.player.id));
+    const defendingStarters = (isHome ? awayStarters : homeStarters).filter(s => !sentOffIds.has(s.player.id));
     const atkStats = isHome ? homeStats : awayStats;
     const defStats = isHome ? awayStats : homeStats;
     const atkTactics = isHome ? homeTactics : awayTactics;
     const defTactics = isHome ? awayTactics : homeTactics;
 
-    const atkMids = isHome ? homeMids : awayMids;
-    const atkAtts = isHome ? homeAtts : awayAtts;
-    const defDefs = isHome ? awayDefs : homeDefs;
+    const atkMids = (isHome ? homeMids : awayMids).filter(s => !sentOffIds.has(s.player.id));
+    const atkAtts = (isHome ? homeAtts : awayAtts).filter(s => !sentOffIds.has(s.player.id));
+    const defDefs = (isHome ? awayDefs : homeDefs).filter(s => !sentOffIds.has(s.player.id));
     const defGK = isHome ? awayGK : homeGK;
 
     // Step 1: Progression Pass / Buildup (Tactics Influence: Possession vs Counter vs Long Ball)
@@ -936,6 +937,7 @@ export function simulateMatch(
           const defStat = playerStatsMap.get(defender.player.id);
           if (defStat?.yellowCard) {
             defStat.redCard = true;
+            sentOffIds.add(defender.player.id);
             pushEvent({
               minute: actionMin,
               second: actionSec,
