@@ -390,6 +390,86 @@ function queueRoomSnapshot(room: GameRoom) {
   }, 350));
 }
 
+function publicManagerRef(managerId: string): string {
+  // Opaque client-facing reference. Never expose the server's manager UUID/ID.
+  return 'p-' + crypto.createHash('sha256').update(managerId).digest('hex').slice(0, 12);
+}
+
+function resolveManagerId(room: GameRoom, suppliedId: unknown): string | null {
+  const value = String(suppliedId || '');
+  if (!value) return null;
+  if (room.managers.some(m => m.id === value)) return value;
+  const match = room.managers.find(m => publicManagerRef(m.id) === value);
+  return match?.id || null;
+}
+
+function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRoom {
+  const sanitized = JSON.parse(JSON.stringify(room)) as GameRoom;
+  const ref = (id: string | null | undefined) => {
+    if (!id) return id;
+    return id === viewerManagerId ? id : publicManagerRef(id);
+  };
+
+  sanitized.hostId = ref(sanitized.hostId) as string;
+  sanitized.managers = sanitized.managers.map(m => ({
+    ...m,
+    id: ref(m.id) as string,
+  }));
+  sanitized.leagueTable = sanitized.leagueTable.map(row => ({
+    ...row,
+    managerId: ref(row.managerId) as string,
+  }));
+  sanitized.fixtures = sanitized.fixtures.map(f => ({
+    ...f,
+    homeManagerId: ref(f.homeManagerId) as string,
+    awayManagerId: ref(f.awayManagerId) as string,
+    winnerManagerId: ref(f.winnerManagerId) as string | undefined,
+  }));
+  sanitized.phaseReadyIds = sanitized.phaseReadyIds?.map(id => ref(id) as string);
+  sanitized.transferWindowReadyIds = sanitized.transferWindowReadyIds?.map(id => ref(id) as string);
+
+  if (sanitized.auction) {
+    sanitized.auction.highestBidderId = ref(sanitized.auction.highestBidderId) as string | null;
+    sanitized.auction.winnerId = ref(sanitized.auction.winnerId) as string | null;
+    if (sanitized.auction.hasSubmittedSecretBid) {
+      sanitized.auction.hasSubmittedSecretBid = Object.fromEntries(
+        Object.entries(sanitized.auction.hasSubmittedSecretBid).map(([id, value]) => [ref(id) as string, value])
+      );
+    }
+  }
+
+  if (sanitized.transferOffers) {
+    sanitized.transferOffers = sanitized.transferOffers.map(offer => ({
+      ...offer,
+      fromManagerId: ref(offer.fromManagerId) as string,
+      toManagerId: ref(offer.toManagerId) as string,
+    }));
+  }
+
+  if (sanitized.knockoutStage) {
+    sanitized.knockoutStage.rounds = sanitized.knockoutStage.rounds.map(round => ({
+      ...round,
+      fixtures: round.fixtures.map(f => ({
+        ...f,
+        homeManagerId: ref(f.homeManagerId) as string,
+        awayManagerId: ref(f.awayManagerId) as string,
+        winnerManagerId: ref(f.winnerManagerId) as string | undefined,
+      })),
+    }));
+  }
+
+  if (sanitized.awards) {
+    const awards: any = sanitized.awards;
+    for (const key of Object.keys(awards)) {
+      if (awards[key] && typeof awards[key] === 'object' && 'managerId' in awards[key]) {
+        awards[key].managerId = ref(awards[key].managerId) as string;
+      }
+    }
+  }
+
+  return sanitized;
+}
+
 function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = true) {
   const room = rooms.get(roomCode);
   if (!room) return;
@@ -401,8 +481,11 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = tr
   // causing polling to reject a newer server state and making rejoin look stuck.
   room.updatedAt = Date.now();
 
-  // Clone room to sanitize blind auction state (never reveal hidden bids)
-  const sanitizedRoom = JSON.parse(JSON.stringify(room)) as GameRoom;
+  // Clone room and enforce the privacy boundary: each client receives its
+  // own real manager ID, while every other manager ID becomes an opaque public ref.
+  const viewerManagerId = [...socketToRoom.entries()]
+    .find(([socket, session]) => socket !== excludeSocket && session.roomCode === roomCode)?.[1]?.managerId;
+  const sanitizedRoom = sanitizeRoomForViewer(room, viewerManagerId);
   const rawSecretBids = blindSecretBids.get(roomCode) || {};
 
   // Blind Auction privacy boundary: before reveal, send only two clues.
@@ -440,14 +523,13 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = tr
   }
 
   if (persist) queueRoomSnapshot(room);
-  const payload = JSON.stringify({
-    type: 'ROOM_UPDATE',
-    room: sanitizedRoom,
-  });
-
   for (const client of sockets) {
     if (client !== excludeSocket && client.readyState === WebSocket.OPEN) {
-      client.send(payload);
+      const viewerId = socketToRoom.get(client)?.managerId;
+      client.send(JSON.stringify({
+        type: 'ROOM_UPDATE',
+        room: sanitizeRoomForViewer(room, viewerId),
+      }));
     }
   }
 }
@@ -2446,15 +2528,16 @@ wss.on('connection', (ws) => {
 
         // --- 5. KICK PLAYER ---
         case 'KICK_PLAYER': {
-          const { roomCode, targetManagerId } = payload;
+          const { roomCode, resolvedTargetId } = payload;
           const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
           const { room, session } = auth;
-          if (!isRoomHost(room, session.managerId) || targetManagerId === room.hostId) {
+          if (!isRoomHost(room, session.managerId) || resolvedTargetId === room.hostId) {
             sendSocketError(ws, 'Only the host can kick another manager.');
             return;
           }
-          const target = room.managers.find(m => m.id === targetManagerId);
+          const resolvedTargetId = resolveManagerId(room, resolvedTargetId);
+          const target = resolvedTargetId ? room.managers.find(m => m.id === resolvedTargetId) : undefined;
           if (!target || target.isHost) {
             sendSocketError(ws, 'That manager cannot be kicked.');
             return;
@@ -2462,7 +2545,7 @@ wss.on('connection', (ws) => {
 
           // Host removal is allowed during every game phase. Clean the target out of
           // active auction/fixtures so the remaining room never references a kicked ID.
-          if (room.auction?.highestBidderId === targetManagerId) {
+          if (room.auction?.highestBidderId === resolvedTargetId) {
             room.auction.highestBidderId = null;
             room.auction.highestBidderName = null;
             room.auction.currentBid = room.auction.currentPlayer?.startingPrice || 0;
@@ -2472,12 +2555,12 @@ wss.on('connection', (ws) => {
             for (const round of room.knockoutStage.rounds) {
               for (const fixture of round.fixtures) {
                 if (fixture.played) continue;
-                if (fixture.homeManagerId === targetManagerId && fixture.awayManagerId !== targetManagerId) {
+                if (fixture.homeManagerId === resolvedTargetId && fixture.awayManagerId !== resolvedTargetId) {
                   fixture.played = true;
                   fixture.homeScore = 0;
                   fixture.awayScore = 3;
                   fixture.winnerManagerId = fixture.awayManagerId;
-                } else if (fixture.awayManagerId === targetManagerId && fixture.homeManagerId !== targetManagerId) {
+                } else if (fixture.awayManagerId === resolvedTargetId && fixture.homeManagerId !== resolvedTargetId) {
                   fixture.played = true;
                   fixture.homeScore = 3;
                   fixture.awayScore = 0;
@@ -2488,17 +2571,17 @@ wss.on('connection', (ws) => {
             }
           } else {
             room.fixtures = room.fixtures.filter(f =>
-              f.played || (f.homeManagerId !== targetManagerId && f.awayManagerId !== targetManagerId)
+              f.played || (f.homeManagerId !== resolvedTargetId && f.awayManagerId !== resolvedTargetId)
             );
           }
 
-          removeManagerFromRoom(room, targetManagerId);
+          removeManagerFromRoom(room, resolvedTargetId);
 
           const sockets = roomSockets.get(room.code);
           if (sockets) {
             for (const client of [...sockets]) {
               const info = socketToRoom.get(client);
-              if (info?.managerId === targetManagerId) {
+              if (info?.managerId === resolvedTargetId) {
                 sockets.delete(client);
                 socketToRoom.delete(client);
                 if (client.readyState === WebSocket.OPEN) {
@@ -3116,7 +3199,9 @@ wss.on('connection', (ws) => {
         // --- 15. TRANSFERS ---
         case 'PROPOSE_TRANSFER': {
           const { roomCode, offer } = payload;
-          const auth = authorizeSocket(ws, roomCode, offer?.fromManagerId);
+          const suppliedFromManagerId = resolveManagerId(rooms.get(String(roomCode || '').toUpperCase()) as GameRoom, offer?.fromManagerId);
+          const suppliedToManagerId = resolveManagerId(rooms.get(String(roomCode || '').toUpperCase()) as GameRoom, offer?.toManagerId);
+          const auth = authorizeSocket(ws, roomCode, suppliedFromManagerId || undefined);
           if (!auth) return;
           const { room } = auth;
 
@@ -3125,8 +3210,8 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          const sender = room.managers.find(m => m.id === offer.fromManagerId);
-          const target = room.managers.find(m => m.id === offer.toManagerId);
+          const sender = room.managers.find(m => m.id === suppliedFromManagerId);
+          const target = room.managers.find(m => m.id === suppliedToManagerId);
           const offeredCash = Number(offer.offeredCash || 0);
           if (!sender || !target || sender.id === target.id) {
             sendSocketError(ws, 'Invalid transfer participants.');
