@@ -30,32 +30,39 @@ function calculateTeamPower(manager: Manager): TeamPower {
   const defensePlayers = starters.filter(s => entryCategory(s) === 'DEF');
   const goalkeeper = starters.find(s => entryCategory(s) === 'GK') || starters[0];
 
-  const attack = average(attackPlayers.map(s =>
-    s.player.attributes.sho * 0.40 +
-    s.player.attributes.dri * 0.25 +
-    s.player.attributes.pac * 0.20 +
-    s.player.attributes.phy * 0.15
-  ), manager.teamOverall || 70);
+  const rolePerformance = (s: SquadPlayerEntry) => {
+    const position = s.assignedPosition || s.player.position;
+    const fit = calculatePositionFit(s.player.position, s.player.alternatePositions || [], position);
+    const a = s.player.attributes;
+    let raw = 0;
 
-  const midfield = average(midfieldPlayers.map(s =>
-    s.player.attributes.pas * 0.45 +
-    s.player.attributes.dri * 0.25 +
-    s.player.attributes.phy * 0.15 +
-    s.player.attributes.sho * 0.15
-  ), manager.teamOverall || 70);
+    if (getPositionCategory(position) === 'ATT') {
+      raw = a.sho * 0.42 + a.pac * 0.22 + a.dri * 0.23 + a.pas * 0.13;
+    } else if (getPositionCategory(position) === 'MID') {
+      const attackingMid = ['CAM', 'LM', 'RM'].includes(position);
+      raw = a.pas * (attackingMid ? 0.32 : 0.42) +
+        a.dri * 0.24 + a.phy * 0.14 +
+        a.sho * (attackingMid ? 0.18 : 0.08) +
+        a.pac * 0.08 + a.def * 0.04;
+    } else if (getPositionCategory(position) === 'DEF') {
+      const wideDefender = ['LB', 'RB', 'LWB', 'RWB'].includes(position);
+      raw = a.def * 0.45 + a.phy * 0.20 +
+        a.pac * (wideDefender ? 0.20 : 0.10) +
+        a.pas * 0.15 + a.dri * (wideDefender ? 0.05 : 0.10);
+    } else {
+      raw = a.dri * 0.30 + a.sho * 0.20 + a.pas * 0.15 +
+        a.def * 0.15 + a.phy * 0.20;
+    }
 
-  const defense = average(defensePlayers.map(s =>
-    s.player.attributes.def * 0.45 +
-    s.player.attributes.phy * 0.25 +
-    s.player.attributes.pac * 0.15 +
-    s.player.attributes.pas * 0.15
-  ), manager.teamOverall || 70);
+    return raw * (0.70 + fit * 0.003);
+  };
+
+  const attack = average(attackPlayers.map(rolePerformance), manager.teamOverall || 70);
+  const midfield = average(midfieldPlayers.map(rolePerformance), manager.teamOverall || 70);
+  const defense = average(defensePlayers.map(rolePerformance), manager.teamOverall || 70);
 
   const goalkeeperPower = goalkeeper
-    ? goalkeeper.player.attributes.dri * 0.45 +
-      goalkeeper.player.attributes.phy * 0.20 +
-      goalkeeper.player.attributes.pas * 0.15 +
-      goalkeeper.player.attributes.sho * 0.20
+    ? rolePerformance(goalkeeper)
     : manager.teamOverall || 70;
 
   const tactics = manager.tactics || {
