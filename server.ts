@@ -288,7 +288,9 @@ function enterLeague(room: GameRoom) {
 
 function ensurePhaseReadyTicker(room: GameRoom) {
   if (!room.phaseReadyDeadline) return;
-  if (!['lobby', 'formation_select', 'team_management'].includes(room.phase)) {
+  const timedPhase = ['lobby', 'formation_select', 'team_management'].includes(room.phase) ||
+    (room.phase === 'league' && room.transferWindowOpen === true);
+  if (!timedPhase) {
     clearPhaseReadyTimer(room);
     return;
   }
@@ -322,6 +324,17 @@ function ensurePhaseReadyTicker(room: GameRoom) {
       if (current.phase === 'formation_select') {
         current.phaseReadyIds = current.managers.map(m => m.id);
         beginAuctionFromFormation(current);
+        broadcastRoom(current.code);
+        return;
+      }
+
+      if (current.phase === 'league' && current.transferWindowOpen) {
+        current.transferWindowReadyIds = current.managers.map(m => m.id);
+        current.transferWindowOpen = false;
+        current.transferWindowReadyIds = [];
+        current.transferWindowMatchday = undefined;
+        current.phaseReadyDeadline = undefined;
+        current.currentMatchday = Math.min(current.totalMatchdays, current.currentMatchday + 1);
         broadcastRoom(current.code);
         return;
       }
@@ -1932,6 +1945,8 @@ function openMidSeasonWindow(room: GameRoom) {
   room.transferWindowOpen = true;
   room.transferWindowMatchday = windowMatchday;
   room.transferWindowReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+  room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+  ensurePhaseReadyTicker(room);
   room.updatedAt = Date.now();
   return true;
 }
@@ -1944,6 +1959,7 @@ function maybeCloseMidSeasonWindow(room: GameRoom): boolean {
   room.transferWindowOpen = false;
   room.transferWindowReadyIds = [];
   room.transferWindowMatchday = undefined;
+  clearPhaseReadyTimer(room);
   return true;
 }
 
