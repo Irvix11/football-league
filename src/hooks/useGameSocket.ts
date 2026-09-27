@@ -38,6 +38,7 @@ export function useGameSocket() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const managerIdRef = useRef<string | null>(null);
   const intentionalCloseRef = useRef(false);
+  const isSimulatingRef = useRef(false);
 
   useEffect(() => {
     managerIdRef.current = managerId;
@@ -114,6 +115,7 @@ export function useGameSocket() {
 
           case 'ROOM_UPDATE':
             setRoom(newRoom);
+            isSimulatingRef.current = false;
             setIsSimulating(false);
             break;
 
@@ -123,6 +125,11 @@ export function useGameSocket() {
             break;
 
           case 'ERROR':
+            if (isSimulatingRef.current) {
+              isSimulatingRef.current = false;
+              setIsSimulating(false);
+              setSimulationError(typeof message === 'string' ? message : 'Knockout match failed to start.');
+            }
             // Reconnects can land on a different Vercel Function instance. Give the
             // durable snapshot one HTTP retry before deciding that a saved room is gone.
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
@@ -385,27 +392,17 @@ export function useGameSocket() {
     }
   }, [room, managerId, send]);
 
-  const runKnockoutMatch = useCallback(async (fixtureId: string) => {
+  const runKnockoutMatch = useCallback((fixtureId: string) => {
     if (!room || !managerId) return;
-    setIsSimulating(true);
-    setSimulationError(null);
-    try {
-      const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}/run-knockout-match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ managerId, fixtureId }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error || 'Failed to start the knockout match.');
-      if (data?.room) setRoom(data.room as GameRoom);
-    } catch (error: any) {
-      setSimulationError(error?.message || 'Failed to start the knockout match.');
-    } finally {
-      setIsSimulating(false);
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      setSimulationError('Connection lost. Reconnect before starting the knockout match.');
+      return;
     }
+    setSimulationError(null);
+    isSimulatingRef.current = true;
+    setIsSimulating(true);
+    send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId, fixtureId });
   }, [room, managerId, send]);
-
   const completeKnockoutMatch = useCallback(async (fixtureId: string) => {
     if (!room || !managerId) return;
     try {
