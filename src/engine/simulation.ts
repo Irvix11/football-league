@@ -476,33 +476,66 @@ const DEFAULT_MATCH_TACTICS = {
 };
 
 function normalizeManagerForMatch(manager: Manager): Manager {
-  const squad = Array.isArray(manager.squad) ? manager.squad : [];
-  const normalizedSquad = squad.map((entry) => ({
-    ...entry,
-    isStarting: Boolean(entry.isStarting),
-    condition: entry.condition || {
-      state: 'FIT' as const,
-      fatigue: 0,
-      injuryMatchesLeft: 0,
-      yellowCards: 0,
-      redCards: 0,
-      suspensionMatchesLeft: 0,
-    },
-    assignedPosition: entry.assignedPosition || entry.player?.position,
-    player: {
-      ...entry.player,
-      alternatePositions: entry.player?.alternatePositions || [],
-    },
+  const squad = Array.isArray(manager.squad) ? manager.squad.filter(Boolean) : [];
+  const normalizedSquad = squad
+    .filter((entry) => entry?.player?.id && entry.player.overall !== undefined)
+    .map((entry) => ({
+      ...entry,
+      isStarting: Boolean(entry.isStarting),
+      condition: entry.condition || {
+        state: 'FIT' as const,
+        fatigue: 0,
+        injuryMatchesLeft: 0,
+        yellowCards: 0,
+        redCards: 0,
+        suspensionMatchesLeft: 0,
+      },
+      assignedPosition: entry.assignedPosition || entry.player?.position,
+      player: {
+        ...entry.player,
+        alternatePositions: Array.isArray(entry.player?.alternatePositions) ? entry.player.alternatePositions : [],
+        attributes: {
+          pac: Number(entry.player?.attributes?.pac ?? 50),
+          sho: Number(entry.player?.attributes?.sho ?? 50),
+          pas: Number(entry.player?.attributes?.pas ?? 50),
+          dri: Number(entry.player?.attributes?.dri ?? 50),
+          def: Number(entry.player?.attributes?.def ?? 50),
+          phy: Number(entry.player?.attributes?.phy ?? 50),
+        },
+      },
+    }));
+
+  const eligible = normalizedSquad.filter(
+    s => s.condition.state !== 'SUSPENDED' && s.condition.state !== 'INJURED'
+  );
+  const explicitStarters = eligible.filter(s => s.isStarting);
+  const starters = explicitStarters.length >= 11 ? explicitStarters.slice(0, 11) : eligible.slice(0, 11);
+  const starterIds = new Set(starters.map(s => s.player.id));
+  const repairedSquad = normalizedSquad.map(s => ({
+    ...s,
+    isStarting: starterIds.has(s.player.id),
   }));
 
-  // Older saved rooms can predate tactics/condition persistence. Match simulation
-  // should remain playable instead of crashing on those snapshots.
+  if (repairedSquad.length < 11) {
+    throw new Error(`Cannot simulate ${manager.name || 'team'}: squad has ${repairedSquad.length}/11 valid players. Finish the squad before playing.`);
+  }
+  if (starters.length < 11) {
+    throw new Error(`Cannot simulate ${manager.name || 'team'}: only ${starters.length}/11 players are available.`);
+  }
+
+  const safeTactics = {
+    ...DEFAULT_MATCH_TACTICS,
+    ...(manager.tactics || {}),
+  };
+
   return {
     ...manager,
     formation: manager.formation || '4-3-3',
-    tactics: manager.tactics || DEFAULT_MATCH_TACTICS,
-    squad: normalizedSquad,
-    teamOverall: manager.teamOverall || calculateTeamOverall(manager.formation || '4-3-3', normalizedSquad),
+    tactics: safeTactics,
+    squad: repairedSquad,
+    teamOverall: Number.isFinite(Number(manager.teamOverall))
+      ? Number(manager.teamOverall)
+      : calculateTeamOverall(manager.formation || '4-3-3', repairedSquad),
   };
 }
 
@@ -636,7 +669,12 @@ export function simulateMatch(
   const awayAtts = getPlayersByCat(awayStarters, 'ATT');
 
   // Helper random picker
-  const pick = <T>(arr: T[]): T => arr[Math.floor(rand() * arr.length)];
+  const pick = <T>(arr: T[], label = 'player pool'): T => {
+    if (!Array.isArray(arr) || arr.length === 0) {
+      throw new Error(`Match simulation has no valid ${label}.`);
+    }
+    return arr[Math.min(arr.length - 1, Math.floor(rand() * arr.length))];
+  };
 
   // Helper to add event
   const pushEvent = (event: Omit<MatchEvent, 'id' | 'currentScore'>) => {
@@ -766,9 +804,9 @@ export function simulateMatch(
       ? pick(defDefs) 
       : pick(atkMids.length > 0 ? atkMids : attackingStarters);
     
-    const receiver = pick(
-      (atkAtts.length > 0 ? atkAtts : attackingStarters).filter(p => p.player.id !== passer.player.id) || attackingStarters
-    );
+    const receiverPool = (atkAtts.length > 0 ? atkAtts : attackingStarters)
+      .filter(p => p.player.id !== passer.player.id);
+    const receiver = pick(receiverPool.length > 0 ? receiverPool : attackingStarters, 'attacking receiver');
 
     const startX = ballX;
     const startY = ballY;
