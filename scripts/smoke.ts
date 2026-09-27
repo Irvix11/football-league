@@ -20,6 +20,32 @@ const allTimePool = getPlayersForLobby('Global', 'All-Time');
 if (currentPool.length < 500) throw new Error(`FC27 current pool is incomplete: expected 500+ 80+ players, got ${currentPool.length}`);
 if (currentPool.some(p => p.overall < 80 || p.overall > 99)) throw new Error('FC27 current pool contains a player outside the required 80+ OVR range');
 if (new Set(currentPool.map(p => p.id)).size !== currentPool.length) throw new Error('FC27 current pool contains duplicate player IDs');
+
+for (const formation of Object.keys(FORMATIONS_CONFIG) as Array<keyof typeof FORMATIONS_CONFIG>) {
+  const config = FORMATIONS_CONFIG[formation];
+  if (config.slots.length !== 11) throw new Error(`Formation ${formation} does not define exactly 11 slots`);
+  const used = new Set<string>();
+  const squad: SquadPlayerEntry[] = [];
+  for (const slot of config.slots) {
+    const player = currentPool.find(
+      p => !used.has(p.id) &&
+        (slot.category === 'GK' ? p.category === 'GK' : p.category === slot.category)
+    );
+    if (!player) throw new Error(`FC27 pool cannot fill ${formation} slot ${slot.position}`);
+    used.add(player.id);
+    squad.push({
+      player,
+      isStarting: true,
+      startingSlotIndex: slot.index,
+      assignedPosition: slot.position,
+      condition: condition(),
+    });
+  }
+  const overall = calculateTeamOverall(formation, squad);
+  if (!Number.isFinite(overall) || overall < 50 || overall > 99) {
+    throw new Error(`Formation ${formation} produced an invalid team overall`);
+  }
+}
 if (allTimePool.length < 200) throw new Error('All-Time pool lost part of the 200-player legend set');
 if (allTimePool.some(p => p.age === 0)) throw new Error('All-Time pool contains invalid age 0');
 const normalizeName = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
