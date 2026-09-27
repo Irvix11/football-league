@@ -1996,8 +1996,8 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Insufficient budget for secret bid.');
             return;
           }
-          if (manager.squad.length >= 11) {
-            sendSocketError(ws, 'Your XI is already full (11/11 players).');
+          if (manager.squad.length >= 18) {
+            sendSocketError(ws, 'Your 18-player squad is already full (18/18 players).');
             return;
           }
           const blindLimits = getFormationSquadCategoryLimits(manager.formation);
