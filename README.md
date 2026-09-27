@@ -89,3 +89,5 @@ Before shipping a release, verify:
 <!-- vercel-force-deploy: 2026-09-27T19:58 -->
 
 <!-- force-vercel: 1790519815791 -->
+
+<!-- harmless production deployment trigger: 2026-09-27 -->
