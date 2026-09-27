@@ -65,6 +65,66 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 app.use(express.json());
+const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/auto';
+
+async function callOpenRouter(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OpenRouter is not configured. Set OPENROUTER_API_KEY on the server.');
+
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://football-league-nine.vercel.app',
+      'X-Title': 'Football Auction League',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages,
+      temperature: 0.7,
+      max_tokens: 500,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = typeof data?.error?.message === 'string' ? data.error.message : `OpenRouter HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+
+  return data?.choices?.[0]?.message?.content || '';
+}
+
+app.get('/api/ai/status', (_req, res) => {
+  res.json({
+    configured: Boolean(process.env.OPENROUTER_API_KEY),
+    model: OPENROUTER_MODEL,
+    baseUrl: OPENROUTER_BASE_URL,
+  });
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    if (!messages.length || messages.length > 20) {
+      return res.status(400).json({ error: 'messages must contain between 1 and 20 items' });
+    }
+
+    const safeMessages = messages.map((m: any) => ({
+      role: ['system', 'user', 'assistant'].includes(m?.role) ? m.role : 'user',
+      content: String(m?.content || '').slice(0, 4000),
+    }));
+
+    const answer = await callOpenRouter(safeMessages);
+    return res.json({ answer, model: OPENROUTER_MODEL });
+  } catch (error: any) {
+    console.error('[openrouter]', error);
+    return res.status(502).json({ error: error?.message || 'AI request failed' });
+  }
+});
+
 
 // In-Memory Storage for Active Rooms
 const rooms = new Map<string, GameRoom>();
