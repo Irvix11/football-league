@@ -338,7 +338,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   if (assignedGkCount > 1) errors.push('Only one starting goalkeeper is allowed.');
 
   // Formation category limits are enforced by the auction engine when players
-  // are purchased. Once the 18-player squad is assembled, managers may switch
+  // are purchased. Once the 11-player squad is assembled, managers may switch
   // formations and use any outfield players in any outfield role. The only hard
   // formation requirement here is the 11 starting slots.
   // Positional fit / Effective OVR accounts for out-of-position play.
