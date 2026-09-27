@@ -1036,7 +1036,10 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   className="w-full px-3.5 py-2.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs font-semibold outline-none cursor-pointer hover:border-emerald-500 transition-colors"
                 >
                   <option value="">Auto Select Best Qualified Starter</option>
-                  {starters.map((s) => (
+                  {(role === 'penaltyTakerId' || role === 'freeKickTakerId' || role === 'cornerTakerId'
+                    ? starters.filter(s => s.player.category !== 'GK')
+                    : starters
+                  ).map((s) => (
                     <option key={s.player.id} value={s.player.id}>
                       {s.player.name} ({s.player.position} · OVR {s.player.overall} · SHO {s.player.attributes.sho} · PAS {s.player.attributes.pas})
                     </option>
