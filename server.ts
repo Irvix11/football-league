@@ -1002,7 +1002,7 @@ function advanceAuction(room: GameRoom) {
   const selectedPlayer = (forcedManager && forcedCandidates.length > 0
     ? forcedCandidates[Math.floor(Math.random() * forcedCandidates.length)]
     : auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)]);
-  // Auction lots always start at zero. Keep legacy/imported player values from
+  // Auction lots always start at £1M. Keep legacy/imported player values from
   // leaking into the live auction after a reconnect or old room snapshot.
   const nextPlayer = {
     ...selectedPlayer,
