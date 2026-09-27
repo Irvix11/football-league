@@ -91,11 +91,14 @@ const ALL_POSITIONS: Position[] = [
 
 function allowedPositionsForPlayer(player: Player, _starterCategory?: 'GK' | 'DEF' | 'MID' | 'ATT'): Position[] {
   // The formation owns the slot; the manager owns the tactical role.
-  // Any outfield player can be assigned to any outfield role. Natural and
-  // alternate positions score highly; unusual roles remain legal but receive
-  // a visible positional-fit penalty and reduce Team OVR.
+  // Any outfield player may be played anywhere on the pitch. Natural and
+  // alternate positions are listed first, followed by every other outfield
+  // role. Out-of-position play is legal and is reflected in Effective OVR.
   if (player.category === 'GK') return ['GK'];
-  return ALL_POSITIONS.filter((position) => position !== 'GK');
+  const preferred = [player.position, ...(player.alternatePositions || [])]
+    .filter((p, index, list) => p !== 'GK' && list.indexOf(p) === index);
+  const other = ALL_POSITIONS.filter((position) => position !== 'GK' && !preferred.includes(position));
+  return [...preferred, ...other];
 }
 
 function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF' | 'MID' | 'ATT'): Position {
@@ -485,7 +488,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
-                AUTO-FILL uses OVR + attributes + positional fit. Tap one player, then another to swap. You can also assign any outfield role.
+                AUTO-FILL uses OVR + attributes + positional fit. Tap a player to inspect them, choose any outfield position, or tap another player to swap. Effective OVR updates for the selected role.
               </p>
               <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-mono font-black">
                 <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">NATURAL 90–100</span>
