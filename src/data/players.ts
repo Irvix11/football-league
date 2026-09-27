@@ -1144,8 +1144,7 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
  * Auction pricing is intentionally independent of market value.
  * The game economy is driven by OVR with a simple bounded starting-price curve.
  */
-export function getAuctionStartingPrice(player: Player): number {
-  const overall = Math.max(80, Math.min(99, Number(player.overall) || 80));
+export function getAuctionStartingPrice(_player: Player): number {
   return 0;
 }
 
