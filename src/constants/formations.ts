@@ -331,8 +331,8 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   // This makes formation changes and transfers flexible; positional fit/OVR
   // handles the performance penalty for playing out of position.
 
-  const gkCount = naturalCategoryCounts.GK;
-  if (gkCount > squadLimits.GK) errors.push(`Squad can contain at most ${squadLimits.GK} goalkeepers.`);
+  const assignedGkCount = starters.filter(s => getEntryAssignedCategory(s) === 'GK').length;
+  if (assignedGkCount > 1) errors.push('Only one starting goalkeeper is allowed.');
 
   return {
     isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 0 && squad.length === 11,
