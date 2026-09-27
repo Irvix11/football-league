@@ -21,7 +21,7 @@ import {
   KnockoutStageState
 } from './src/types/football.js';
 import { FORMATIONS_CONFIG, BENCH_CATEGORY_ALLOCATION, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
-import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
+import { getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
 import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot } from './server/persistence.js';
 
