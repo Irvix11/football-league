@@ -126,12 +126,12 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   // In Blind mode the real category is server-private, so the client never
   // disables bidding based on a masked category. The server remains authoritative.
   const isCategoryFull = !isBlind && player
-    ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
+    ? player.category === 'GK' && categoryCounts.GK >= 2
     : false;
 
   const minNextBid = auction.highestBidderId ? auction.currentBid + 1 : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
-  const isSquadFull = currentManager.squad.length >= 11;
+  const isSquadFull = currentManager.squad.length >= 18;
   const isWinning = auction.highestBidderId === managerId;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
@@ -213,7 +213,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">SQUAD</div>
-            <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 11</div>
+            <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 18</div>
           </div>
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
@@ -377,11 +377,11 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     {/* Bid Action Buttons */}
                     {isSquadFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-amber-400 font-semibold">
-                        Your starting XI is full (11/11). You cannot bid on further players.
+                        Your 18-player squad is full (18/18). You cannot bid on further players.
                       </div>
                     ) : isCategoryFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-rose-400 font-semibold">
-                        Max {player.category} limit reached for {currentManager.formation}.
+                        Your goalkeeper limit is full (2 GK).
                       </div>
                     ) : (
                       <div className="space-y-3">
