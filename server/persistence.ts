@@ -2,14 +2,12 @@ import type { GameRoom } from '../src/types/football.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 
-// Persistence runs only on the trusted server. Prefer the Supabase secret/service
-// key so the database can have RLS enabled without exposing write/delete privileges
-// to players. The publishable key remains a temporary fallback for old deployments;
- // once SUPABASE_SECRET_KEY is configured on Vercel, all persistence uses it.
+// Persistence runs only on the trusted server. RLS is intentionally locked down
+// for anon/authenticated clients, so this server must use a privileged secret key.
+// Never fall back to a publishable/anon key for persistence.
 const SUPABASE_KEY =
   process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_PUBLISHABLE_KEY ||
   '';
 
 function headers(extra: Record<string,string> = {}) {
