@@ -46,7 +46,6 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const remaining = [...squad];
   const starters: SquadPlayerEntry[] = [];
-
   const orderedSlots = [...config.slots].sort((a, b) => {
     if (a.category === 'GK') return -1;
     if (b.category === 'GK') return 1;
@@ -63,7 +62,6 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
       (a, b) => playerLineupScore(b, slot) - playerLineupScore(a, slot) || b.player.overall - a.player.overall
     )[0];
     if (!chosen) continue;
-
     remaining.splice(remaining.findIndex(entry => entry.player.id === chosen.player.id), 1);
     starters.push({
       ...chosen,
@@ -74,21 +72,7 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
     });
   }
 
-  const bench = remaining
-    .sort((a, b) => b.player.overall - a.player.overall)
-    .slice(0, 7)
-    .map((entry, index) => ({
-      ...entry,
-      isStarting: false,
-      startingSlotIndex: undefined,
-      benchIndex: index,
-      assignedPosition: entry.player.category === 'GK' ? 'GK' : (entry.assignedPosition || entry.player.position),
-    }));
-
-  return [
-    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
-    ...bench,
-  ].slice(0, 18);
+  return starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
 }
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
@@ -435,7 +419,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/11</div>
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
@@ -563,7 +547,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
 
             <div className="mt-3 w-full rounded-2xl bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-white/10 p-3 shadow-xl shadow-black/20 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">SQUAD · 18 PLAYERS</span>
+                <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">SQUAD · 11 PLAYERS</span>
                 <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.length}/18</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
