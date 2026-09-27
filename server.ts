@@ -2143,6 +2143,17 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Wait until every manager presses I\'M DONE with formation.');
             return;
           }
+
+          const auctionPoolSize = getPlayersForLobby(room.settings.playerPool, room.settings.era).length;
+          const requiredAuctionPlayers = room.managers.length * 11;
+          if (auctionPoolSize < requiredAuctionPlayers) {
+            sendSocketError(
+              ws,
+              `Not enough players in this pool for ${room.managers.length} managers (${auctionPoolSize} available, ${requiredAuctionPlayers} required). Choose Global or reduce the manager count.`
+            );
+            return;
+          }
+
           room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
           room.phase = 'auction';
           advanceAuction(room);
