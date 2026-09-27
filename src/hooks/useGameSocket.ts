@@ -215,7 +215,7 @@ export function useGameSocket() {
         });
       } catch {}
     };
-    const timer = window.setInterval(sync, 1800);
+    const timer = window.setInterval(sync, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [room?.code]);
 
