@@ -583,11 +583,43 @@ function autoFillManagerLineup(manager: Manager) {
 
 function normalizeRoomToXI(room: GameRoom): boolean {
   let changed = false;
+  const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
+  const ownedIds = new Set(room.managers.flatMap(manager => manager.squad.map(entry => entry.player.id)));
 
+  // One-time migration for rooms created before the 18-player squad format.
+  // We keep the existing XI and add seven bench players from the configured pool
+  // so saved/rejoined rooms do not become permanently unconfirmable.
   for (const manager of room.managers) {
-    if (manager.squad.length >= 18) {
-      const normalized = manager.squad.slice(0, 18);
-      manager.squad = normalized;
+    if (manager.squad.length === 11) {
+      const usedByManager = new Set(manager.squad.map(entry => entry.player.id));
+      const additions: SquadPlayerEntry[] = [];
+
+      for (const category of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
+        const needed = BENCH_CATEGORY_ALLOCATION[category];
+        const candidates = pool
+          .filter(player => player.category === category && !ownedIds.has(player.id) && !usedByManager.has(player.id))
+          .sort((a, b) => b.overall - a.overall);
+        for (const player of candidates.slice(0, needed)) {
+          usedByManager.add(player.id);
+          ownedIds.add(player.id);
+          additions.push({
+            player,
+            isStarting: false,
+            startingSlotIndex: undefined,
+            benchIndex: additions.length,
+            assignedPosition: player.position,
+            condition: createFitCondition(),
+          });
+        }
+      }
+
+      if (additions.length === 7) {
+        manager.squad = [...manager.squad, ...additions];
+        autoFillManagerLineup(manager);
+        changed = true;
+      }
+    } else if (manager.squad.length >= 18) {
+      manager.squad = manager.squad.slice(0, 18);
       autoFillManagerLineup(manager);
       changed = true;
     }
