@@ -23,6 +23,7 @@ import {
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
+import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot } from './server/persistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,6 +123,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
   }
 
   room.updatedAt = Date.now();
+  void saveRoomSnapshot(room);
   const payload = JSON.stringify({
     type: 'ROOM_UPDATE',
     room: sanitizedRoom,
@@ -1406,7 +1408,12 @@ wss.on('connection', (ws) => {
         // --- 2. JOIN LOBBY ---
         case 'JOIN_LOBBY': {
           const { roomCode, managerName, reconnectId } = payload;
-          const room = rooms.get(roomCode?.toUpperCase());
+          const normalizedRoomCode = roomCode?.toUpperCase();
+          let room = rooms.get(normalizedRoomCode);
+          if (!room && normalizedRoomCode) {
+            room = await loadRoomSnapshot(normalizedRoomCode) || undefined;
+            if (room) rooms.set(normalizedRoomCode, room);
+          }
 
           if (!room) {
             ws.send(JSON.stringify({ type: 'ERROR', message: 'Lobby not found. Please verify the code.' }));
@@ -1743,8 +1750,23 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if (manager.squad.length >= 11) {
+          if (manager.squad.length >= 18) {
             ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 18-player squad is already full (18/18 players).' }));
+            return;
+          }
+
+          const auctionPlayer = room.auction.currentPlayer;
+          if (!auctionPlayer) return;
+          const limits = getFormationSquadCategoryLimits(manager.formation);
+          const ownedCategoryCount = manager.squad.filter(s => s.player.category === auctionPlayer.category).length;
+          if (ownedCategoryCount >= limits[auctionPlayer.category]) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: `Your ${auctionPlayer.category} quota is full for ${manager.formation}.` }));
+            return;
+          }
+
+          const bidStep = bidAmount >= 250 ? 10 : bidAmount >= 100 ? 5 : 2;
+          if (room.auction.highestBidderId && bidAmount < room.auction.currentBid + bidStep) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${room.auction.currentBid + bidStep}M.` }));
             return;
           }
 
@@ -1779,6 +1801,16 @@ wss.on('connection', (ws) => {
           }
           if (manager.budget < bidAmount) {
             sendSocketError(ws, 'Insufficient budget for secret bid.');
+            return;
+          }
+          if (manager.squad.length >= 18) {
+            sendSocketError(ws, 'Your 18-player squad is already full.');
+            return;
+          }
+          const blindLimits = getFormationSquadCategoryLimits(manager.formation);
+          const blindCategoryCount = manager.squad.filter(s => s.player.category === currentPl.category).length;
+          if (blindCategoryCount >= blindLimits[currentPl.category]) {
+            sendSocketError(ws, `Your ${currentPl.category} quota is full for ${manager.formation}.`);
             return;
           }
           let secretMap = blindSecretBids.get(roomCode);
@@ -2152,6 +2184,22 @@ wss.on('connection', (ws) => {
 });
 
 // API Endpoints
+app.get('/api/room/:code', async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  let room = rooms.get(code);
+  if (!room) {
+    room = await loadRoomSnapshot(code) || undefined;
+    if (room) rooms.set(code, room);
+  }
+  if (!room) return res.status(404).json({ error: 'Lobby not found' });
+  const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
+  if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction') {
+    snapshot.auction.hasSubmittedSecretBid = undefined;
+    snapshot.auction.currentPlayer = snapshot.auction.isSold ? snapshot.auction.currentPlayer : null;
+  }
+  return res.json(snapshot);
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', activeRooms: rooms.size });
 });
