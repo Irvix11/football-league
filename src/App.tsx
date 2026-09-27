@@ -11,7 +11,49 @@ import { SeasonEndView } from './components/SeasonEndView';
 import { Volume2, VolumeX, AlertCircle, UserX, X } from 'lucide-react';
 import { sound } from './utils/audio';
 
-export default function App() {
+class AppErrorBoundary extends React.Component<React.PropsWithChildren, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[AppErrorBoundary]', error);
+  }
+
+  handleRecovery = () => {
+    try {
+      localStorage.removeItem('fal_session');
+    } catch {}
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-3xl border border-rose-500/30 bg-slate-900 p-7 text-center shadow-2xl">
+            <div className="text-rose-400 text-3xl font-black mb-3">!</div>
+            <h1 className="text-xl font-black">Game state recovered</h1>
+            <p className="mt-2 text-sm text-slate-400">
+              The current screen hit an invalid saved state. Your browser has not been permanently damaged.
+            </p>
+            <button
+              onClick={this.handleRecovery}
+              className="mt-5 px-5 py-3 rounded-xl bg-rose-500 text-slate-950 font-black hover:bg-rose-400"
+            >
+              RESET & RECONNECT
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AppContent() {
   const {
     room,
     managerId,
@@ -262,5 +304,14 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <AppContent />
+    </AppErrorBoundary>
   );
 }
