@@ -443,6 +443,65 @@ function playerSlotScore(player: any, slot: any): number {
   return player.overall * 0.55 + fit * 0.35 + relevant * 0.10;
 }
 
+// A player is valued by how well he performs a role, not just by OVR.
+// This is deliberately deterministic so auction strategy and match strategy
+// use the same six-stat football logic.
+function playerMetaScore(player: any, targetPosition: string): number {
+  const a = player.attributes || {};
+  const pos = String(targetPosition);
+  if (pos === 'GK') return a.dri * 0.30 + a.sho * 0.20 + a.pas * 0.15 + a.def * 0.15 + a.phy * 0.20;
+
+  if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) {
+    const wide = ['LB', 'RB', 'LWB', 'RWB'].includes(pos);
+    return a.def * 0.45 + a.phy * 0.20 + a.pac * (wide ? 0.20 : 0.10) + a.pas * (wide ? 0.15 : 0.15) + a.dri * (wide ? 0.05 : 0.10);
+  }
+
+  if (['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(pos)) {
+    const attacking = ['CAM', 'LM', 'RM'].includes(pos);
+    return a.pas * (attacking ? 0.32 : 0.42) +
+      a.dri * 0.24 +
+      a.phy * 0.14 +
+      a.sho * (attacking ? 0.18 : 0.08) +
+      a.pac * 0.08 +
+      a.def * (attacking ? 0.04 : 0.04);
+  }
+
+  return a.sho * 0.42 + a.pac * 0.22 + a.dri * 0.23 + a.pas * 0.13;
+}
+
+function tacticalCompatibility(player: any, style: string, mentality: string): number {
+  const a = player.attributes || {};
+  let bonus = 0;
+  if (style === 'Possession') bonus += (a.pas - 70) * 0.10 + (a.dri - 70) * 0.08;
+  if (style === 'High Press') bonus += (a.pac - 70) * 0.10 + (a.phy - 70) * 0.08 + (a.def - 70) * 0.05;
+  if (style === 'Counter Attack') bonus += (a.pac - 70) * 0.13 + (a.sho - 70) * 0.08;
+  if (style === 'Low Block') bonus += (a.def - 70) * 0.13 + (a.phy - 70) * 0.10;
+  if (style === 'Long Ball') bonus += (a.phy - 70) * 0.10 + (a.pac - 70) * 0.07 + (a.sho - 70) * 0.05;
+  if (style === 'Aggressive') bonus += (a.sho - 70) * 0.08 + (a.pac - 70) * 0.06;
+
+  if (mentality === 'Aggressive') bonus += (a.sho - 70) * 0.05 + (a.pac - 70) * 0.03;
+  if (mentality === 'Defensive') bonus += (a.def - 70) * 0.05 + (a.phy - 70) * 0.03;
+  return bonus;
+}
+
+function bestFormationPlayerValue(player: any, manager: Manager): { score: number; position: string } {
+  const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+  const candidates = config.slots.filter((slot: any) =>
+    slot.category === player.category || (slot.category !== 'GK' && player.category !== 'GK')
+  );
+  const pool = candidates.length ? candidates : config.slots;
+  let best = { score: -Infinity, position: player.position };
+
+  for (const slot of pool) {
+    const fit = calculatePositionFit(player.position, player.alternatePositions || [], slot.position);
+    const meta = playerMetaScore(player, slot.position);
+    const tactical = tacticalCompatibility(player, manager.tactics?.style || 'Balanced', manager.tactics?.mentality || 'Balanced');
+    const score = meta * (0.72 + fit / 100 * 0.28) + tactical;
+    if (score > best.score) best = { score, position: slot.position };
+  }
+  return best;
+}
+
 function autoFillManagerLineup(manager: Manager) {
   const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
   if (manager.squad.length < 11) return;
@@ -703,21 +762,23 @@ function simulateBotBlindBids(room: GameRoom) {
     const categoryCount = bot.squad.filter(s => s.player.category === currentPl.category).length;
     if (categoryCount >= limits[currentPl.category]) continue;
 
-    // Bots can see the full card server-side. Their valuation combines market
-    // value and the six football attributes, with a small role-aware weighting.
-    const a = currentPl.attributes || { pac: 0, sho: 0, pas: 0, dri: 0, def: 0, phy: 0 };
-    const roleScore =
-      currentPl.category === 'ATT'
-        ? a.sho * 0.40 + a.pac * 0.20 + a.dri * 0.25 + a.pas * 0.15
-        : currentPl.category === 'MID'
-          ? a.pas * 0.35 + a.dri * 0.25 + a.phy * 0.15 + a.sho * 0.15 + a.pac * 0.10
-          : currentPl.category === 'DEF'
-            ? a.def * 0.50 + a.phy * 0.20 + a.pac * 0.15 + a.pas * 0.15
-            : a.dri * 0.45 + a.phy * 0.20 + a.pas * 0.15 + a.sho * 0.20;
-
+    // Blind auction uses the same meta model, but bots can privately inspect
+    // the hidden player while humans only see the two clues.
+    const meta = bestFormationPlayerValue(currentPl, bot);
+    const roleFit = calculatePositionFit(currentPl.position, currentPl.alternatePositions || [], meta.position);
+    const tacticalValue = tacticalCompatibility(
+      currentPl,
+      bot.tactics?.style || 'Balanced',
+      bot.tactics?.mentality || 'Balanced'
+    );
     const valuation = Math.max(
       currentPl.startingPrice,
-      Math.min(bot.budget, currentPl.marketValue * 0.45 + roleScore * 0.70)
+      Math.min(
+        bot.budget,
+        currentPl.marketValue * 0.28 +
+          meta.score * (0.72 + roleFit / 100 * 0.20) * 0.62 +
+          tacticalValue
+      )
     );
 
     // Different bots get slightly different risk appetites so Solo games don't
@@ -746,13 +807,35 @@ function simulateBotBids(room: GameRoom) {
     const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + 2 : room.auction.currentBid;
     if (bot.budget < minNextBid) continue;
 
-    // Formation slots are flexible; the bot may buy any outfield player.
+    // Formation slots are flexible, but category limits still protect the squad shape.
     const botLimits = getFormationSquadCategoryLimits(bot.formation);
     if (bot.squad.filter(s => s.player.category === currentPl.category).length >= botLimits[currentPl.category]) continue;
 
-    // Bot decision roll based on player overall vs price
-    const maxValuation = currentPl.marketValue * 1.15;
-    if (minNextBid <= maxValuation && Math.random() < 0.28) {
+    // Meta valuation: the bot evaluates the player's best role in its formation,
+    // then adjusts for its chosen tactical style/mentality. OVR is only a small
+    // sanity signal instead of the main pricing mechanism.
+    const meta = bestFormationPlayerValue(currentPl, bot);
+    const ovrSignal = currentPl.overall * 0.22;
+    const metaSignal = meta.score * 0.78;
+    const roleFit = calculatePositionFit(currentPl.position, currentPl.alternatePositions || [], meta.position);
+    const valuePerPoint = 0.72 + roleFit / 100 * 0.20;
+    const tacticalValue = Math.max(-12, Math.min(12,
+      tacticalCompatibility(currentPl, bot.tactics?.style || 'Balanced', bot.tactics?.mentality || 'Balanced')
+    ));
+    const maxValuation = Math.max(
+      currentPl.startingPrice,
+      Math.min(
+        bot.budget,
+        currentPl.marketValue * 0.28 + (ovrSignal + metaSignal) * valuePerPoint * 0.62 + tacticalValue
+      )
+    );
+
+    // Scarcity matters: bots spend more aggressively when they still need a role.
+    const targetNeed = Math.max(0, 11 - bot.squad.length);
+    const scarcityMultiplier = 1 + Math.min(0.18, targetNeed * 0.015);
+    const adjustedValuation = Math.min(bot.budget, maxValuation * scarcityMultiplier);
+
+    if (minNextBid <= adjustedValuation && Math.random() < 0.34) {
       // Bot places bid!
       room.auction.currentBid = minNextBid;
       room.auction.highestBidderId = bot.id;
