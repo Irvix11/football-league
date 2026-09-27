@@ -175,11 +175,10 @@ export function useGameSocket() {
           case 'ROOM_UPDATE': {
             const saved = getSavedSession();
             setRoom(restoreViewerIdentity(newRoom, managerIdRef.current, saved?.managerName || null));
-            break;
-          }
             isSimulatingRef.current = false;
             setIsSimulating(false);
             break;
+          }
 
           case 'BLIND_BID_CONFIRMED':
             setSecretBidSubmitted(amount);
