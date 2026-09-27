@@ -1,6 +1,6 @@
 import React from 'react';
 import { GameRoom, Formation } from '../types/football';
-import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from '../constants/formations';
+import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts } from '../constants/formations';
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
 import { FastForward, Play, Bot, User } from 'lucide-react';
@@ -27,7 +27,6 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
   const selectedFormation = currentManager?.formation || '4-3-3';
   const formationConfig = FORMATIONS_CONFIG[selectedFormation] || FORMATIONS_CONFIG['4-3-3'];
   const starterCounts = getFormationStarterCategoryCounts(selectedFormation);
-  const squadLimits = getFormationSquadCategoryLimits(selectedFormation);
   const botManager = room.managers.find((m) => m.isBot);
   const squad = currentManager?.squad || [];
   const starters = squad.filter((s) => s.isStarting);
@@ -106,7 +105,7 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
             </div>
             <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
               <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/11</div>
+              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/18</div>
             </div>
           </div>
 
@@ -122,13 +121,13 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
                     {starterCounts[cat]} STARTERS
                   </div>
                   <div className="text-[9px] text-slate-500 mt-0.5">
-                    XI limit {squadLimits[cat]}
+                    formation slot
                   </div>
                 </div>
               ))}
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Your formation defines the exact 11-player XI quota. The auction runs GK → DEF → MID → ATT until every manager has a complete XI. After the auction, the game auto-fills the best XI using OVR, attributes and positional fit — and you can edit every player's role.
+              Your formation defines the exact 11-player XI quota. Players are auctioned in GK → DEF → MID → ATT order for the required XI slots, then the remaining bench places can be any mix. Your squad is 18 players total (11 starters + 7 substitutes). After the auction, the game auto-fills the best XI using OVR, attributes and positional fit — and you can move outfield players into different roles.
             </p>
           </div>
         </div>
