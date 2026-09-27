@@ -10,6 +10,10 @@ export default async function handler(req: any, res: any) {
   const code = String(raw || '').trim().toUpperCase();
   if (!code) return res.status(400).json({ error: 'Lobby code is required' });
 
+  // Room snapshots are authoritative live state; never let an intermediary cache
+  // an older score, auction timer, or squad snapshot.
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
   const room = await loadRoomSnapshot(code);
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
 
