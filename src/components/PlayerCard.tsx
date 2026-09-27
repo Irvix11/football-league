@@ -74,7 +74,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-[0.22em] text-amber-300 uppercase"><span className="w-1.5 h-1.5 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.8)]" /> PRIME LEGEND</span>
           <span className="text-[9px] font-black tracking-widest text-amber-200/60 uppercase">ALL-TIME</span>
         </div>
-      )
+      )}
       <div className="p-4 border-b border-slate-800/80 flex items-start justify-between">
         <div className="flex items-baseline gap-2">
           <div className="font-display font-black text-4xl md:text-5xl tracking-tight text-amber-400">
