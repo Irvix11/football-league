@@ -398,7 +398,15 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           if (nextEvent.type === 'fulltime') {
             if (soundEnabled) sound.playWhistle();
             setCurrentEventIndex(nextIndex);
-            setFullTimeOverlay(true);
+            if (fixture.wentToPenalties && penaltySequence.length > 0) {
+              // Knockout shootouts should flow straight into the visual spot-kick
+              // sequence instead of hiding it behind another confirmation screen.
+              setPenaltyIndex(0);
+              setShowPenaltyShootout(true);
+              setFullTimeOverlay(false);
+            } else {
+              setFullTimeOverlay(true);
+            }
             setIsPlaying(false);
             return;
           }
@@ -491,7 +499,13 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       setIsPlaying(false);
       setGoalOverlay(null);
       setHalfTimeOverlay(false);
-      setFullTimeOverlay(true);
+      if (fixture.wentToPenalties && penaltySequence.length > 0) {
+        setPenaltyIndex(0);
+        setShowPenaltyShootout(true);
+        setFullTimeOverlay(false);
+      } else {
+        setFullTimeOverlay(true);
+      }
       const lastEv = events[lastIndex];
       const endSecs = (lastEv.minute || 90) * 60 + (lastEv.second || 0);
       setDisplaySeconds(endSecs);
