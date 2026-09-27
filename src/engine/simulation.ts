@@ -546,7 +546,7 @@ export function simulateMatch(
 
   // Helper getters for players
   const getPlayersByCat = (starters: SquadPlayerEntry[], cat: 'GK' | 'DEF' | 'MID' | 'ATT') =>
-    starters.filter(s => s.player.category === cat);
+    starters.filter(s => getPositionCategory(s.assignedPosition || s.player.position) === cat);
 
   const homeGK = getPlayersByCat(homeStarters, 'GK')[0] || homeStarters[0];
   const awayGK = getPlayersByCat(awayStarters, 'GK')[0] || awayStarters[0];
