@@ -259,7 +259,7 @@ function queueRoomSnapshot(room: GameRoom) {
   }, 350));
 }
 
-function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
+function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = true) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
@@ -308,7 +308,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
     }
   }
 
-  queueRoomSnapshot(room);
+  if (persist) queueRoomSnapshot(room);
   const payload = JSON.stringify({
     type: 'ROOM_UPDATE',
     room: sanitizedRoom,
@@ -963,7 +963,7 @@ function ensureAuctionTicker(room: GameRoom) {
     // reduces WebSocket traffic and snapshot writes without changing timing.
     if (remainingChanged || lastBroadcastRemaining !== remaining) {
       lastBroadcastRemaining = remaining;
-      broadcastRoom(currentR.code);
+      broadcastRoom(currentR.code, undefined, false);
     }
   }, 250);
 
