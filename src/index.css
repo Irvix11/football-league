@@ -311,3 +311,32 @@ table tbody tr:hover {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Responsive hero banner animations. Kept local to the component system so
+   the hero can be copied without pulling in a separate animation package. */
+@keyframes falFadeSlideIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fal-fade-1 { animation: falFadeSlideIn 560ms cubic-bezier(.22,1,.36,1) both; }
+.animate-fal-fade-2 { animation: falFadeSlideIn 700ms 80ms cubic-bezier(.22,1,.36,1) both; }
+.animate-fal-fade-3 { animation: falFadeSlideIn 700ms 160ms cubic-bezier(.22,1,.36,1) both; }
+.animate-fal-fade-4 { animation: falFadeSlideIn 700ms 240ms cubic-bezier(.22,1,.36,1) both; }
+
+@theme inline {
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-background: var(--fal-bg);
+  --color-foreground: #f8fafc;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fal-fade-1,
+  .animate-fal-fade-2,
+  .animate-fal-fade-3,
+  .animate-fal-fade-4 {
+    animation: none;
+  }
+}
