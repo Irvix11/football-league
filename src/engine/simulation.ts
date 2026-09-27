@@ -217,6 +217,24 @@ function resolveCollisionSeparation(coords: LivePlayerPosition[], activePlayerId
  * - team tactics (defensiveLine, pressingIntensity, attackWidth)
  * - active ball carrier and target receiver
  */
+function tacticalShapeAdjustments(tactics: any, possession: 'home' | 'away', isHome: boolean) {
+  const style = tactics?.style || 'Balanced';
+  const mentality = tactics?.mentality || 'Balanced';
+  const teamHasBall = possession === (isHome ? 'home' : 'away');
+  let depth = 0, width = 1, forwardRun = 0, compact = 0;
+  if (style === 'Possession') { depth += teamHasBall ? 3 : 1; width += 0.10; compact += teamHasBall ? -1 : 2; }
+  else if (style === 'High Press') { depth += teamHasBall ? 4 : 7; forwardRun += 2; compact += 1; }
+  else if (style === 'Counter Attack') { depth += teamHasBall ? 7 : -5; forwardRun += teamHasBall ? 5 : 0; width += 0.04; }
+  else if (style === 'Low Block') { depth += teamHasBall ? -1 : -9; compact += 7; width -= 0.08; }
+  else if (style === 'Long Ball') { depth += teamHasBall ? 5 : -2; forwardRun += teamHasBall ? 4 : 1; width += 0.03; }
+  else if (style === 'Aggressive') { depth += teamHasBall ? 6 : 5; forwardRun += 4; width += 0.05; }
+  if (mentality === 'Aggressive') { depth += teamHasBall ? 3 : 2; forwardRun += 3; }
+  else if (mentality === 'Defensive') { depth -= teamHasBall ? 2 : 5; compact += 4; width -= 0.04; }
+  depth += ((tactics?.defensiveLine || 50) - 50) * 0.10;
+  width *= 0.92 + ((tactics?.attackWidth || 50) / 100) * 0.16;
+  return { depth, width, forwardRun, compact };
+}
+
 function generate22PlayerCoordinates(
   homeStarters: SquadPlayerEntry[],
   awayStarters: SquadPlayerEntry[],
@@ -259,7 +277,8 @@ function generate22PlayerCoordinates(
       }
     } else {
       // Outfield base position
-      let baseDepth = 15 + (slot.y / 100) * 65;
+      const shape = tacticalShapeAdjustments(homeTactics, possession, true);
+      let baseDepth = 15 + (slot.y / 100) * 65 + shape.depth;
       const baseWidth = 12 + (slot.x / 100) * 76;
 
       // Stagger midfield lines so CDMs, CMs, and CAMs don't cluster
@@ -271,7 +290,7 @@ function generate22PlayerCoordinates(
 
       if (possession === 'home') {
         // Pushing forward into attack
-        const pushX = (ballX - 45) * 0.32 + highLineBoost;
+        const pushX = (ballX - 45) * 0.32 + highLineBoost + shape.forwardRun;
         x = Math.min(93, Math.max(16, baseDepth + pushX));
         const lateralShift = (ballY - 50) * 0.18;
         y = Math.min(91, Math.max(9, 50 + (baseWidth - 50) * widthFactor + lateralShift));
@@ -285,7 +304,7 @@ function generate22PlayerCoordinates(
         // Defending shape: drop back and compact
         const dropX = Math.min(12, (50 - ballX) * 0.26);
         x = Math.min(84, Math.max(15, baseDepth - dropX + highLineBoost * 0.4));
-        const compactWidth = 50 + (baseWidth - 50) * 0.82 + (ballY - 50) * 0.14;
+        const compactWidth = 50 + (baseWidth - 50) * Math.max(0.62, 0.82 - shape.compact * 0.018) * shape.width + (ballY - 50) * 0.14;
         y = Math.min(89, Math.max(11, compactWidth));
 
         // Nearest defender to ball closes down
@@ -362,7 +381,8 @@ function generate22PlayerCoordinates(
         action = activeAction || 'passing';
       }
     } else {
-      let baseDepth = 100 - (15 + (slot.y / 100) * 65);
+      const shape = tacticalShapeAdjustments(awayTactics, possession, false);
+      let baseDepth = 100 - (15 + (slot.y / 100) * 65) - shape.depth;
       const baseWidth = 12 + (slot.x / 100) * 76;
 
       if (slot.position === 'CDM') baseDepth += 5;
@@ -372,7 +392,7 @@ function generate22PlayerCoordinates(
       const widthFactor = (awayTactics?.attackWidth || 50) / 50;
 
       if (possession === 'away') {
-        const pushX = (55 - ballX) * 0.32 + highLineBoost;
+        const pushX = (55 - ballX) * 0.32 + highLineBoost + shape.forwardRun;
         x = Math.max(7, Math.min(84, baseDepth - pushX));
         const lateralShift = (ballY - 50) * 0.18;
         y = Math.min(91, Math.max(9, 50 + (baseWidth - 50) * widthFactor + lateralShift));
@@ -384,7 +404,7 @@ function generate22PlayerCoordinates(
       } else {
         const dropX = Math.min(12, (ballX - 50) * 0.26);
         x = Math.max(16, Math.min(85, baseDepth + dropX - highLineBoost * 0.4));
-        const compactWidth = 50 + (baseWidth - 50) * 0.82 + (ballY - 50) * 0.14;
+        const compactWidth = 50 + (baseWidth - 50) * Math.max(0.62, 0.82 - shape.compact * 0.018) * shape.width + (ballY - 50) * 0.14;
         y = Math.min(89, Math.max(11, compactWidth));
 
         const dist = Math.hypot(x - ballX, y - ballY);
