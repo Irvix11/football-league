@@ -25,16 +25,8 @@ export interface FormationConfig {
 }
 
 
-// The formation controls the exact 11-player starting XI. The seven substitutes are
-// distributed as 1 GK + 2 DEF + 2 MID + 2 ATT so the 18-player auction squad remains
-// balanced while still respecting the chosen formation's starting slots.
-export const BENCH_CATEGORY_ALLOCATION: Record<PositionCategory, number> = {
-  GK: 1,
-  DEF: 2,
-  MID: 2,
-  ATT: 2,
-};
-
+// Each manager owns exactly 11 players. The selected formation defines the exact
+// positional category quota for those 11 players; there is no bench or substitute roster.
 export function getFormationStarterCategoryCounts(formation: Formation): Record<PositionCategory, number> {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const counts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
@@ -43,13 +35,9 @@ export function getFormationStarterCategoryCounts(formation: Formation): Record<
 }
 
 export function getFormationSquadCategoryLimits(formation: Formation): Record<PositionCategory, number> {
-  const starters = getFormationStarterCategoryCounts(formation);
-  return {
-    GK: starters.GK + BENCH_CATEGORY_ALLOCATION.GK,
-    DEF: starters.DEF + BENCH_CATEGORY_ALLOCATION.DEF,
-    MID: starters.MID + BENCH_CATEGORY_ALLOCATION.MID,
-    ATT: starters.ATT + BENCH_CATEGORY_ALLOCATION.ATT,
-  };
+  // Compatibility helper for auction code: XI-only means squad limits are exactly
+  // the formation's starting category counts.
+  return getFormationStarterCategoryCounts(formation);
 }
 
 export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
@@ -281,7 +269,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
 } {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const starters = squad.filter(s => s.isStarting);
-  const substitutes = squad.filter(s => !s.isStarting);
+  const substitutes: SquadPlayerEntry[] = [];
 
   const categoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
   const starterCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
@@ -308,11 +296,8 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   if (starters.length !== 11) {
     errors.push(`Need exactly 11 starters (currently ${starters.length})`);
   }
-  if (substitutes.length !== 7) {
-    errors.push(`Need exactly 7 substitutes (currently ${substitutes.length})`);
-  }
-  if (squad.length > 18) {
-    errors.push(`Squad cannot exceed 18 players (currently ${squad.length})`);
+  if (squad.length !== 11) {
+    errors.push("Need exactly 11 players (currently " + squad.length + ")");
   }
 
   // Formation slots are exact for the starting XI. The seven bench places are
@@ -342,7 +327,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   }
 
   return {
-    isValid: errors.length === 0,
+    isValid: errors.length === 0 && starters.length === 11 && squad.length === 11,
     startersCount: starters.length,
     substitutesCount: substitutes.length,
     totalCount: squad.length,
