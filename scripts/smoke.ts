@@ -72,8 +72,38 @@ const away = buildManager('away', 'Away FC');
 
 const leagueResult = simulateMatch(home, away, 'smoke-league', 1, 12345);
 if (!leagueResult.played || !leagueResult.events?.length) throw new Error('League simulation produced no events');
+if (leagueResult.homeScore === undefined || leagueResult.awayScore === undefined) {
+  throw new Error('League simulation did not persist a final score');
+}
+if (leagueResult.homeStats?.score !== leagueResult.homeScore || leagueResult.awayStats?.score !== leagueResult.awayScore) {
+  throw new Error('Final team stats do not match the fixture score');
+}
 if (leagueResult.events.some(e => !e.playerCoordinates || e.playerCoordinates.length !== 22)) {
   throw new Error('Live match events do not contain 22-player coordinates');
+}
+
+// Regression test: every event must carry the cumulative score, and it must
+// never move backwards during the live timeline. This protects the UI from
+// showing a score reset when room polling replaces the fixture object.
+let previousHome = 0;
+let previousAway = 0;
+for (const event of leagueResult.events) {
+  const score = event.currentScore;
+  if (!score || score.home < previousHome || score.away < previousAway) {
+    throw new Error('Match event score timeline is not monotonic');
+  }
+  previousHome = score.home;
+  previousAway = score.away;
+}
+const lastEvent = leagueResult.events[leagueResult.events.length - 1];
+if (lastEvent.currentScore?.home !== leagueResult.homeScore || lastEvent.currentScore?.away !== leagueResult.awayScore) {
+  throw new Error('Full-time event score does not match persisted fixture score');
+}
+
+// Determinism regression: the same seed must reproduce the same final score.
+const replay = simulateMatch(home, away, 'smoke-league-replay', 1, 12345);
+if (replay.homeScore !== leagueResult.homeScore || replay.awayScore !== leagueResult.awayScore) {
+  throw new Error('Seeded match simulation is not deterministic');
 }
 
 let foundKnockoutExtension = false;
