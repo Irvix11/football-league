@@ -1011,7 +1011,11 @@ function calculateSeasonAwards(room: GameRoom): SeasonAwards {
   }
 
   const all = Array.from(aggregates.values());
-  const playerData = (id: string) => DEVELOPMENT_PLAYERS.find(p => p.id === id);
+  // Use the same player source as the room. The previous lookup only searched
+  // DEVELOPMENT_PLAYERS, so imported FC27 and All-Time players were invisible
+  // to positional/age awards.
+  const awardPlayers = getPlayersForLobby('Global', room.settings.era);
+  const playerData = (id: string) => awardPlayers.find(p => p.id === id);
 
   const topScorer = [...all].sort((a, b) => b.goals - a.goals || b.sumRating - a.sumRating)[0] || {
     playerId: 'none', playerName: 'No scorer yet', teamName: '—', goals: 0, assists: 0, saves: 0, tackles: 0, passes: 0, sumRating: 0, matches: 0, cleanSheets: 0
@@ -2006,7 +2010,19 @@ wss.on('connection', (ws) => {
             }
           }
 
-          room.leagueTable = calculateInitialTable(room.managers);
+          if (room.phase === 'lobby') {
+            room.leagueTable = calculateInitialTable(room.managers);
+          } else if (room.phase === 'league') {
+            const existingRows = new Map(room.leagueTable.map(row => [row.managerId, row]));
+            const freshRows = calculateInitialTable(room.managers);
+            room.leagueTable = freshRows.map(row => existingRows.get(row.managerId) || row);
+            room.leagueTable.sort((a, b) =>
+              b.points - a.points ||
+              b.goalDifference - a.goalDifference ||
+              b.goalsFor - a.goalsFor ||
+              a.managerName.localeCompare(b.managerName)
+            );
+          }
           broadcastRoom(room.code);
           break;
         }
@@ -2742,7 +2758,15 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/players', (req, res) => {
-  res.json(DEVELOPMENT_PLAYERS);
+  const requestedEra = String(req.query?.era || 'Current');
+  const era = requestedEra === 'All-Time' ? 'All-Time' : 'Current';
+  const validPools = new Set([
+    'Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A',
+    'Brasileirão', 'Champions League', 'World Cup',
+  ]);
+  const requestedPool = String(req.query?.pool || 'Global');
+  const pool = validPools.has(requestedPool) ? requestedPool as any : 'Global';
+  res.json(getPlayersForLobby(pool, era));
 });
 
 // Dedicated Solo Game endpoint (instantly generates 11-player squads and navigates to Team Management)
@@ -2772,7 +2796,7 @@ app.post('/api/ai/advice', async (req, res) => {
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
-    const result = await callOpenRouter([
+    const content = await callOpenRouter([
       {
         role: 'system',
         content: 'You are the tactical assistant for Football Auction League. Give concise, practical football-management advice. Do not invent player data that is not supplied by the user.',
@@ -2780,7 +2804,6 @@ app.post('/api/ai/advice', async (req, res) => {
       { role: 'user', content: prompt },
     ]);
 
-    const content = result?.choices?.[0]?.message?.content;
     if (!content) return res.status(502).json({ error: 'OpenRouter returned no assistant response' });
     return res.json({ content });
   } catch (error: any) {
