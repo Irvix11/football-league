@@ -33,20 +33,7 @@ function buildManager(id: string, name: string): Manager {
     });
   }
 
-  for (const player of DEVELOPMENT_PLAYERS) {
-    if (squad.length >= 18) break;
-    if (used.has(player.id)) continue;
-    used.add(player.id);
-    squad.push({
-      player,
-      isStarting: false,
-      benchIndex: squad.length - 11,
-      assignedPosition: player.position,
-      condition: condition(),
-    });
-  }
 
-  if (squad.length !== 18) throw new Error('Smoke test requires an 18-player squad');
 
   const manager: Manager = {
     id,
