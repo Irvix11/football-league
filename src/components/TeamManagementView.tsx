@@ -56,18 +56,30 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
     const chosen = [...pool].sort(
       (a, b) => playerLineupScore(b, slot) - playerLineupScore(a, slot) || b.player.overall - a.player.overall
     )[0];
-
     if (!chosen) continue;
+
     remaining.splice(remaining.findIndex(entry => entry.player.id === chosen.player.id), 1);
     starters.push({
       ...chosen,
       isStarting: true,
       startingSlotIndex: slot.index,
+      benchIndex: undefined,
       assignedPosition: slot.position,
     });
   }
 
-  return starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
+  const bench = remaining.slice(0, 7).map((entry, index) => ({
+    ...entry,
+    isStarting: false,
+    startingSlotIndex: undefined,
+    benchIndex: index,
+    assignedPosition: entry.assignedPosition || entry.player.position,
+  }));
+
+  return [
+    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11),
+    ...bench,
+  ];
 }
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
@@ -209,7 +221,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const firstSlotPos = formationConfig.slots.find((s) => s.index === firstSlot)?.position || first.assignedPosition || first.player.position;
     const secondSlotPos = formationConfig.slots.find((s) => s.index === secondSlot)?.position || second.assignedPosition || second.player.position;
 
-    next[firstIndex] = { ...second, isStarting: true, startingSlotIndex: firstSlot, assignedPosition: secondSlotPos };
+    next[firstIndex] = { ...second, isStarting: true, startingSlotIndex: firstSlot, assignedPosition: firstSlotPos };
     next[secondIndex] = { ...first, isStarting: true, startingSlotIndex: secondSlot, assignedPosition: firstSlotPos };
 
     setActionError(null);
@@ -236,11 +248,6 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const updated = currentManager.squad.map((s) =>
       s.player.id === playerId ? { ...s, assignedPosition: position } : s
     );
-    const checked = validateSquadFormation(currentManager.formation, updated);
-    if (!checked.isValid) {
-      setActionError(checked.errors.join(' '));
-      return;
-    }
     setActionError(null);
     onUpdateLineup(updated);
   };
@@ -384,7 +391,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/11</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
