@@ -129,7 +129,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     ? player.category === 'GK' && categoryCounts.GK >= 2
     : false;
 
-  const minNextBid = auction.highestBidderId ? auction.currentBid + 1 : auction.currentBid;
+  const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
+  const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
   const isSquadFull = currentManager.squad.length >= 18;
   const isWinning = auction.highestBidderId === managerId;
