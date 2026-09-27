@@ -692,7 +692,7 @@ function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
   const ordered: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
   for (const category of ordered) {
     const needsCategory = room.managers.some(manager => {
-      const required = getFormationStarterCategoryCounts(manager.formation)[category];
+      const required = getFormationSquadCategoryLimits(manager.formation)[category];
       const count = manager.squad.filter(entry => entry.player.category === category).length;
       return count < required;
     });
