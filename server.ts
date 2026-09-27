@@ -2144,6 +2144,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     hostId,
     settings,
     phase: 'formation_select',
+    isSolo: true,
     managers,
     auction: {
       currentPlayerIndex: 0,
@@ -3160,7 +3161,7 @@ wss.on('connection', (ws) => {
           }
           matchSimulationLocks.add(lockKey);
           try {
-            const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday);
+            const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday, undefined, false, undefined, room.isSolo === true);
             Object.assign(fix, result);
             room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
@@ -3518,7 +3519,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     }
     matchSimulationLocks.add(lockKey);
     try {
-      const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday);
+      const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday, undefined, false, undefined, room.isSolo === true);
       Object.assign(fix, result);
       room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
