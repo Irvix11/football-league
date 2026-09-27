@@ -871,9 +871,15 @@ function advanceAuction(room: GameRoom) {
     ? auctionCandidates.filter(player => forcedManager.budget >= player.startingPrice)
     : [];
 
-  const nextPlayer = (forcedManager && forcedCandidates.length > 0
+  const selectedPlayer = (forcedManager && forcedCandidates.length > 0
     ? forcedCandidates[Math.floor(Math.random() * forcedCandidates.length)]
     : auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)]);
+  // Auction lots always start at zero. Keep legacy/imported player values from
+  // leaking into the live auction after a reconnect or old room snapshot.
+  const nextPlayer = {
+    ...selectedPlayer,
+    startingPrice: 0,
+  };
 
   const isForcedPurchase = Boolean(
     forcedManager &&
