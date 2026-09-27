@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { GameRoom } from '../types/football';
 import { LiveMatchEngine } from './LiveMatchEngine';
+import { TeamManagementView } from './TeamManagementView';
 import { sound } from '../utils/audio';
 import { 
   Play, FastForward, Trophy, BarChart2, ArrowRightLeft, AlertCircle, Calendar 
@@ -14,6 +15,8 @@ interface LeagueDashboardViewProps {
   onFinishSeason?: () => Promise<void> | void;
   onProposeTransfer: (offer: any) => void;
   onRespondTransfer: (offerId: string, accept: boolean) => void;
+  onUpdateLineup?: (squad: any[], formation?: any, tactics?: any, roles?: any) => void;
+  onFinishManagement?: () => void;
   isSimulating?: boolean;
   simulationError?: string | null;
 }
@@ -26,6 +29,8 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   onFinishSeason,
   onProposeTransfer,
   onRespondTransfer,
+  onUpdateLineup,
+  onFinishManagement,
   isSimulating = false,
   simulationError = null,
 }) => {
@@ -66,6 +71,9 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
 
   // Match stats modal
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const midSeasonOpen = room.transferWindowOpen === true;
+  const readyIds = room.transferWindowReadyIds || [];
+  const alreadyFinishedManagement = readyIds.includes(managerId);
 
   // Synchronize selected fixture when matchday changes
   useEffect(() => {
@@ -107,6 +115,11 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   };
 
   // Handler for finishing season
+  const handleFinishManagementClick = () => {
+    if (alreadyFinishedManagement) return;
+    onFinishManagement?.();
+  };
+
   const handleFinishSeasonClick = async () => {
     sound.playGoal();
     if (onFinishSeason) {
@@ -150,6 +163,34 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#0e1d1b_0%,#040812_45%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 pb-24 lg:pb-8 flex flex-col justify-between max-w-7xl mx-auto select-none">
+      {midSeasonOpen && onUpdateLineup && (
+        <div className="fixed inset-0 z-40 bg-slate-950/90 backdrop-blur-md overflow-y-auto p-2 sm:p-5">
+          <div className="max-w-5xl mx-auto">
+            <div className="mb-3 rounded-2xl border border-amber-400/20 bg-slate-900/95 shadow-2xl shadow-black/40 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.22em] font-black text-amber-300">MID-SEASON BREAK</div>
+                <div className="text-lg sm:text-xl font-black text-white">Review your squad before the second half</div>
+                <div className="text-[11px] text-slate-400 mt-1">Change formation, reposition players, tune tactics, and negotiate player-for-player swaps with optional cash.</div>
+              </div>
+              <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-right">
+                <div className="text-[9px] uppercase tracking-widest text-slate-500">MANAGERS READY</div>
+                <div className="font-mono font-black text-amber-300">{readyIds.length}/{room.managers.length}</div>
+              </div>
+            </div>
+            <TeamManagementView
+              room={room}
+              managerId={managerId}
+              onUpdateLineup={onUpdateLineup}
+              managementOnly
+              onFinishManagement={handleFinishManagementClick}
+              onOpenTransfers={() => setShowTransferModal(true)}
+              windowReadyCount={readyIds.length}
+              windowManagerCount={room.managers.length}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Top Header: MATCHDAY X as visual anchor */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
         <div>
@@ -171,11 +212,11 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
           {room.settings.transfersEnabled && (
             <button
               onClick={() => setShowTransferModal(true)}
-              disabled={currentMatchday % 5 !== 0}
+              disabled={!midSeasonOpen}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-slate-200 transition-colors cursor-pointer active:scale-95"
             >
               <ArrowRightLeft className="w-3.5 h-3.5 text-amber-400" />
-              <span>TRANSFERS {currentMatchday % 5 === 0 ? 'OPEN' : `(MD ${Math.ceil(currentMatchday / 5) * 5})`}</span>
+              <span>{midSeasonOpen ? 'MID-SEASON TRANSFERS' : 'TRANSFERS LOCKED'}</span>
             </button>
           )}
 
@@ -190,7 +231,11 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
           )}
 
           {/* SIMULATE / NEXT MATCHDAY / FINISH SEASON BUTTON */}
-          {!isCurrentMatchdayPlayed ? (
+          {midSeasonOpen ? (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-300 text-xs font-black uppercase tracking-wider">
+              MID-SEASON BREAK
+            </div>
+          ) : !isCurrentMatchdayPlayed ? (
             <button
               onClick={handleSimulateClick}
               disabled={isSimulating}
@@ -638,7 +683,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                 Transfer rules
               </div>
               <div className="grid grid-cols-2 gap-2 mt-2 text-[9px] text-slate-500">
-                <span>• Opens every 5th matchday</span>
+                <span>• Opens once at the season midpoint</span>
                 <span>• Player-for-player + cash</span>
                 <span>• Both squads stay within formation limits</span>
                 <span>• Budgets are updated atomically</span>
