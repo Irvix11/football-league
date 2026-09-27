@@ -65,6 +65,7 @@ async function callOpenRouter(messages: Array<{ role: 'system' | 'user' | 'assis
       'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://football-league-nine.vercel.app',
       'X-Title': 'Football Auction League',
     },
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       model: OPENROUTER_MODEL,
       messages,
