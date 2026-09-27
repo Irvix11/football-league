@@ -1757,7 +1757,10 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          const bidStep = bidAmount >= 250 ? 10 : bidAmount >= 100 ? 5 : 2;
+          // The increment is based on the current auction price, not the
+          // submitted amount. This keeps client and server validation identical
+          // around £100M/£250M thresholds.
+          const bidStep = room.auction.currentBid >= 250 ? 10 : room.auction.currentBid >= 100 ? 5 : 2;
           if (room.auction.highestBidderId && bidAmount < room.auction.currentBid + bidStep) {
             ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${room.auction.currentBid + bidStep}M.` }));
             return;
