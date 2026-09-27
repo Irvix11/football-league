@@ -90,7 +90,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  const sockets = roomSockets.get(roomCode);
+  const sockets = roomSockets.get(roomCode) || new Set<WebSocket>();
 
   // Clone room to sanitize blind auction state (never reveal hidden bids)
   const sanitizedRoom = JSON.parse(JSON.stringify(room)) as GameRoom;
