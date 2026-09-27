@@ -397,6 +397,11 @@ export function useGameSocket() {
     }
   }, [room, managerId, send]);
 
+  const closeTransferWindow = useCallback(() => {
+    if (!room || !managerId) return;
+    send('CLOSE_TRANSFER_WINDOW', { roomCode: room.code, managerId });
+  }, [room, managerId, send]);
+
   const rematch = useCallback(() => {
     if (!room) return;
     send('REMATCH', { roomCode: room.code });
@@ -446,6 +451,7 @@ export function useGameSocket() {
     finishSeason,
     proposeTransfer,
     respondTransfer,
+    closeTransferWindow,
     rematch,
     leaveLobby,
     savedSession: getSavedSession(),
