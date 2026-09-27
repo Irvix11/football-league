@@ -964,8 +964,7 @@ function advanceAuction(room: GameRoom) {
   if (auctionCandidates.length === 0) {
     emergencyFillRemainingXI(room, unowned);
     room.managers.forEach(autoFillManagerLineup);
-    room.phase = 'team_management';
-    room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+    enterTeamManagement(room);
     broadcastRoom(room.code);
     return;
   }
@@ -2608,8 +2607,7 @@ wss.on('connection', (ws) => {
           }
 
           room.managers.forEach(autoFillManagerLineup);
-          room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
-          room.phase = 'team_management';
+          enterTeamManagement(room);
           broadcastRoom(room.code);
           break;
         }
