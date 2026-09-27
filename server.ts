@@ -1424,7 +1424,9 @@ wss.on('connection', (ws) => {
             era: requestedSettings?.era || 'Current',
             auctionMode: requestedSettings?.auctionMode || 'Classic',
             transfersEnabled: requestedSettings?.transfersEnabled !== false,
-            leagueType: requestedSettings?.leagueType || 'Round Robin',
+            leagueType: requestedSettings?.competitionFormat === 'League'
+              ? 'Double Round Robin'
+              : (requestedSettings?.leagueType || 'Round Robin'),
             competitionFormat: requestedSettings?.competitionFormat === 'Knockout'
               ? 'Knockout'
               : requestedSettings?.competitionFormat === 'Champions Cup'
@@ -1601,6 +1603,9 @@ wss.on('connection', (ws) => {
             ...settings,
             maxManagers: safeMaxManagers,
             startingBudget: safeBudget,
+            leagueType: (settings?.competitionFormat ?? room.settings.competitionFormat) === 'League'
+              ? 'Double Round Robin'
+              : (settings?.leagueType ?? room.settings.leagueType),
           };
           // Apply budget adjustments to managers
           for (const m of room.managers) {
