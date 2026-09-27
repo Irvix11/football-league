@@ -470,8 +470,8 @@ function advanceAuction(room: GameRoom) {
     }
   }
 
-  // Check if all managers have complete 18-player squads
-  const allFull = room.managers.every(m => m.squad.length >= 18);
+  // Check if all managers have complete XI-only squads
+  const allFull = room.managers.every(m => m.squad.length >= 11);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
@@ -579,7 +579,8 @@ function simulateBotBids(room: GameRoom) {
     if (bot.budget < minNextBid) continue;
 
     // Formation slots are flexible; the bot may buy any outfield player.
-    if (currentPl.category === 'GK' && bot.squad.filter(s => s.player.category === 'GK').length >= 2) continue;
+    const botLimits = getFormationSquadCategoryLimits(bot.formation);
+    if (bot.squad.filter(s => s.player.category === currentPl.category).length >= botLimits[currentPl.category]) continue;
 
     // Bot decision roll based on player overall vs price
     const maxValuation = currentPl.marketValue * 1.15;
@@ -1709,8 +1710,8 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if (manager.squad.length >= 18) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 18-player squad is already full (18/18 players).' }));
+          if (manager.squad.length >= 11) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your XI is already full (11/11 players).' }));
             return;
           }
 
@@ -1765,8 +1766,8 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Insufficient budget for secret bid.');
             return;
           }
-          if (manager.squad.length >= 18) {
-            sendSocketError(ws, 'Your 18-player squad is already full.');
+          if (manager.squad.length >= 11) {
+            sendSocketError(ws, 'Your XI is already full (11/11 players).');
             return;
           }
           const blindLimits = getFormationSquadCategoryLimits(manager.formation);
