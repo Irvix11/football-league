@@ -1584,6 +1584,32 @@ export function simulateMatch(
         scoreAfter: { home: hPens, away: aPens },
         commentary: `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} misses — shootout over!`,
       });
+
+      pushEvent({
+        minute: 121 + Math.floor(sdRound * 10 / 60),
+        second: (sdRound * 10) % 60,
+        type: 'penalty_shootout_kick',
+        team: 'home',
+        playerId: hTaker.player.id,
+        playerName: hTaker.player.name,
+        commentary: penaltyShootout[penaltyShootout.length - 2].commentary,
+        ballCoordinates: { x: 97, y: 49 },
+        ballStartCoordinates: { x: 88.5, y: 50 },
+        momentum,
+      });
+
+      pushEvent({
+        minute: 121 + Math.floor((sdRound * 10 + 5) / 60),
+        second: (sdRound * 10 + 5) % 60,
+        type: 'penalty_shootout_kick',
+        team: 'away',
+        playerId: aTaker.player.id,
+        playerName: aTaker.player.name,
+        commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
+        ballCoordinates: { x: 3, y: 55 },
+        ballStartCoordinates: { x: 11.5, y: 50 },
+        momentum,
+      });
     }
 
     homePenaltyScore = hPens;
