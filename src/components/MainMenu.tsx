@@ -80,7 +80,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-[#040812] text-slate-100 overflow-hidden select-none">
+    <div className="relative min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-[#02050b] text-slate-100 overflow-hidden select-none">
       {/* Dynamic Background: Pitch Lines, Center Circle & Subtle Stadium Floodlights */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Stadium Floodlight Cones */}
@@ -144,14 +144,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         )}
 
         {/* Category Pill Tag */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-xs font-semibold text-emerald-400 mb-6 shadow-sm">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.035] border border-emerald-400/20 text-[11px] font-bold text-emerald-300 mb-6 shadow-lg shadow-emerald-500/5 backdrop-blur-xl">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Realtime Tactical Auction & 2D Animated Match Engine</span>
         </div>
 
         {/* Mandatory Title/Branding: FOOTBALL / AUCTION / LEAGUE */}
         <div className="flex flex-col items-center mb-6 leading-none">
-          <h1 className="font-display font-black text-5xl sm:text-7xl md:text-8xl tracking-tight text-white uppercase drop-shadow-sm">
+          <h1 className="font-display font-black text-5xl sm:text-7xl md:text-8xl tracking-tight text-white uppercase drop-shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
             FOOTBALL
           </h1>
           <div className="font-display font-black text-5xl sm:text-7xl md:text-8xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-amber-300 uppercase py-1">
@@ -174,7 +174,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               setActiveModal('solo');
               setManagerName(savedSession?.managerName || '');
             }}
-            className="group relative p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-emerald-500/95 via-teal-500/90 to-emerald-600 border-2 border-emerald-300/80 hover:border-white text-slate-950 transition-all duration-200 shadow-xl shadow-emerald-500/25 active:scale-[0.98] cursor-pointer flex items-center justify-between"
+            className="group relative p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-400 via-teal-400 to-emerald-500 border border-emerald-200/70 hover:border-white/80 text-slate-950 transition-all duration-300 shadow-2xl shadow-emerald-500/20 hover:shadow-emerald-400/30 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer flex items-center justify-between overflow-hidden"
           >
             <div className="flex items-center gap-4 text-left">
               <div className="w-12 h-12 rounded-xl bg-slate-950 text-emerald-400 flex items-center justify-center font-black shadow-md group-hover:scale-105 transition-transform">
@@ -203,7 +203,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 setActiveModal('create');
                 setManagerName(savedSession?.managerName || '');
               }}
-              className="group relative p-4 sm:p-5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 hover:bg-slate-900 transition-all duration-200 text-left flex items-center justify-between shadow-lg active:scale-[0.98] cursor-pointer"
+              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/7 hover:border-emerald-400/35 hover:bg-white/[0.055] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
@@ -224,7 +224,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 setActiveModal('join');
                 setManagerName(savedSession?.managerName || '');
               }}
-              className="group relative p-4 sm:p-5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-teal-500/60 hover:bg-slate-900 transition-all duration-200 text-left flex items-center justify-between shadow-lg active:scale-[0.98] cursor-pointer"
+              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/7 hover:border-teal-400/35 hover:bg-white/[0.055] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
@@ -245,7 +245,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
       {/* Footer */}
       <footer className="relative z-10 max-w-6xl mx-auto w-full py-4 border-t border-slate-900/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
-        <div>Verified football ratings & authentic 22-player tactical simulation.</div>
+        <div>Verified football ratings & 18-player squad tactical simulation.</div>
         <div className="flex items-center gap-3 text-slate-400">
           <span>Season 2025/26</span>
           <span aria-hidden="true">·</span>
