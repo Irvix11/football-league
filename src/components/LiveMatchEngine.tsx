@@ -1315,3 +1315,5 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 };
 
 // Production redeploy marker: penalty shootout pacing + scorecard (1790528797239)
+
+// Force production Git deployment marker 2026-09-27T17:19:22.012Z
