@@ -173,6 +173,8 @@ export interface AuctionState {
   highestBidderId: string | null;
   highestBidderName: string | null;
   secondsRemaining: number;
+  /** Absolute server deadline used to keep the auction clock correct across reconnects. */
+  auctionEndsAt?: number;
   isPaused: boolean;
   isSold: boolean;
   winnerId: string | null;

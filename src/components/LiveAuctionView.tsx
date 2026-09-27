@@ -37,6 +37,15 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const [bidUpdated, setBidUpdated] = useState(false);
   const [wasOutbid, setWasOutbid] = useState(false);
 
+  // Render the countdown from the server's absolute deadline. This keeps the
+  // UI moving even if a websocket snapshot is only arriving every few seconds.
+  const [auctionClock, setAuctionClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!auction.currentPlayer || auction.isSold || auction.isPaused) return;
+    const timer = window.setInterval(() => setAuctionClock(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [auction.currentPlayer?.id, auction.isSold, auction.isPaused, auction.auctionEndsAt]);
+
   // Detect new bid or outbid
   useEffect(() => {
     if (auction.currentBid !== prevBidRef.current) {
@@ -74,7 +83,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
   // Audio tick on last 3 seconds
   useEffect(() => {
-    if (auction.secondsRemaining > 0 && auction.secondsRemaining <= 3 && !auction.isSold) {
+    if (displaySecondsRemaining > 0 && auction.secondsRemaining <= 3 && !auction.isSold) {
       sound.playTick();
     }
   }, [auction.secondsRemaining, auction.isSold]);
@@ -140,6 +149,10 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const auctionDone = readyIds.includes(managerId);
   const auctionReadyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
   const squadComplete = currentManager.squad.length === 11;
+
+  const displaySecondsRemaining = auction.auctionEndsAt
+    ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
+    : auction.secondsRemaining;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
 
@@ -341,7 +354,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                   <div className="flex items-center gap-2">
                     <Clock
                       className={`w-4 h-4 ${
-                        auction.secondsRemaining <= 4 ? 'text-rose-500 animate-bounce' : 'text-amber-400'
+                        displaySecondsRemaining <= 4 ? 'text-rose-500 animate-bounce' : 'text-amber-400'
                       }`}
                     />
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -351,12 +364,12 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
                   <div
                     className={`font-mono font-black text-2xl tracking-wider px-3 py-0.5 rounded-lg border ${
-                      auction.secondsRemaining <= 4
+                      displaySecondsRemaining <= 4
                         ? 'text-rose-400 bg-rose-950/40 border-rose-500/50 animate-pulse'
                         : 'text-slate-100 bg-slate-950 border-slate-800'
                     }`}
                   >
-                    00:{auction.secondsRemaining < 10 ? `0${auction.secondsRemaining}` : auction.secondsRemaining}
+                    00:{displaySecondsRemaining < 10 ? `0${displaySecondsRemaining}` : displaySecondsRemaining}
                   </div>
                 </div>
 

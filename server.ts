@@ -734,6 +734,7 @@ function advanceAuction(room: GameRoom) {
     highestBidderId: null,
     highestBidderName: null,
     secondsRemaining: duration,
+    auctionEndsAt: Date.now() + duration * 1000,
     isPaused: false,
     isSold: false,
     winnerId: null,
@@ -751,15 +752,37 @@ function advanceAuction(room: GameRoom) {
 
   broadcastRoom(room.code);
 
-  // Set up ticker interval
+  // Keep one authoritative ticker per room. The absolute deadline is the
+  // source of truth, so reconnecting to a different Vercel Function instance
+  // can safely resume the countdown instead of freezing at the last snapshot.
+  ensureAuctionTicker(room);
+}
+
+function ensureAuctionTicker(room: GameRoom) {
+  if (room.phase !== 'auction' || room.auction.isSold || room.auction.isPaused) return;
+  if (auctionIntervals.has(room.code)) return;
+
+  // Backward compatibility for snapshots created before auctionEndsAt existed.
+  if (!room.auction.auctionEndsAt) {
+    room.auction.auctionEndsAt = Date.now() + Math.max(0, room.auction.secondsRemaining) * 1000;
+  }
+
   const timer = setInterval(() => {
     const currentR = rooms.get(room.code);
-    if (!currentR || currentR.phase !== 'auction' || currentR.auction.isPaused) return;
+    if (!currentR || currentR.phase !== 'auction' || currentR.auction.isSold) {
+      clearInterval(timer);
+      auctionIntervals.delete(room.code);
+      return;
+    }
+    if (currentR.auction.isPaused) return;
 
-    // Bots participate in every auction mode. Blind-mode bots submit
-    // private bids based on their hidden player valuation, so Solo mode remains
-    // fully playable without leaking the mystery player's identity to humans.
-    if (currentR.auction.secondsRemaining > 2) {
+    const deadline = currentR.auction.auctionEndsAt || Date.now();
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    currentR.auction.secondsRemaining = remaining;
+
+    // Bots participate in every auction mode. Blind-mode bots submit private
+    // bids based on their hidden player valuation.
+    if (remaining > 2) {
       if (currentR.settings.auctionMode === 'Blind') {
         simulateBotBlindBids(currentR);
       } else {
@@ -767,16 +790,15 @@ function advanceAuction(room: GameRoom) {
       }
     }
 
-    if (currentR.auction.secondsRemaining > 0) {
-      currentR.auction.secondsRemaining--;
-      broadcastRoom(currentR.code);
-    } else {
-      // Auction item finished!
+    if (remaining <= 0) {
       clearInterval(timer);
       auctionIntervals.delete(currentR.code);
       finalizeAuctionItem(currentR);
+      return;
     }
-  }, 1000);
+
+    broadcastRoom(currentR.code);
+  }, 250);
 
   auctionIntervals.set(room.code, timer);
 }
@@ -1878,6 +1900,9 @@ wss.on('connection', (ws) => {
           const existing = reconnectId ? room.managers.find(m => m.id === reconnectId) : null;
 
           if (existing) {
+            // A reconnect may land on a fresh Vercel Function instance. Resume
+            // the in-memory ticker from the persisted absolute deadline.
+            ensureAuctionTicker(room);
             if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
             roomSockets.get(room.code)!.add(ws);
             socketToRoom.set(ws, { roomCode: room.code, managerId: existing.id });
@@ -2302,6 +2327,7 @@ wss.on('connection', (ws) => {
           // Extend countdown if < 5 seconds left
           if (room.auction.secondsRemaining <= 4) {
             room.auction.secondsRemaining = 5;
+            room.auction.auctionEndsAt = Date.now() + 5000;
           }
 
           broadcastRoom(room.code);
@@ -2800,6 +2826,9 @@ app.get('/api/room/:code', async (req, res) => {
     if (room) rooms.set(code, room);
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
+  // HTTP polling can be the first request after a serverless instance changes.
+  // Resume the auction clock before returning the durable snapshot.
+  ensureAuctionTicker(room);
   const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
   if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction' && !snapshot.auction.isSold) {
     // Keep the REST snapshot behind the same privacy boundary as WebSocket
