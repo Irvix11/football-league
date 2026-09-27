@@ -383,7 +383,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                       </div>
                     ) : isCategoryFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-rose-400 font-semibold">
-                        Your ${player?.category || 'position'} quota is full for ${currentManager.formation}.
+                        Your {player?.category || 'position'} quota is full for {currentManager.formation}.
                       </div>
                     ) : (
                       <div className="space-y-3">
