@@ -377,8 +377,35 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             return;
           }
 
-          if (soundEnabled && (nextEvent.type === 'shot_saved' || nextEvent.type === 'foul')) {
-            sound.playWhistle();
+          if (soundEnabled) {
+            switch (nextEvent.type) {
+              case 'pass':
+              case 'carry':
+              case 'cross':
+                sound.playPass();
+                break;
+              case 'shot':
+              case 'shot_saved':
+              case 'shot_missed':
+              case 'shot_blocked':
+              case 'penalty_shot':
+                sound.playShot();
+                break;
+              case 'tackle':
+              case 'interception':
+                sound.playTackle();
+                break;
+              case 'yellow_card':
+              case 'red_card':
+                sound.playCard();
+                break;
+              case 'foul':
+                sound.playWhistle();
+                break;
+              case 'corner':
+                sound.playTick();
+                break;
+            }
           }
 
           setCurrentEventIndex(nextIndex);
