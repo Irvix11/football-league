@@ -403,22 +403,21 @@ export function useGameSocket() {
     setIsSimulating(true);
     send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId, fixtureId });
   }, [room, managerId, send]);
-  const completeKnockoutMatch = useCallback(async (fixtureId: string) => {
+  const completeKnockoutMatch = useCallback((fixtureId: string) => {
     if (!room || !managerId) return;
-    try {
-      const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}/complete-knockout-match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        body: JSON.stringify({ managerId, fixtureId }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error || 'Failed to continue the knockout round.');
-      if (data?.room) setRoom(data.room as GameRoom);
-    } catch (error: any) {
-      setSimulationError(error?.message || 'Failed to continue the knockout round.');
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      setSimulationError('Connection lost. Reconnect before continuing the knockout round.');
+      return;
     }
-  }, [room, managerId]);
+
+    // Keep bracket advancement on the same authoritative WebSocket instance that
+    // simulated the match. Using a REST request here can hit a different Vercel
+    // function instance before the just-finished fixture has been persisted.
+    setSimulationError(null);
+    isSimulatingRef.current = true;
+    setIsSimulating(true);
+    send('COMPLETE_KNOCKOUT_MATCH', { roomCode: room.code, managerId, fixtureId });
+  }, [room, managerId, send]);
 
   const runMatchday = useCallback(async (matchday: number) => {
     if (!room || !managerId) return;
