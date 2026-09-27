@@ -2915,6 +2915,7 @@ async function startServer() {
 }
 
 // The same Node process serves HTTP, static assets, and WebSocket upgrades.
+export { app };
 export default server;
 
 if (!process.env.VERCEL) {
