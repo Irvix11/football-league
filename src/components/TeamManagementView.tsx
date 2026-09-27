@@ -636,9 +636,43 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                       <option key={pos} value={pos}>{pos}</option>
                     ))}
                   </select>
-                  <div className="mt-2 text-[10px] text-slate-500">
-                    Primary: {inspectedPlayer.entry.player.position} · Alternate: {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'} · OVR: {inspectedPlayer.entry.player.overall}
-                  </div>
+                  {(() => {
+                    const slot = inspectedPlayer.slotIndex !== undefined
+                      ? formationConfig.slots.find((s) => s.index === inspectedPlayer.slotIndex)
+                      : undefined;
+                    const fit = calculatePositionFit(
+                      inspectedPlayer.entry.player.position,
+                      inspectedPlayer.entry.player.alternatePositions,
+                      inspectedPlayer.entry.assignedPosition || slot?.position || inspectedPlayer.entry.player.position
+                    );
+                    const effective = getEffectiveOvr(
+                      inspectedPlayer.entry,
+                      slot?.position || inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position
+                    );
+                    return (
+                      <>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div className="rounded-lg bg-slate-900 border border-slate-800 p-2">
+                            <div className="text-[8px] uppercase text-slate-600 font-black">BASE OVR</div>
+                            <div className="font-mono font-black text-slate-100">{inspectedPlayer.entry.player.overall}</div>
+                          </div>
+                          <div className="rounded-lg bg-slate-900 border border-emerald-500/20 p-2">
+                            <div className="text-[8px] uppercase text-slate-600 font-black">EFFECTIVE OVR</div>
+                            <div className="font-mono font-black text-emerald-400">{effective}</div>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[10px]">
+                          <span className="text-slate-500">Natural: {inspectedPlayer.entry.player.position}</span>
+                          <span className={fit >= 90 ? 'text-emerald-400 font-bold' : fit >= 70 ? 'text-amber-400 font-bold' : 'text-rose-400 font-bold'}>
+                            {fit >= 90 ? 'NATURAL' : fit >= 70 ? 'ALTERNATE' : 'OUT OF POSITION'} · {fit}%
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[10px] text-slate-500">
+                          Alternate: {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             )}
