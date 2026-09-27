@@ -31,9 +31,25 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const allowedWsOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const wss = new WebSocketServer({
+  server,
+  maxPayload: 64 * 1024,
+  perMessageDeflate: false,
+  verifyClient: ({ origin, req }) => {
+    if (process.env.NODE_ENV !== 'production' && !origin) return true;
+    if (allowedWsOrigins.length > 0) return allowedWsOrigins.includes(origin);
+    if (!origin) return false;
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+    const protocol = forwardedProto || (req.socket.encrypted ? 'https' : 'http');
+    return origin === `${protocol}://${req.headers.host}`;
+  },
+});
 
-app.use(express.json());
+app.use(express.json({ limit: '128kb' }));
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/$/, '');
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/auto';
 
@@ -1653,7 +1669,20 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
 
 // WebSocket Connection Handler
 wss.on('connection', (ws) => {
+  let messageWindowStartedAt = Date.now();
+  let messageCount = 0;
+
   ws.on('message', async (messageRaw) => {
+    const now = Date.now();
+    if (now - messageWindowStartedAt >= 1000) {
+      messageWindowStartedAt = now;
+      messageCount = 0;
+    }
+    messageCount += 1;
+    if (messageCount > 40) {
+      sendSocketError(ws, 'Too many messages. Slow down.');
+      return;
+    }
     try {
       const data = JSON.parse(messageRaw.toString());
       const { type, payload } = data;
