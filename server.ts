@@ -1804,10 +1804,10 @@ wss.on('connection', (ws) => {
             const unavailableStarter = manager.squad.some(
               s => s.isStarting && (s.condition.state === 'SUSPENDED' || s.condition.state === 'INJURED')
             );
-            if (!validation.isValid || manager.squad.length !== 11 || unavailableStarter) {
+            if (!validation.isValid || manager.squad.length !== 18 || unavailableStarter) {
               sendSocketError(ws, unavailableStarter
                 ? 'Your starting XI contains an unavailable player.'
-                : 'Complete your 11-player starting XI and formation before confirming.');
+                : 'Complete your 18-player squad and 11-player starting XI before confirming.');
               return;
             }
             manager.confirmedTeam = true;
