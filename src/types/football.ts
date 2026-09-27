@@ -187,6 +187,8 @@ export interface AuctionState {
   /** Set when exactly one manager remains who must fill the current positional stage. */
   forcedWinnerId?: string | null;
   forcedWinnerName?: string | null;
+  /** Market price charged when exactly one manager remains for a positional slot. */
+  forcedPurchasePrice?: number;
   isForcedPurchase?: boolean;
 }
 
