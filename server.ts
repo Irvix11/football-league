@@ -485,6 +485,7 @@ function advanceAuction(room: GameRoom) {
     
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
+    room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
     broadcastRoom(room.code);
     return;
   }
@@ -1365,7 +1366,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     transferOffers: [],
     transferWindowOpen: false,
     transferWindowReadyIds: [],
-    phaseReadyIds: [],
+    phaseReadyIds: managers.filter(m => m.isBot).map(m => m.id),
     awards: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -1491,6 +1492,7 @@ wss.on('connection', (ws) => {
             totalMatchdays: 1,
             leagueTable: calculateInitialTable(managers),
             transferOffers: [],
+            phaseReadyIds: [],
             awards: null,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -1867,6 +1869,11 @@ wss.on('connection', (ws) => {
           if (!auth || auth.room.phase !== 'auction') return;
           const { room } = auth;
 
+          if ((room.phaseReadyIds || []).includes(managerId)) {
+            sendSocketError(ws, 'You marked the auction done and cannot bid again.');
+            return;
+          }
+
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
           if ((room.phaseReadyIds || []).includes(managerId)) {
@@ -1926,6 +1933,55 @@ wss.on('connection', (ws) => {
           break;
         }
 
+        // --- 11. BLIND AUCTION SECRET BID SUBMISSION ---
+        case 'SUBMIT_BLIND_BID': {
+          const { roomCode, managerId, amount } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth || auth.room.phase !== 'auction') return;
+          const { room } = auth;
+
+          const manager = room.managers.find(m => m.id === managerId);
+          if (!manager) return;
+
+          const bidAmount = Number(amount);
+          const currentPl = room.auction.currentPlayer;
+          if (!currentPl || !Number.isFinite(bidAmount) || bidAmount < currentPl.startingPrice) {
+            sendSocketError(ws, 'Secret bid must meet the player starting price.');
+            return;
+          }
+          if (manager.budget < bidAmount) {
+            sendSocketError(ws, 'Insufficient budget for secret bid.');
+            return;
+          }
+          if (manager.squad.length >= 11) {
+            sendSocketError(ws, 'Your XI is already full (11/11 players).');
+            return;
+          }
+          const blindLimits = getFormationSquadCategoryLimits(manager.formation);
+          const blindCategoryCount = manager.squad.filter(s => s.player.category === currentPl.category).length;
+          if (blindCategoryCount >= blindLimits[currentPl.category]) {
+            sendSocketError(ws, `Your ${currentPl.category} quota is full for ${manager.formation}.`);
+            return;
+          }
+          let secretMap = blindSecretBids.get(roomCode);
+          if (!secretMap) {
+            secretMap = {};
+            blindSecretBids.set(roomCode, secretMap);
+          }
+          secretMap[managerId] = bidAmount;
+
+          // Acknowledge submission privately to this client only
+          ws.send(JSON.stringify({
+            type: 'BLIND_BID_CONFIRMED',
+            amount: bidAmount,
+          }));
+
+          // Broadcast public update that this manager submitted (without amount)
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- 12. AUCTION READY / TEAM MANAGEMENT ---
         case 'AUCTION_READY': {
           const { roomCode, managerId } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
@@ -1948,12 +2004,486 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        // --- 11. BLIND AUCTION SECRET BID SUBMISSION ---
-        case 'SUBMIT_BLIND_BID': {
-          const { roomCode, managerId, amount } = payload;
+        // --- 13. TEAM MANAGEMENT & TACTICS ---
+        case 'UPDATE_LINEUP': {
+          const { roomCode, managerId, squad, formation, tactics, roles } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
-          if (!auth || auth.room.phase !== 'auction') return;
-case 'SUBMIT_BLIND_BID': {
-          const { roomCode, managerId, amount } = payload;
+          if (!auth) return;
+          const { room } = auth;
+          if (!['team_management', 'league', 'knockout'].includes(room.phase)) return;
+
+          const manager = room.managers.find(m => m.id === managerId);
+          if (manager) {
+            const nextFormation = formation || manager.formation;
+            const sanitized = squad
+              ? validateAndSanitizeLineupUpdate(manager, squad, nextFormation, tactics, roles)
+              : {
+                  squad: manager.squad,
+                  tactics: tactics || manager.tactics,
+                  roles: roles || manager.roles,
+                };
+
+            if (!sanitized) {
+              sendSocketError(ws, 'Invalid lineup. You can only rearrange players you already own and must keep a valid formation.');
+              return;
+            }
+
+            manager.squad = sanitized.squad;
+            manager.formation = nextFormation;
+            manager.tactics = sanitized.tactics;
+            manager.roles = sanitized.roles;
+            manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
+            broadcastRoom(room.code);
+          }
+          break;
+        }
+
+        // --- 13. CONFIRM TEAM ---
+        case 'CONFIRM_TEAM': {
+          const { roomCode, managerId } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
-          if (!auth || auth.room.phase !== 'auction') return;
+          if (!auth) return;
+          const { room } = auth;
+
+          const manager = room.managers.find(m => m.id === managerId);
+          if (manager) {
+            const validation = validateSquadFormation(manager.formation, manager.squad);
+            const unavailableStarter = manager.squad.some(
+              s => s.isStarting && (s.condition.state === 'SUSPENDED' || s.condition.state === 'INJURED')
+            );
+            if (!validation.isValid || manager.squad.length !== 11 || unavailableStarter) {
+              sendSocketError(ws, unavailableStarter
+                ? 'Your starting XI contains an unavailable player.'
+                : 'Complete your 11-player squad and 11-player starting XI before confirming.');
+              return;
+            }
+            manager.confirmedTeam = true;
+          }
+
+          // Auto-confirm bots
+          for (const m of room.managers) {
+            if (m.isBot) m.confirmedTeam = true;
+          }
+
+          // Check if all confirmed
+          const allConfirmed = room.managers.every(m => m.confirmedTeam);
+          if (allConfirmed) {
+            if (room.settings.competitionFormat !== 'League') {
+              initializeKnockout(room);
+            } else {
+              room.fixtures = generateLeagueFixtures(room.managers, 'Double Round Robin');
+              room.currentMatchday = 1;
+              const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
+              room.totalMatchdays = maxMd;
+              room.leagueTable = calculateInitialTable(room.managers);
+              room.phase = 'league';
+            }
+          }
+
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- KNOCKOUT MATCH ---
+        case 'RUN_KNOCKOUT_MATCH': {
+          const { roomCode, fixtureId } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'knockout') return;
+          const { room } = auth;
+          const stage = room.knockoutStage;
+          if (!stage) return;
+          const round = stage.rounds[stage.rounds.length - 1];
+          const fix = round.fixtures.find(f => f.id === fixtureId);
+          if (!fix || fix.played) return;
+
+          const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+          const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+          if (!homeMgr || !awayMgr) return;
+
+          const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+          Object.assign(fix, result);
+          room.fixtures = round.fixtures;
+          // IMPORTANT: keep the room in the knockout phase while the client
+          // plays the authoritative event timeline in LiveMatchEngine.
+          // The bracket/season advances only after COMPLETE_KNOCKOUT_MATCH.
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // Advance the bracket only after the 2D live match has reached full-time.
+        case 'COMPLETE_KNOCKOUT_MATCH': {
+          const { roomCode, fixtureId } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'knockout') return;
+          const { room } = auth;
+          const stage = room.knockoutStage;
+          if (!stage) return;
+          const round = stage.rounds[stage.rounds.length - 1];
+          const fix = round.fixtures.find(f => f.id === fixtureId);
+          if (!fix || !fix.played) return;
+
+          // Idempotent: multiple viewers may reach full-time.
+          advanceKnockoutRound(room);
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- 14. SIMULATE MATCHDAY ---
+        case 'RUN_MATCHDAY': {
+          const { roomCode, matchday } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'league') return;
+          const { room } = auth;
+
+          if (room.transferWindowOpen) {
+            sendSocketError(ws, 'Mid-season management window is open. Finish your squad review before playing the next match.');
+            return;
+          }
+
+          const targetMatchday = Number(matchday || room.currentMatchday);
+          if (!Number.isInteger(targetMatchday) || targetMatchday < 1 || targetMatchday > room.totalMatchdays) {
+            sendSocketError(ws, 'Invalid matchday.');
+            return;
+          }
+          if (targetMatchday !== room.currentMatchday) {
+            sendSocketError(ws, 'Simulate the current matchday before advancing.');
+            return;
+          }
+
+          const currentFixtures = room.fixtures.filter(f => f.matchday === targetMatchday && !f.played);
+          if (!currentFixtures.length) {
+            sendSocketError(ws, 'This matchday is already complete.');
+            return;
+          }
+
+          // Run exactly one fixture per action so its authoritative event
+          // timeline can be watched in the 2D Live Match Engine.
+          const fix = currentFixtures[0];
+          const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+          const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+
+          if (!homeMgr || !awayMgr) {
+            sendSocketError(ws, 'Unable to load both teams for this fixture.');
+            return;
+          }
+
+          const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday);
+          Object.assign(fix, result);
+          room.leagueTable = updateLeagueTable(room.leagueTable, fix);
+
+          // The league is always a double round robin. Once the final league
+          // fixture is completed, immediately build the correct playoff bracket:
+          // 2-5 teams -> Final, 6-9 -> top 4 Semi-Finals, 10-16 -> top 8 Quarter-Finals.
+          const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
+          room.currentMatchday = targetMatchday;
+
+          const midpointMatchday = getMidSeasonWindowMatchday(room);
+          const midpointComplete =
+            midpointMatchday > 0 &&
+            targetMatchday === midpointMatchday &&
+            room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
+
+          if (midpointComplete && !leagueComplete) {
+            openMidSeasonWindow(room);
+          }
+
+          if (leagueComplete) {
+            initializeLeaguePlayoffs(room);
+          }
+
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- 14b. NEXT MATCHDAY ---
+        case 'NEXT_MATCHDAY': {
+          const { roomCode, nextMatchday } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'league') return;
+          const { room } = auth;
+
+          if (room.transferWindowOpen) {
+            sendSocketError(ws, 'Finish the mid-season management window before continuing.');
+            return;
+          }
+
+          const requestedNext = Number(nextMatchday || room.currentMatchday + 1);
+          const currentPlayed = room.fixtures.filter(f => f.matchday === room.currentMatchday).every(f => f.played);
+          if (!currentPlayed) {
+            sendSocketError(ws, 'Finish the current matchday before proceeding.');
+            return;
+          }
+          room.currentMatchday = Math.min(room.totalMatchdays, Math.max(room.currentMatchday, requestedNext));
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- 14c. FINISH SEASON ---
+        case 'FINISH_SEASON': {
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth || auth.room.phase !== 'league') return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can finish the season.');
+            return;
+          }
+
+          const seasonComplete = room.currentMatchday >= room.totalMatchdays &&
+            room.fixtures.filter(f => f.matchday === room.totalMatchdays).every(f => f.played);
+          if (!seasonComplete) {
+            sendSocketError(ws, 'Complete every matchday before viewing season awards.');
+            return;
+          }
+          room.phase = 'season_end';
+          room.awards = calculateSeasonAwards(room);
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- 15. TRANSFERS ---
+        case 'PROPOSE_TRANSFER': {
+          const { roomCode, offer } = payload;
+          const auth = authorizeSocket(ws, roomCode, offer?.fromManagerId);
+          if (!auth) return;
+          const { room } = auth;
+
+          if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
+            sendSocketError(ws, 'Transfers are only available during the mid-season management window.');
+            return;
+          }
+
+          const sender = room.managers.find(m => m.id === offer.fromManagerId);
+          const target = room.managers.find(m => m.id === offer.toManagerId);
+          const offeredCash = Number(offer.offeredCash || 0);
+          if (!sender || !target || sender.id === target.id) {
+            sendSocketError(ws, 'Invalid transfer participants.');
+            return;
+          }
+          if (!Number.isFinite(offeredCash) || offeredCash < 0 || offeredCash > sender.budget) {
+            sendSocketError(ws, 'Invalid cash amount.');
+            return;
+          }
+
+          const offeredEntry = sender.squad.find(s => s.player.id === offer.offeredPlayerId);
+          const requestedEntry = target.squad.find(s => s.player.id === offer.requestedPlayerId);
+          if (!offeredEntry || !requestedEntry) {
+            sendSocketError(ws, 'You can only trade players currently owned by the two managers.');
+            return;
+          }
+
+          const newOffer: TransferOffer = {
+            id: newId('transfer'),
+            fromManagerId: sender.id,
+            fromManagerName: sender.name,
+            toManagerId: target.id,
+            toManagerName: target.name,
+            offeredPlayerId: offeredEntry.player.id,
+            offeredPlayerName: offeredEntry.player.name,
+            requestedPlayerId: requestedEntry.player.id,
+            requestedPlayerName: requestedEntry.player.name,
+            offeredCash,
+            matchday: room.currentMatchday,
+            status: 'pending',
+            createdAt: Date.now(),
+          };
+
+          if (target.isBot) {
+            const offeredValue = offeredEntry.player.overall + offeredCash * 0.20;
+            const requestedValue = requestedEntry.player.overall;
+            newOffer.status = offeredValue >= requestedValue ? 'accepted' : 'rejected';
+            if (newOffer.status === 'accepted') executeTransferOffer(room, newOffer);
+            room.transferOffers.push(newOffer);
+          } else {
+            room.transferOffers.push(newOffer);
+          }
+
+          broadcastRoom(room.code);
+          break;
+        }
+
+        case 'RESPOND_TRANSFER': {
+          const { roomCode, managerId, offerId, accept } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
+
+          if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
+            sendSocketError(ws, 'Transfers are only available during the mid-season management window.');
+            return;
+          }
+
+          const offer = room.transferOffers.find(o => o.id === offerId && o.status === 'pending');
+          if (!offer || offer.toManagerId !== managerId) {
+            sendSocketError(ws, 'Transfer proposal not found or already resolved.');
+            return;
+          }
+
+          offer.status = accept && executeTransferOffer(room, offer) ? 'accepted' : 'rejected';
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- MID-SEASON MANAGEMENT WINDOW ---
+        case 'CLOSE_TRANSFER_WINDOW': {
+          const { roomCode, managerId } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room } = auth;
+
+          if (!room.transferWindowOpen) {
+            sendSocketError(ws, 'The mid-season management window is not open.');
+            return;
+          }
+
+          const manager = room.managers.find(m => m.id === managerId);
+          if (!manager) return;
+
+          const readyIds = new Set(room.transferWindowReadyIds || []);
+          readyIds.add(managerId);
+          room.transferWindowReadyIds = [...readyIds];
+
+          if (maybeCloseMidSeasonWindow(room)) {
+            room.currentMatchday = Math.min(room.totalMatchdays, room.currentMatchday + 1);
+          }
+
+          broadcastRoom(room.code);
+          break;
+        }
+
+        // --- LEAVE ROOM ---
+        case 'LEAVE_ROOM': {
+          const { roomCode, managerId } = payload;
+          const auth = authorizeSocket(ws, roomCode, managerId);
+          if (!auth) return;
+          const { room, session } = auth;
+          const sockets = roomSockets.get(room.code);
+          if (sockets) sockets.delete(ws);
+          socketToRoom.delete(ws);
+
+          if (session.managerId !== room.hostId && room.phase === 'lobby') {
+            room.managers = room.managers.filter(m => m.id !== session.managerId);
+            room.leagueTable = calculateInitialTable(room.managers);
+            broadcastRoom(room.code);
+          }
+          break;
+        }
+
+        // --- 16. REMATCH / RESET ---
+        case 'REMATCH': {
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
+          if (!auth) return;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can start a rematch.');
+            return;
+          }
+
+          room.awards = null;
+          if (room.settings.competitionFormat !== 'League') {
+            initializeKnockout(room);
+          } else {
+            room.fixtures = generateLeagueFixtures(room.managers, 'Double Round Robin');
+            room.currentMatchday = 1;
+            room.leagueTable = calculateInitialTable(room.managers);
+            room.phase = 'league';
+          }
+
+          broadcastRoom(room.code);
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('WebSocket Error:', err);
+    }
+  });
+
+  ws.on('close', () => {
+    const info = socketToRoom.get(ws);
+    if (info) {
+      const sockets = roomSockets.get(info.roomCode);
+      if (sockets) {
+        sockets.delete(ws);
+      }
+      socketToRoom.delete(ws);
+    }
+  });
+});
+
+// API Endpoints
+app.get('/api/room/:code', async (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  let room = rooms.get(code);
+  if (!room) {
+    room = await loadRoomSnapshot(code) || undefined;
+    if (room) rooms.set(code, room);
+  }
+  if (!room) return res.status(404).json({ error: 'Lobby not found' });
+  const snapshot = JSON.parse(JSON.stringify(room)) as GameRoom;
+  if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction') {
+    snapshot.auction.hasSubmittedSecretBid = undefined;
+    snapshot.auction.currentPlayer = snapshot.auction.isSold ? snapshot.auction.currentPlayer : null;
+  }
+  return res.json(snapshot);
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', activeRooms: rooms.size });
+});
+
+app.get('/api/players', (req, res) => {
+  res.json(DEVELOPMENT_PLAYERS);
+});
+
+// Dedicated Solo Game endpoint (instantly generates 11-player squads and navigates to Team Management)
+app.post('/api/solo-game', (req, res) => {
+  try {
+    const { managerName, formation } = req.body || {};
+    if (!managerName || !managerName.trim()) {
+      return res.status(400).json({ error: 'Manager name is required' });
+    }
+    const result = createSoloGameRoom(managerName.trim(), formation);
+    res.json({
+      success: true,
+      roomCode: result.roomCode,
+      managerId: result.managerId,
+      room: result.room,
+    });
+  } catch (err: any) {
+    console.error('Error creating solo game:', err);
+    res.status(500).json({ error: err.message || 'Failed to create solo game' });
+  }
+});
+
+// Serve frontend in dev via Vite middlewares, or static dist in production
+async function startServer() {
+  const PORT = Number(process.env.PORT) || 3000;
+
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Football Auction League server running on port ${PORT}`);
+  });
+}
+
+// Vercel Node runtime captures this server and upgrades WebSocket connections.
+export default server;
+
+// Vercel's zero-config Node server runtime uses this root server.ts directly.
+// The listener is also required for local development.
+if (!process.env.VERCEL) {
+  startServer();
+}
