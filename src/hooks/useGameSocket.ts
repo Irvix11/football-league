@@ -8,29 +8,18 @@ export interface SavedSession {
   managerName: string;
 }
 
-const DEFAULT_REALTIME_BACKEND = 'https://footballleague.antideploy.com';
-
 function getGameServerBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
 
-  // Vercel is currently the static/frontend deployment. Keep the durable
-  // WebSocket/room backend on the existing Node server unless an explicit
-  // VITE_GAME_SERVER_URL is configured.
-  if (window.location.hostname.endsWith('.vercel.app')) {
-    return DEFAULT_REALTIME_BACKEND;
-  }
-
+  // Production runs frontend and realtime backend on the same Vercel origin.
+  // Keep VITE_GAME_SERVER_URL as an optional override for local/staging servers.
   return window.location.origin;
 }
 
 function getWebSocketBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
-  const base = configured
-    ? configured
-    : window.location.hostname.endsWith('.vercel.app')
-      ? DEFAULT_REALTIME_BACKEND
-      : window.location.origin;
+  const base = configured || window.location.origin;
 
   const url = new URL(base);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -246,10 +235,8 @@ export function useGameSocket() {
     try {
       setErrorMessage(null);
 
-      // Do not fail instantly while the realtime backend is waking up or the
-      // browser is completing the WebSocket handshake. Antideploy can scale the
-      // Node service to zero when idle, so a fresh visit can legitimately take
-      // a few seconds before the socket becomes OPEN.
+      // Give the Vercel realtime function a short window to cold-start and complete
+      // the WebSocket handshake before reporting the connection as unavailable.
       const deadline = Date.now() + 8000;
       while ((!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) && Date.now() < deadline) {
         await new Promise(resolve => window.setTimeout(resolve, 200));
