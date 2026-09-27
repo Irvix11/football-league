@@ -60,6 +60,22 @@ export default function App() {
   const currentManager = room?.managers.find((m) => m.id === managerId);
   const isHost = currentManager?.isHost ?? false;
   const kickTargets = room?.managers.filter((m) => m.id !== managerId && !m.isHost) ?? [];
+  const knownPhases = new Set([
+    'lobby',
+    'formation_select',
+    'auction',
+    'team_management',
+    'league',
+    'knockout',
+    'season_end',
+  ]);
+  const rawPhase = room ? String((room as unknown as { phase?: unknown }).phase ?? '') : '';
+  const hasUnsupportedPhase = Boolean(room && !knownPhases.has(rawPhase));
+
+  const resetBrokenSession = () => {
+    try { localStorage.removeItem('fal_session'); } catch {}
+    window.location.reload();
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
@@ -211,7 +227,39 @@ export default function App() {
           onRematch={rematch}
           onNewLobby={leaveLobby}
         />
-      ) : null}
+      ) : hasUnsupportedPhase ? (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-lg rounded-3xl border border-amber-500/30 bg-slate-900/90 p-7 text-center shadow-2xl">
+            <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-300 text-xl font-black">!</div>
+            <h1 className="text-xl font-black">Saved game needs recovery</h1>
+            <p className="mt-2 text-sm text-slate-400">
+              This room contains an unsupported game state (<span className="font-mono text-amber-300">{rawPhase || 'missing phase'}</span>).
+              The app was previously rendering a blank screen here.
+            </p>
+            <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 font-bold text-sm"
+              >
+                Reconnect
+              </button>
+              <button
+                onClick={resetBrokenSession}
+                className="px-4 py-2.5 rounded-xl bg-rose-500 text-slate-950 hover:bg-rose-400 font-black text-sm"
+              >
+                Reset Saved Game
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center text-slate-400">
+            <p className="font-bold">Loading game state…</p>
+            <p className="text-xs mt-1">If this stays here, reconnect or reset the saved session.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
