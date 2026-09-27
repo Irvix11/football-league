@@ -2363,6 +2363,16 @@ wss.on('connection', (ws) => {
           if (!auth || auth.room.phase !== 'auction') return;
           const { room } = auth;
 
+          if (room.auction.isForcedPurchase) {
+            const forcedId = room.auction.forcedWinnerId;
+            if (forcedId === managerId) {
+              sendSocketError(ws, 'This positional slot is a mandatory purchase. The player will be assigned automatically.');
+            } else {
+              sendSocketError(ws, `${room.auction.forcedWinnerName || 'Another manager'} must complete this positional slot before the auction continues.`);
+            }
+            return;
+          }
+
           if ((room.phaseReadyIds || []).includes(managerId)) {
             sendSocketError(ws, 'You marked the auction done and cannot bid again.');
             return;
@@ -2444,6 +2454,16 @@ wss.on('connection', (ws) => {
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room } = auth;
+
+          if (room.auction.isForcedPurchase) {
+            const forcedId = room.auction.forcedWinnerId;
+            if (forcedId === managerId) {
+              sendSocketError(ws, 'This positional slot is a mandatory purchase. The player will be assigned automatically.');
+            } else {
+              sendSocketError(ws, `${room.auction.forcedWinnerName || 'Another manager'} must complete this positional slot before the auction continues.`);
+            }
+            return;
+          }
 
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
