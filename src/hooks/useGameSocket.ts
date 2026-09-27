@@ -26,6 +26,64 @@ function getWebSocketBaseUrl(): string {
   return url.toString().replace(/\/$/, '');
 }
 
+function restoreViewerIdentity(snapshot: GameRoom, viewerId: string | null, viewerName: string | null): GameRoom {
+  if (!snapshot || !viewerId) return snapshot;
+
+  const isMine = (name?: string) => Boolean(viewerName && name === viewerName);
+
+  const next = { ...snapshot };
+  next.managers = snapshot.managers.map(m => isMine(m.name) ? { ...m, id: viewerId } : m);
+  const me = next.managers.find(m => m.id === viewerId);
+  if (me?.isHost) next.hostId = viewerId;
+
+  next.leagueTable = snapshot.leagueTable.map(row =>
+    isMine(row.managerName) ? { ...row, managerId: viewerId } : row
+  );
+
+  next.fixtures = snapshot.fixtures.map(f => ({
+    ...f,
+    homeManagerId: isMine(f.homeManagerName) ? viewerId : f.homeManagerId,
+    awayManagerId: isMine(f.awayManagerName) ? viewerId : f.awayManagerId,
+    winnerManagerId:
+      f.winnerManagerId && isMine(f.winnerManagerId === viewerId ? viewerName || undefined : undefined)
+        ? viewerId
+        : f.winnerManagerId,
+  }));
+
+  if (next.transferOffers) {
+    next.transferOffers = snapshot.transferOffers.map(offer => ({
+      ...offer,
+      fromManagerId: isMine(offer.fromManagerName) ? viewerId : offer.fromManagerId,
+      toManagerId: isMine(offer.toManagerName) ? viewerId : offer.toManagerId,
+    }));
+  }
+
+  if (next.auction) {
+    next.auction.highestBidderId =
+      next.auction.highestBidderName === viewerName ? viewerId : next.auction.highestBidderId;
+    next.auction.winnerId =
+      next.auction.winnerId === viewerId || (next.auction.highestBidderName === viewerName && next.auction.isSold)
+        ? viewerId
+        : next.auction.winnerId;
+  }
+
+  if (next.knockoutStage) {
+    next.knockoutStage = {
+      ...next.knockoutStage,
+      rounds: next.knockoutStage.rounds.map(round => ({
+        ...round,
+        fixtures: round.fixtures.map(f => ({
+          ...f,
+          homeManagerId: isMine(f.homeManagerName) ? viewerId : f.homeManagerId,
+          awayManagerId: isMine(f.awayManagerName) ? viewerId : f.awayManagerId,
+        })),
+      })),
+    };
+  }
+
+  return next;
+}
+
 export function useGameSocket() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [managerId, setManagerId] = useState<string | null>(null);
@@ -98,7 +156,7 @@ export function useGameSocket() {
         switch (type) {
           case 'LOBBY_CREATED':
           case 'LOBBY_JOINED': {
-            setRoom(newRoom);
+            setRoom(restoreViewerIdentity(newRoom, assignedId, null));
             setManagerId(assignedId);
             managerIdRef.current = assignedId;
             setSecretBidSubmitted(null);
@@ -113,8 +171,11 @@ export function useGameSocket() {
             break;
           }
 
-          case 'ROOM_UPDATE':
-            setRoom(newRoom);
+          case 'ROOM_UPDATE': {
+            const saved = getSavedSession();
+            setRoom(restoreViewerIdentity(newRoom, managerIdRef.current, saved?.managerName || null));
+            break;
+          }
             isSimulatingRef.current = false;
             setIsSimulating(false);
             break;
@@ -220,7 +281,10 @@ export function useGameSocket() {
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
         setRoom(current => {
-          if (!current || snapshot.updatedAt >= current.updatedAt) return snapshot;
+          if (!current || snapshot.updatedAt >= current.updatedAt) {
+            const saved = getSavedSession();
+            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || current.currentManager?.name || null);
+          }
           return current;
         });
       } catch {}
