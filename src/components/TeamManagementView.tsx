@@ -34,7 +34,7 @@ function playerLineupScore(entry: SquadPlayerEntry, slot: { position: any; categ
 /**
  * Automatically fills every formation slot with the best available player,
  * considering OVR, attributes and positional fit. Remaining players become
- * the seven substitutes. The user can then manually swap/edit the XI.
+ * The manager can then manually swap/edit the XI.
  */
 function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): SquadPlayerEntry[] {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
@@ -334,7 +334,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* --- TAB 1: STARTING XI & BENCH (Formation Switcher + Interactive Pitch) --- */}
+      {/* --- TAB 1: STARTING XI (Formation Switcher + Interactive Pitch) --- */}
       {/* ========================================================================= */}
       {activeTab === 'pitch' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 my-2 flex-1 items-start">
@@ -501,7 +501,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Bench / Substitutes & Active Player Details (5 cols) */}
+          {/* Right Column: Starting XI & Active Player Details (5 cols) */}
           <div className="lg:col-span-5 space-y-4">
             {/* Desktop Selected Player Preview */}
             {inspectedPlayer && (
@@ -981,7 +981,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
           <div className="w-12 h-1 rounded-full bg-slate-700 mx-auto mb-3" />
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              {inspectedPlayer.isStarter ? 'Starting XI Player' : 'Bench Substitute'}
+              Starting XI Player
             </span>
             <button
               onClick={() => setInspectedPlayer(null)}
