@@ -25,14 +25,14 @@ export interface FormationConfig {
 }
 
 
-// Each manager owns 18 players: 11 starters + 7 substitutes.
-// Starter slots are exact; the bench adds a small category allowance so the
-// auction can build a complete 18-player squad without breaking the formation.
+// Each manager owns exactly 11 players: the starting XI.
+// There are no substitutes. The formation therefore controls the exact
+// natural-category quota available during the auction.
 export const BENCH_CATEGORY_ALLOCATION: Record<PositionCategory, number> = {
-  GK: 1,
-  DEF: 2,
-  MID: 2,
-  ATT: 2,
+  GK: 0,
+  DEF: 0,
+  MID: 0,
+  ATT: 0,
 };
 
 export function getFormationStarterCategoryCounts(formation: Formation): Record<PositionCategory, number> {
@@ -43,13 +43,9 @@ export function getFormationStarterCategoryCounts(formation: Formation): Record<
 }
 
 export function getFormationSquadCategoryLimits(formation: Formation): Record<PositionCategory, number> {
-  const starters = getFormationStarterCategoryCounts(formation);
-  return {
-    GK: starters.GK + BENCH_CATEGORY_ALLOCATION.GK,
-    DEF: starters.DEF + BENCH_CATEGORY_ALLOCATION.DEF,
-    MID: starters.MID + BENCH_CATEGORY_ALLOCATION.MID,
-    ATT: starters.ATT + BENCH_CATEGORY_ALLOCATION.ATT,
-  };
+  // With an XI-only squad, the auction limits are exactly the formation's
+  // starting category counts.
+  return getFormationStarterCategoryCounts(formation);
 }
 
 export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
@@ -326,9 +322,9 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
     }
   }
 
-  if (squad.length > 18) errors.push('Squad cannot exceed 18 players.');
+  if (squad.length > 11) errors.push('Squad cannot exceed 11 players.');
   if (starters.length !== 11) errors.push('Starting XI must contain exactly 11 players.');
-  if (substitutes.length !== 7) errors.push('Squad must contain exactly 7 substitutes.');
+  if (substitutes.length !== 0) errors.push('Squad cannot contain substitutes.');
 
   const naturalCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
   for (const entry of squad) naturalCategoryCounts[entry.player.category] += 1;
@@ -343,7 +339,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   if (gkCount > squadLimits.GK) errors.push(`Squad can contain at most ${squadLimits.GK} goalkeepers.`);
 
   return {
-    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 7 && squad.length === 18,
+    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 0 && squad.length === 11,
     startersCount: starters.length,
     substitutesCount: substitutes.length,
     totalCount: squad.length,
