@@ -308,7 +308,7 @@ export interface Fixture {
   playerStats?: PlayerMatchStat[];
   seed?: number;
   isKnockout?: boolean;
-  roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final';
+  roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final';
   wentToExtraTime?: boolean;
   wentToPenalties?: boolean;
   homePenaltyScore?: number;
@@ -323,13 +323,13 @@ export interface Fixture {
 }
 
 export interface KnockoutRound {
-  roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final';
+  roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final';
   fixtures: Fixture[];
   isComplete: boolean;
 }
 
 export interface KnockoutStageState {
-  currentRound: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final';
+  currentRound: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final';
   rounds: KnockoutRound[];
   championId?: string;
   championName?: string;
