@@ -31,10 +31,36 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 const server = http.createServer(app);
-const allowedWsOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
+const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
+
+// The production frontend may be hosted separately from the realtime Node server.
+// Keep explicit origins by default, while allowing additional deployments through
+// ALLOWED_WS_ORIGINS on the backend.
+const allowedWsOrigins = configuredOrigins.length > 0
+  ? configuredOrigins
+  : [
+      'https://football-league-nine.vercel.app',
+      'https://football-league-irvix1.vercel.app',
+      'https://football-league-git-main-irvix1.vercel.app',
+    ];
+
+app.use((req, res, next) => {
+  const origin = String(req.headers.origin || '');
+  const isAllowed = !origin || allowedWsOrigins.includes(origin);
+  if (isAllowed) {
+    if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(isAllowed ? 204 : 403);
+  }
+  next();
+});
 const wss = new WebSocketServer({
   server,
   maxPayload: 64 * 1024,
