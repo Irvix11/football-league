@@ -16,6 +16,16 @@ const condition = () => ({
 // All-Time must retain the 200 curated prime/legend entries and deduplicate
 // current players that already have a curated prime version.
 const currentPool = getPlayersForLobby('Global', 'Current');
+
+const invalidAuctionPrices = currentPool.filter(player => player.startingPrice !== 1);
+if (invalidAuctionPrices.length) {
+  throw new Error(`Auction starting price regression: ${invalidAuctionPrices.length} players do not start at £1M.`);
+}
+
+const malformedNames = currentPool.filter(player => /".*"/.test(player.name) || /\s{2,}/.test(player.name));
+if (malformedNames.length) {
+  throw new Error(`Malformed player display names detected: ${malformedNames.slice(0, 5).map(p => p.name).join(', ')}`);
+}
 const allTimePool = getPlayersForLobby('Global', 'All-Time');
 if (currentPool.length < 500) throw new Error(`FC27 current pool is incomplete: expected 500+ 80+ players, got ${currentPool.length}`);
 if (currentPool.some(p => p.overall < 80 || p.overall > 99)) throw new Error('FC27 current pool contains a player outside the required 80+ OVR range');
