@@ -389,8 +389,41 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                   </div>
                 </div>
 
-                {/* Classic / Quick Bid Display */}
-                {!isBlind ? (
+                {/* Forced positional purchase: the final manager missing this
+                    category is automatically awarded the next suitable lot at its
+                    starting price. */}
+                {auction.isForcedPurchase ? (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-400/50 shadow-lg shadow-amber-500/10">
+                      <div className="flex items-center gap-2 text-amber-300 font-black text-xs uppercase tracking-wider">
+                        <Shield className="w-4 h-4" />
+                        FORCED POSITIONAL PURCHASE
+                      </div>
+                      {auction.forcedWinnerId === managerId ? (
+                        <>
+                          <div className="mt-2 text-lg font-black text-white">You must sign this player.</div>
+                          <div className="mt-1 text-xs text-slate-300">
+                            You are the last manager missing a {player?.category || 'position'} slot.
+                            The player will be signed for the starting price.
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="mt-2 text-sm font-black text-white">
+                            {auction.forcedWinnerName || 'Another manager'} must sign this player.
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">
+                            Bidding is locked while the final {player?.category || 'position'} slot is completed.
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-black">Mandatory price</span>
+                      <span className="font-mono font-black text-emerald-400">£{player?.startingPrice || auction.currentBid}M</span>
+                    </div>
+                  </div>
+                ) : !isBlind ? (
                   <>
                     {/* VISUALLY DOMINANT CURRENT BID */}
                     <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800/80">
@@ -534,6 +567,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                       </div>
                     </form>
                   </div>
+                )}
                 )}
               </div>
             </div>
