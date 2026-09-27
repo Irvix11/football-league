@@ -276,6 +276,8 @@ function calculateInitialTable(managers: Manager[]): LeagueTableRow[] {
 
 function removeManagerFromRoom(room: GameRoom, managerId: string) {
   room.managers = room.managers.filter(manager => manager.id !== managerId);
+  room.phaseReadyIds = (room.phaseReadyIds || []).filter(id => id !== managerId);
+  room.transferWindowReadyIds = (room.transferWindowReadyIds || []).filter(id => id !== managerId);
   const secretBids = blindSecretBids.get(room.code);
   if (secretBids) {
     delete secretBids[managerId];
