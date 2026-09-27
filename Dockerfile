@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -7,9 +7,10 @@ RUN npm install
 
 COPY . .
 
-RUN npm run build:full
+RUN npm run build
 
 ENV NODE_ENV=production
+ENV PORT=8080
 
 EXPOSE 8080
 
