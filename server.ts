@@ -17,6 +17,7 @@ import {
   SeasonAwards,
   TeamRoles,
   PositionCategory,
+  Position,
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football.js';
