@@ -51,7 +51,16 @@ export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | nul
       return null;
     }
     const rows = await response.json() as Array<{ snapshot?: GameRoom }>;
-    return rows[0]?.snapshot || null;
+    const snapshot = rows[0]?.snapshot || null;
+
+    // Completed games are intentionally not recoverable. If an old server
+    // instance left a finished season behind, remove it on the next access.
+    if (snapshot?.phase === 'season_end') {
+      await deleteRoomSnapshot(roomCode);
+      return null;
+    }
+
+    return snapshot;
   } catch (error) {
     console.error('[persistence] load room failed:', error);
     return null;
