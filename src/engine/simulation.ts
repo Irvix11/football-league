@@ -1,5 +1,5 @@
 import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult } from '../types/football.js';
-import { FORMATIONS_CONFIG, calculateTeamOverall } from '../constants/formations.js';
+import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory } from '../constants/formations.js';
 
 /**
  * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
@@ -18,10 +18,17 @@ interface TeamPower {
 
 function calculateTeamPower(manager: Manager): TeamPower {
   const starters = manager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
-  const attackPlayers = starters.filter(s => s.player.category === 'ATT');
-  const midfieldPlayers = starters.filter(s => s.player.category === 'MID');
-  const defensePlayers = starters.filter(s => s.player.category === 'DEF');
-  const goalkeeper = starters.find(s => s.player.category === 'GK') || starters[0];
+  // Use the manager's assigned position when determining the tactical unit.
+  // This makes manual positional switches (e.g. CM -> CAM, LB -> LWB,
+  // ST -> CF) affect the simulation rather than leaving players in their
+  // database category forever.
+  const entryCategory = (s: SquadPlayerEntry) =>
+    getPositionCategory(s.assignedPosition || s.player.position);
+
+  const attackPlayers = starters.filter(s => entryCategory(s) === 'ATT');
+  const midfieldPlayers = starters.filter(s => entryCategory(s) === 'MID');
+  const defensePlayers = starters.filter(s => entryCategory(s) === 'DEF');
+  const goalkeeper = starters.find(s => entryCategory(s) === 'GK') || starters[0];
 
   const attack = average(attackPlayers.map(s =>
     s.player.attributes.sho * 0.40 +
