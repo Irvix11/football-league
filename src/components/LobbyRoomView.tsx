@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GameRoom, LobbySettings, PlayerPool, Era, AuctionMode, LeagueType, CompetitionFormat } from '../types/football';
 import { Crown, Bot, CheckCircle2, Clock, Copy, Check, Settings, UserX, Play, LogOut, ShieldAlert, User } from 'lucide-react';
+import { PhaseReadyTimer } from './PhaseReadyTimer';
 
 interface LobbyRoomViewProps {
   room: GameRoom;
@@ -96,6 +97,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <PhaseReadyTimer room={room} label="AUTO-START" accent="amber" />
           {isHost && (
             <button
               onClick={() => setShowEditSettings(true)}
