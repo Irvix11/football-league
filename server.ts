@@ -739,6 +739,12 @@ function finalizeAuctionItem(room: GameRoom) {
         price: finalPrice,
         timestamp: Date.now(),
       });
+    } else {
+      // A stale/invalid winner can occur after reconnects or legacy-room
+      // migration. Never expose a winner who did not actually receive the player.
+      winnerId = null;
+      room.auction.winnerId = null;
+      room.auction.soldPrice = 0;
     }
   }
 
