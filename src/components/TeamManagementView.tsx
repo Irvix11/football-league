@@ -49,7 +49,9 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
   });
 
   for (const slot of orderedSlots) {
-    const candidates = remaining.filter(entry => entry.player.category === slot.category);
+    const candidates = remaining.filter(entry =>
+      getPositionCategory(entry.assignedPosition || entry.player.position) === slot.category
+    );
     const pool = candidates.length ? candidates : remaining;
     const chosen = [...pool].sort(
       (a, b) => playerLineupScore(b, slot) - playerLineupScore(a, slot) || b.player.overall - a.player.overall
@@ -87,12 +89,14 @@ const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
 
-function allowedPositionsForPlayer(player: Player): Position[] {
-  // GK stays GK; outfield players can be manually deployed anywhere outfield.
-  // Position fit is calculated by the engine, so out-of-position use has a real rating impact.
-  return player.category === 'GK'
-    ? ['GK']
-    : ALL_POSITIONS.filter((position) => position !== 'GK');
+function allowedPositionsForPlayer(player: Player, starterCategory?: 'GK' | 'DEF' | 'MID' | 'ATT'): Position[] {
+  // Goalkeepers stay GK. Starters may move freely inside the formation category
+  // (e.g. CM -> CAM, CB -> LB, ST -> CF/LW), while bench players may be assigned
+  // any outfield role for later tactical use.
+  if (player.category === 'GK') return ['GK'];
+  const outfield = ALL_POSITIONS.filter((position) => position !== 'GK');
+  if (!starterCategory) return outfield;
+  return outfield.filter((position) => getPositionCategory(position) === starterCategory);
 }
 
 function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF' | 'MID' | 'ATT'): Position {
@@ -247,12 +251,21 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const entry = currentManager.squad.find((s) => s.player.id === playerId);
     if (!entry) return;
 
-    // Do not silently turn a GK into an outfield player or vice versa.
     const currentCategory = getPositionCategory(entry.assignedPosition || entry.player.position);
     const nextCategory = getPositionCategory(position);
     if ((currentCategory === 'GK') !== (nextCategory === 'GK')) {
       setActionError('Goalkeepers can only be assigned to GK.');
       return;
+    }
+
+    // A starter must stay inside the category of its formation slot. This still
+    // allows genuine positional switches such as CB→LB, CM→CAM and ST→CF.
+    if (entry.isStarting && entry.startingSlotIndex !== undefined) {
+      const slot = formationConfig.slots.find((s) => s.index === entry.startingSlotIndex);
+      if (slot && slot.category !== nextCategory) {
+        setActionError(`That slot requires a ${slot.category} player. Change the position within ${slot.category} or swap the player.`);
+        return;
+      }
     }
 
     const updated = currentManager.squad.map((s) =>
@@ -489,7 +502,19 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-slate-500 mt-2 text-center">Tap a player to change their playing position. Team OVR reflects the current XI and positional fit.</p>
+              <p className="text-[10px] text-slate-500 mt-2 text-center">Tap a player to change position. OVR is the player's base rating; Team OVR includes positional fit and condition.</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-1.5 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">XI OVR AVG</div>
+                  <div className="font-mono font-black text-slate-100">
+                    {starters.length ? Math.round(starters.reduce((sum, s) => sum + s.player.overall, 0) / starters.length) : 0}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-950 border border-emerald-500/20 px-2 py-1.5 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">TEAM OVR</div>
+                  <div className="font-mono font-black text-emerald-400">{currentManager.teamOverall}</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -522,7 +547,12 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                     onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)}
                     className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-bold text-white"
                   >
-                    {allowedPositionsForPlayer(inspectedPlayer.entry.player).map((pos) => (
+                    {allowedPositionsForPlayer(
+                      inspectedPlayer.entry.player,
+                      inspectedPlayer.isStarter && inspectedPlayer.entry.startingSlotIndex !== undefined
+                        ? formationConfig.slots.find((s) => s.index === inspectedPlayer.entry.startingSlotIndex)?.category
+                        : undefined
+                    ).map((pos) => (
                       <option key={pos} value={pos}>{pos}</option>
                     ))}
                   </select>
@@ -971,24 +1001,21 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
               <span className="font-mono font-black text-emerald-400">{inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}</span>
             </div>
             <select value={inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position} onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)} className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm font-bold text-white">
-              {allowedPositionsForPlayer(inspectedPlayer.entry.player).map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+              {allowedPositionsForPlayer(
+              inspectedPlayer.entry.player,
+              inspectedPlayer.isStarter && inspectedPlayer.entry.startingSlotIndex !== undefined
+                ? formationConfig.slots.find((s) => s.index === inspectedPlayer.entry.startingSlotIndex)?.category
+                : undefined
+            ).map((pos) => <option key={pos} value={pos}>{pos}</option>)}
             </select>
             <div className="mt-2 text-[10px] text-slate-500">OVR {inspectedPlayer.entry.player.overall} · Primary {inspectedPlayer.entry.player.position} · Alt {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'}</div>
           </div>
           <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">PLAY AS</span>
-              <span className="font-mono font-black text-emerald-400">
-                {inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}
-              </span>
+            <div className="text-[10px] uppercase tracking-wider font-black text-slate-400 mb-2">POSITION / OVR</div>
+            <div className="flex items-center justify-between">
+              <span className="font-mono font-black text-emerald-400">{inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}</span>
+              <span className="font-mono font-black text-amber-400">{inspectedPlayer.entry.player.overall} OVR</span>
             </div>
-            <select
-              value={inspectedPlayer.entry.assignedPosition || inspectedPlayer.entry.player.position}
-              onChange={(e) => handlePositionChange(inspectedPlayer.entry.player.id, e.target.value as Position)}
-              className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2.5 text-sm font-bold text-white"
-            >
-              {ALL_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
-            </select>
             <div className="mt-2 text-[10px] text-slate-500">
               OVR {inspectedPlayer.entry.player.overall} · Primary {inspectedPlayer.entry.player.position} · Alt {inspectedPlayer.entry.player.alternatePositions.join(', ') || 'None'}
             </div>
