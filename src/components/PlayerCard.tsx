@@ -19,6 +19,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   const isGK = player.category === 'GK';
   const isHighOvr = player.overall >= 88;
   const isIcon = player.id.startsWith('fc-icon');
+  const isAllTime = player.league === 'All-Time' || player.id.startsWith('at-');
 
   if (size === 'sm') {
     return (
@@ -58,7 +59,9 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
     <div
       onClick={onClick}
       className={`relative overflow-hidden rounded-2xl border transition-all shadow-2xl ${
-        isIcon
+        isAllTime
+          ? 'border-amber-300/70 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.22),transparent_42%),linear-gradient(to_bottom,#1c1405,#0f172a,#020617)] shadow-amber-500/20 ring-1 ring-amber-400/20'
+          : isIcon
           ? 'border-amber-400/60 bg-gradient-to-b from-amber-950/30 via-slate-900 to-slate-950 shadow-amber-500/10'
           : isHighOvr
           ? 'border-emerald-500/40 bg-gradient-to-b from-emerald-950/20 via-slate-900 to-slate-950 shadow-emerald-500/10'
@@ -66,12 +69,18 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
       } ${className}`}
     >
       {/* Top Banner: OVR, Position, Nation */}
+      {isAllTime && (
+        <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-amber-500/20 via-yellow-400/10 to-transparent border-b border-amber-400/20">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-[0.22em] text-amber-300 uppercase"><span className="w-1.5 h-1.5 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.8)]" /> PRIME LEGEND</span>
+          <span className="text-[9px] font-black tracking-widest text-amber-200/60 uppercase">ALL-TIME</span>
+        </div>
+      )
       <div className="p-4 border-b border-slate-800/80 flex items-start justify-between">
         <div className="flex items-baseline gap-2">
           <div className="font-display font-black text-4xl md:text-5xl tracking-tight text-amber-400">
             {player.overall}
           </div>
-          <div className="text-sm font-black uppercase tracking-wider text-slate-300">
+          <div className={`text-sm font-black uppercase tracking-wider ${isAllTime ? 'text-amber-200' : 'text-slate-300'}`}>
             {player.position}
           </div>
         </div>
@@ -87,8 +96,11 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
 
       {/* Player Identity */}
       <div className="px-4 py-3 bg-slate-950/50">
-        <div className="text-lg font-black font-display text-white tracking-wide truncate">
-          {player.name}
+        <div className="flex items-center gap-2">
+          <div className="text-lg font-black font-display text-white tracking-wide truncate">
+            {player.name}
+          </div>
+          {isAllTime && <span className="shrink-0 rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-black tracking-widest text-amber-300">PRIME</span>}
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
           <span>{player.league}</span>
