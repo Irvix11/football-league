@@ -119,6 +119,16 @@ app.get('/api/ai/status', (_req, res) => {
 
 app.post('/api/ai/chat', async (req, res) => {
   try {
+    const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const clientKey = forwardedFor || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const window = aiRequestWindows.get(clientKey);
+    if (!window || now - window.startedAt >= 60_000) {
+      aiRequestWindows.set(clientKey, { startedAt: now, count: 1 });
+    } else {
+      window.count++;
+      if (window.count > 20) return res.status(429).json({ error: 'AI chat rate limit reached. Try again in a minute.' });
+    }
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
     if (!messages.length || messages.length > 20) {
       return res.status(400).json({ error: 'messages must contain between 1 and 20 items' });
@@ -142,6 +152,7 @@ app.post('/api/ai/chat', async (req, res) => {
 const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
+const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
 
 // Prevent double-clicks / concurrent websocket messages from simulating the same
 // fixture twice before the first simulation has committed its result.
@@ -624,7 +635,7 @@ function generateLeagueFixtures(managers: Manager[]): Fixture[] {
         const homeManager = managers.find(m => m.id === home)!;
         const awayManager = managers.find(m => m.id === away)!;
         fixtures.push({
-          id: `fix-${matchday}-${home}-${away}`,
+          id: newId('fix'),
           matchday,
           homeManagerId: home,
           homeManagerName: homeManager.name,
@@ -646,7 +657,7 @@ function generateLeagueFixtures(managers: Manager[]): Fixture[] {
   for (let i = 0; i < firstLegCount; i++) {
     const firstFix = fixtures[i];
     fixtures.push({
-      id: `fix-rev-${firstFix.matchday + numRounds}-${firstFix.awayManagerId}-${firstFix.homeManagerId}`,
+      id: newId('fix-rev'),
       matchday: firstFix.matchday + numRounds,
       homeManagerId: firstFix.awayManagerId,
       homeManagerName: firstFix.awayManagerName,
@@ -3161,7 +3172,7 @@ wss.on('connection', (ws) => {
           }
           matchSimulationLocks.add(lockKey);
           try {
-            const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday, undefined, false, undefined, room.isSolo === true);
+            const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday, undefined, false, undefined, false);
             Object.assign(fix, result);
             room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
@@ -3519,7 +3530,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     }
     matchSimulationLocks.add(lockKey);
     try {
-      const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday, undefined, false, undefined, room.isSolo === true);
+      const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday, undefined, false, undefined, false);
       Object.assign(fix, result);
       room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
