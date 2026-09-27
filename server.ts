@@ -79,11 +79,53 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
   const sanitizedRoom = JSON.parse(JSON.stringify(room)) as GameRoom;
   const rawSecretBids = blindSecretBids.get(roomCode) || {};
 
-  // For blind auction, only send boolean indicator of who has submitted
+  // Blind Auction privacy boundary:
+  // before reveal, clients receive ONLY two server-selected attributes.
+  // The authoritative player object remains server-side and is revealed after
+  // the lot resolves. This prevents names/OVR/club/market value from leaking
+  // through the websocket payload.
   if (room.settings.auctionMode === 'Blind' && room.phase === 'auction') {
     sanitizedRoom.auction.hasSubmittedSecretBid = {};
     for (const mId of Object.keys(rawSecretBids)) {
       sanitizedRoom.auction.hasSubmittedSecretBid[mId] = true;
+    }
+
+    const sourcePlayer = room.auction.currentPlayer;
+    if (sourcePlayer && !room.auction.isSold) {
+      const genericPosition = sourcePlayer.category === 'GK'
+        ? 'GK'
+        : sourcePlayer.category === 'DEF'
+          ? 'CB'
+          : sourcePlayer.category === 'MID'
+            ? 'CM'
+            : 'ST';
+
+      sanitizedRoom.auction.currentPlayer = {
+        ...sourcePlayer,
+        id: `blind-${sourcePlayer.id}`,
+        name: 'Mystery Player',
+        club: 'Unknown Club',
+        league: 'Unknown League',
+        nationality: 'Unknown',
+        position: genericPosition,
+        overall: 0,
+        attributes: {
+          pac: 0,
+          sho: 0,
+          pas: 0,
+          dri: 0,
+          def: 0,
+          phy: 0,
+        },
+        age: 0,
+        preferredFoot: 'Right',
+        alternatePositions: [],
+        marketValue: 0,
+        valueSource: 'Blind Auction',
+        valueVersion: 'hidden',
+        updatedAt: '',
+        blindClues: room.auction.blindClues || [],
+      } as any;
     }
   }
 
@@ -583,6 +625,9 @@ function advanceAuction(room: GameRoom) {
     winnerId: null,
     soldPrice: 0,
     auctionHistory: room.auction.auctionHistory,
+    blindClues: room.settings.auctionMode === 'Blind'
+      ? createBlindAuctionClues(nextPlayer)
+      : undefined,
   };
 
   blindSecretBids.set(room.code, {});
@@ -616,6 +661,18 @@ function advanceAuction(room: GameRoom) {
   }, 1000);
 
   auctionIntervals.set(room.code, timer);
+}
+
+function createBlindAuctionClues(player: any) {
+  const keys = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'] as const;
+  const seed = Array.from(player.id).reduce((sum: number, ch: string) => sum + ch.charCodeAt(0), 0);
+  const first = keys[seed % keys.length];
+  const second = keys[(seed * 7 + 3) % keys.length];
+  const secondKey = second === first ? keys[(keys.indexOf(first) + 1) % keys.length] : second;
+  return [
+    { key: first, value: Number(player.attributes?.[first] ?? 0) },
+    { key: secondKey, value: Number(player.attributes?.[secondKey] ?? 0) },
+  ];
 }
 
 function simulateBotBids(room: GameRoom) {
