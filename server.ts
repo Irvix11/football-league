@@ -143,6 +143,10 @@ const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
 
+// Prevent double-clicks / concurrent websocket messages from simulating the same
+// fixture twice before the first simulation has committed its result.
+const matchSimulationLocks = new Set<string>();
+
 function sendSocketError(ws: WebSocket, message: string) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'ERROR', message }));
@@ -3149,31 +3153,41 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday);
-          Object.assign(fix, result);
-          room.leagueTable = updateLeagueTable(room.leagueTable, fix);
-
-          // The league is always a double round robin. Once every home/away
-          // fixture is complete, build the playoff bracket from the final table.
-          const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
-          room.currentMatchday = targetMatchday;
-
-          const midpointMatchday = getMidSeasonWindowMatchday(room);
-          const midpointComplete =
-            midpointMatchday > 0 &&
-            targetMatchday === midpointMatchday &&
-            room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
-
-          if (midpointComplete && !leagueComplete) {
-            openMidSeasonWindow(room);
+          const lockKey = `${room.code}:league:${fix.id}`;
+          if (matchSimulationLocks.has(lockKey)) {
+            sendSocketError(ws, 'This match is already being simulated. Please wait.');
+            return;
           }
+          matchSimulationLocks.add(lockKey);
+          try {
+            const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday);
+            Object.assign(fix, result);
+            room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
-          if (leagueComplete) {
-            initializeLeaguePlayoffs(room);
+            // The league is always a double round robin. Once every home/away
+            // fixture is complete, build the playoff bracket from the final table.
+            const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
+            room.currentMatchday = targetMatchday;
+
+            const midpointMatchday = getMidSeasonWindowMatchday(room);
+            const midpointComplete =
+              midpointMatchday > 0 &&
+              targetMatchday === midpointMatchday &&
+              room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
+
+            if (midpointComplete && !leagueComplete) {
+              openMidSeasonWindow(room);
+            }
+
+            if (leagueComplete) {
+              initializeLeaguePlayoffs(room);
+            }
+
+            await saveRoomSnapshot(room);
+            broadcastRoom(room.code);
+          } finally {
+            matchSimulationLocks.delete(lockKey);
           }
-
-          await saveRoomSnapshot(room);
-          broadcastRoom(room.code);
           break;
           } catch (error: any) {
             console.error('[WS] RUN_MATCHDAY failed:', error);
@@ -3498,11 +3512,17 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
     if (!homeMgr || !awayMgr) return res.status(409).json({ error: 'Unable to load both teams for this fixture.' });
 
-    const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday);
-    Object.assign(fix, result);
-    room.leagueTable = updateLeagueTable(room.leagueTable, fix);
+    const lockKey = `${room.code}:league:${fix.id}`;
+    if (matchSimulationLocks.has(lockKey)) {
+      return res.status(409).json({ error: 'This match is already being simulated.' });
+    }
+    matchSimulationLocks.add(lockKey);
+    try {
+      const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday);
+      Object.assign(fix, result);
+      room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
-    const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
+      const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
     const midpointMatchday = getMidSeasonWindowMatchday(room);
     const midpointComplete = midpointMatchday > 0 &&
       matchday === midpointMatchday &&
@@ -3511,9 +3531,12 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     if (midpointComplete && !leagueComplete) openMidSeasonWindow(room);
     if (leagueComplete) initializeLeaguePlayoffs(room);
 
-    await saveRoomSnapshot(room);
-    broadcastRoom(room.code);
-    return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
+      await saveRoomSnapshot(room);
+      broadcastRoom(room.code);
+      return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
+    } finally {
+      matchSimulationLocks.delete(lockKey);
+    }
   } catch (error: any) {
     console.error('[REST] run-matchday failed:', error);
     return res.status(500).json({ error: error?.message || 'Failed to simulate match.' });
@@ -3549,12 +3572,21 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
       return res.status(403).json({ error: 'Only a fixture participant or the host can start this match.' });
     }
 
-    const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
-    Object.assign(fix, result);
-    room.fixtures = round.fixtures;
+    const lockKey = `${room.code}:knockout:${fix.id}`;
+    if (matchSimulationLocks.has(lockKey)) {
+      return res.status(409).json({ error: 'This match is already being simulated.' });
+    }
+    matchSimulationLocks.add(lockKey);
+    try {
+      const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+      Object.assign(fix, result);
+      room.fixtures = round.fixtures;
 
-    broadcastRoom(room.code);
-    return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
+      broadcastRoom(room.code);
+      return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
+    } finally {
+      matchSimulationLocks.delete(lockKey);
+    }
   } catch (error: any) {
     console.error('[REST] run-knockout-match failed:', error);
     return res.status(500).json({ error: error?.message || 'Failed to simulate knockout match.' });
