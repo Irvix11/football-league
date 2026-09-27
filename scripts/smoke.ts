@@ -69,6 +69,12 @@ function buildManager(id: string, name: string): Manager {
 
 const home = buildManager('home', 'Home FC');
 const away = buildManager('away', 'Away FC');
+if (home.squad.length !== 11 || away.squad.length !== 11) {
+  throw new Error('Smoke managers must contain exactly 11 players');
+}
+if (home.squad.some(s => !s.isStarting) || away.squad.some(s => !s.isStarting)) {
+  throw new Error('XI-only smoke squads cannot contain substitutes');
+}
 
 const leagueResult = simulateMatch(home, away, 'smoke-league', 1, 12345);
 if (!leagueResult.played || !leagueResult.events?.length) throw new Error('League simulation produced no events');
