@@ -131,7 +131,6 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
   // Animation Engine state (Real Continuous Smooth Interpolation)
   const [animatedPlayers, setAnimatedPlayers] = useState<LivePlayerPosition[]>([]);
-  const [animatedBall, setAnimatedBall] = useState<{ x: number; y: number; arc: number }>({ x: 50, y: 50, arc: 0 });
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const playerNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const ballNodeRef = useRef<HTMLDivElement | null>(null);
@@ -177,7 +176,6 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const bPos = firstEvent.ballCoordinates || { x: 50, y: 50 };
       startBallRef.current = bPos;
       targetBallRef.current = bPos;
-      setAnimatedBall({ x: bPos.x, y: bPos.y, arc: 0 });
       visualBallCoordsRef.current = { x: bPos.x, y: bPos.y };
 
       const firstSecs = (firstEvent.minute || 0) * 60 + (firstEvent.second || 0);
@@ -220,6 +218,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       return visual ? { ...target, x: visual.x, y: visual.y } : target;
     });
     targetPlayersRef.current = targetSeparated;
+    setAnimatedPlayers(targetSeparated);
 
     // Start the ball from the exact last rendered position when available.
     startBallRef.current = currentEvent.ballStartCoordinates || visualBallCoordsRef.current;
