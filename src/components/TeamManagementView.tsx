@@ -222,7 +222,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const secondSlotPos = formationConfig.slots.find((s) => s.index === secondSlot)?.position || second.assignedPosition || second.player.position;
 
     next[firstIndex] = { ...second, isStarting: true, startingSlotIndex: firstSlot, assignedPosition: firstSlotPos };
-    next[secondIndex] = { ...first, isStarting: true, startingSlotIndex: secondSlot, assignedPosition: firstSlotPos };
+    next[secondIndex] = { ...first, isStarting: true, startingSlotIndex: secondSlot, assignedPosition: secondSlotPos };
 
     setActionError(null);
     setSelectedPlayerId(null);
@@ -412,7 +412,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
 
             {/* Interactive Football Pitch (Requirement 9: Position, Jersey #, OVR) */}
             <div className="w-full max-w-lg">
-              <PitchGraphic aspectRatio="vertical" className="p-4 shadow-2xl">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 font-black">LIVE SQUAD MAP</div>
+                  <div className="text-xs text-slate-300 font-bold">Tap a player to inspect · tap another to swap</div>
+                </div>
+                <div className="rounded-xl bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1.5 text-right">
+                  <div className="text-[8px] uppercase tracking-wider text-slate-500 font-black">TEAM OVR</div>
+                  <div className="font-mono text-sm font-black text-emerald-300">{currentManager.teamOverall}</div>
+                </div>
+              </div>
+              <PitchGraphic aspectRatio="vertical" className="p-4 shadow-2xl ring-1 ring-white/5">
                 {formationConfig.slots.map((slot) => {
                   const starter = currentManager.squad.find(
                     (s) => s.isStarting && s.startingSlotIndex === slot.index
@@ -466,7 +476,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
               </PitchGraphic>
             </div>
 
-            <div className="mt-3 w-full rounded-2xl bg-slate-900/80 border border-slate-800 p-3">
+            <div className="mt-3 w-full rounded-2xl bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-white/10 p-3 shadow-xl shadow-black/20 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">STARTING XI OVR</span>
                 <span className="font-mono font-black text-emerald-400">TEAM OVR {currentManager.teamOverall}</span>
