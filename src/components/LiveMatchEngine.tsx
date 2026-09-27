@@ -141,10 +141,10 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     setPenaltyRevealStage('walkup');
     const strikeTimer = window.setTimeout(() => {
       setPenaltyRevealStage('strike');
-    }, 1800);
+    }, 2200);
     const resultTimer = window.setTimeout(() => {
       setPenaltyRevealStage('result');
-    }, 3600);
+    }, 4800);
 
     return () => {
       window.clearTimeout(strikeTimer);
@@ -501,6 +501,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       setGoalOverlay(null);
       setHalfTimeOverlay(false);
       setFullTimeOverlay(false);
+      setShowPenaltyShootout(false);
+      setPenaltyIndex(0);
+      setPenaltyRevealStage('walkup');
       setIsPlaying(true);
     } else {
       setIsPlaying(!isPlaying);
@@ -544,6 +547,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     setGoalOverlay(null);
     setHalfTimeOverlay(false);
     setFullTimeOverlay(false);
+    setShowPenaltyShootout(false);
+    setPenaltyIndex(0);
+    setPenaltyRevealStage('walkup');
     setIsPlaying(true);
     phaseStartTimeRef.current = performance.now();
     const firstEvent = events[0];
