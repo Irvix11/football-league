@@ -80,7 +80,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-[#02050b] text-slate-100 overflow-hidden select-none">
+    <div className="relative min-h-screen flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-[radial-gradient(circle_at_50%_-10%,#12352d_0%,#06130f_28%,#02050b_65%,#010307_100%)] text-slate-100 overflow-hidden select-none">
       {/* Dynamic Background: Pitch Lines, Center Circle & Subtle Stadium Floodlights */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Stadium Floodlight Cones */}
@@ -107,7 +107,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </div>
 
       {/* Top Header */}
-      <header className="relative z-10 max-w-6xl mx-auto w-full flex items-center justify-between py-3 border-b border-slate-900/80">
+      <header className="relative z-10 max-w-6xl mx-auto w-full flex items-center justify-between py-3 px-1 border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-sm shadow-emerald-500/20">
             <Trophy className="w-4 h-4" />
@@ -126,7 +126,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </header>
 
       {/* Main Center Content */}
-      <main className="relative z-10 max-w-4xl mx-auto w-full my-auto py-8 sm:py-12 flex flex-col items-center text-center">
+      <main className="relative z-10 max-w-4xl mx-auto w-full my-auto py-10 sm:py-14 flex flex-col items-center text-center">
         {/* Reconnect Banner if saved session exists */}
         {savedSession && (
           <div className="mb-6 w-full max-w-md p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/30 backdrop-blur-md flex items-center justify-between shadow-lg">
@@ -144,7 +144,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         )}
 
         {/* Category Pill Tag */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.035] border border-emerald-400/20 text-[11px] font-bold text-emerald-300 mb-6 shadow-lg shadow-emerald-500/5 backdrop-blur-xl">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.045] border border-emerald-300/20 text-[11px] font-bold text-emerald-300 mb-6 shadow-lg shadow-emerald-500/5 backdrop-blur-xl">
           <Sparkles className="w-3.5 h-3.5" />
           <span>Realtime Tactical Auction & 2D Animated Match Engine</span>
         </div>
@@ -203,7 +203,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 setActiveModal('create');
                 setManagerName(savedSession?.managerName || '');
               }}
-              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/7 hover:border-emerald-400/35 hover:bg-white/[0.055] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
+              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.045] backdrop-blur-2xl border border-white/10 hover:border-emerald-300/35 hover:bg-white/[0.065] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
@@ -224,7 +224,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 setActiveModal('join');
                 setManagerName(savedSession?.managerName || '');
               }}
-              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/7 hover:border-teal-400/35 hover:bg-white/[0.055] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
+              className="group relative p-4 sm:p-5 rounded-2xl bg-white/[0.045] backdrop-blur-2xl border border-white/10 hover:border-teal-300/35 hover:bg-white/[0.065] transition-all duration-300 text-left flex items-center justify-between shadow-xl shadow-black/20 hover:-translate-y-0.5 active:scale-[0.985] cursor-pointer"
             >
               <div className="flex items-center gap-3.5">
                 <div className="w-10 h-10 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
