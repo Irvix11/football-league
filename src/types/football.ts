@@ -389,6 +389,8 @@ export interface GameRoom {
   totalMatchdays: number;
   leagueTable: LeagueTableRow[];
   transferOffers: TransferOffer[];
+  /** Explicit phase readiness for formation/auction/team setup. */
+  phaseReadyIds?: string[];
   /** True when the season is paused for the mid-season management/transfer window. */
   transferWindowOpen?: boolean;
   /** Matchday after which the mid-season window opened. */
