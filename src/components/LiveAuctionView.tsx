@@ -120,7 +120,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           : 'MYSTERY LOT';
   const activeReadyManagers = activeCategory
     ? room.managers.filter((m) => {
-        const required = getFormationSquadCategoryLimits(m.formation)[activeCategory];
+        const required = getFormationStarterCategoryCounts(m.formation)[activeCategory];
         return m.squad.filter((s) => s.player.category === activeCategory).length >= required;
       }).length
     : 0;
