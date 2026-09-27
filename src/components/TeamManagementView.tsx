@@ -256,7 +256,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   const totalCount = room.managers.length;
 
   return (
-    <div className="min-h-screen bg-[#040812] text-slate-100 p-3 sm:p-5 md:p-6 pb-20 flex flex-col justify-between max-w-7xl mx-auto select-none">
+    <div className="min-h-screen bg-[#02050b] text-slate-100 p-3 sm:p-5 md:p-6 pb-20 flex flex-col justify-between max-w-7xl mx-auto select-none">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
         <div>
@@ -270,7 +270,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
         </div>
 
         {/* Stats Badges */}
-        <div className="flex items-center gap-3 bg-slate-900/90 border border-slate-800 p-2 sm:p-2.5 rounded-2xl shadow-lg">
+        <div className="flex items-center gap-3 bg-white/[0.035] backdrop-blur-xl border border-white/7 p-2 sm:p-2.5 rounded-2xl shadow-2xl shadow-black/20">
           <div className="px-2">
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">TEAM OVR</div>
             <div className="font-mono font-black text-emerald-400 text-lg sm:text-xl">{currentManager.teamOverall}</div>
@@ -291,7 +291,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
       </div>
 
       {/* Segmented Navigation Tabs (Requirements 1, 2, 3) */}
-      <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950/80 rounded-2xl border border-slate-800 my-3">
+      <div className="grid grid-cols-3 gap-1.5 p-1 bg-white/[0.025] backdrop-blur-xl rounded-2xl border border-white/7 my-3 shadow-xl shadow-black/10">
         <button
           onClick={() => setActiveTab('pitch')}
           className={`py-2.5 sm:py-3 px-2 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
@@ -348,7 +348,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
           {/* Large Interactive Pitch (7 cols) */}
           <div className="lg:col-span-7 flex flex-col items-center">
             {/* All 7 Clickable Formations (Requirement 1) */}
-            <div className="w-full mb-3 p-3 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-2">
+            <div className="w-full mb-3 p-3 rounded-2xl bg-white/[0.035] backdrop-blur-xl border border-white/7 space-y-2 shadow-xl shadow-black/10">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-300 font-bold uppercase tracking-wider">Select Formation:</span>
                 <span className="font-mono text-emerald-400 font-black">{currentManager.formation}</span>
