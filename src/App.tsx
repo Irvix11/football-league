@@ -185,6 +185,8 @@ export default function App() {
           onFinishSeason={finishSeason}
           onProposeTransfer={proposeTransfer}
           onRespondTransfer={respondTransfer}
+          onUpdateLineup={updateLineup}
+          onFinishManagement={closeTransferWindow}
           isSimulating={isSimulating}
           simulationError={simulationError}
         />
