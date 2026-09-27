@@ -410,7 +410,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     ) : (
                       <div className="space-y-3">
                         <div className="grid grid-cols-4 gap-2">
-                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [0, 5, 10, 25])).map((inc) => {
+                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [0])).map((inc) => {
                              const targetBid = auction.highestBidderId ? auction.currentBid + inc : auction.currentBid;
                              const possible = currentManager.budget >= targetBid;
                             return (
@@ -637,7 +637,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
-              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
             </div>
             {currentManager.squad.length === 0 ? (
               <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 18/18.</div>
