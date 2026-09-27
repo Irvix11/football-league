@@ -1,6 +1,7 @@
 import type { GameRoom } from '../src/types/football.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wcumaftqouolnuoxgryj.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+
 // Persistence runs only on the trusted server. Prefer the Supabase secret/service
 // key so the database can have RLS enabled without exposing write/delete privileges
 // to players. The publishable key remains a temporary fallback for old deployments;
@@ -9,7 +10,7 @@ const SUPABASE_KEY =
   process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_BpPGMfqBjsdtskvRtp0IOQ_lgwG1dVQ';
+  '';
 
 function headers(extra: Record<string,string> = {}) {
   return {
@@ -20,7 +21,12 @@ function headers(extra: Record<string,string> = {}) {
   };
 }
 
+function persistenceConfigured() {
+  return Boolean(SUPABASE_URL && SUPABASE_KEY);
+}
+
 export async function saveRoomSnapshot(room: GameRoom): Promise<void> {
+  if (!persistenceConfigured()) return;
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/game_room_snapshots?on_conflict=room_code`, {
       method: 'POST',
@@ -41,6 +47,7 @@ export async function saveRoomSnapshot(room: GameRoom): Promise<void> {
 }
 
 export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | null> {
+  if (!persistenceConfigured()) return null;
   try {
     const response = await fetch(
       `${SUPABASE_URL}/rest/v1/game_room_snapshots?select=snapshot&room_code=eq.${encodeURIComponent(roomCode)}&limit=1`,
@@ -68,6 +75,7 @@ export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | nul
 }
 
 export async function deleteRoomSnapshot(roomCode: string): Promise<void> {
+  if (!persistenceConfigured()) return;
   try {
     await fetch(
       `${SUPABASE_URL}/rest/v1/game_room_snapshots?room_code=eq.${encodeURIComponent(roomCode)}`,
