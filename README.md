@@ -93,3 +93,4 @@ Before shipping a release, verify:
 <!-- harmless production deployment trigger: 2026-09-27 -->
 
 <!-- production deploy trigger 2026-09-28 -->
+<!-- production deploy trigger 2026-09-28 hybrid-sim -->
