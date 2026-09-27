@@ -546,7 +546,8 @@ export function simulateMatch(
   matchday: number,
   customSeed?: number,
   isKnockout = false,
-  roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final'
+  roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final',
+  forcePenalties = false
 ): Fixture {
   homeManager = normalizeManagerForMatch(homeManager);
   awayManager = normalizeManagerForMatch(awayManager);
@@ -1218,7 +1219,7 @@ export function simulateMatch(
   let penaltyShootout: PenaltyKickResult[] | undefined;
   let winnerManagerId: string | undefined;
 
-  if (isKnockout && homeScore === awayScore) {
+  if ((isKnockout && homeScore === awayScore) || forcePenalties) {
     wentToExtraTime = true;
     currentTotalSeconds = 5400; // 90:00
 
@@ -1614,6 +1615,7 @@ export function simulateMatch(
 
     homePenaltyScore = hPens;
     awayPenaltyScore = aPens;
+    winnerManagerId = hPens > aPens ? homeManager.id : awayManager.id;
   }
 
     }
