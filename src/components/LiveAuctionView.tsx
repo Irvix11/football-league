@@ -205,9 +205,15 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             <span className="text-xs text-slate-500 font-mono">
               Lot {auction.currentPlayerIndex} / {auction.totalPlayersInPool}
             </span>
+            {room.settings.era === 'All-Time' && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[9px] font-black tracking-[0.16em] text-amber-300 shadow-sm shadow-amber-500/10">
+                <Sparkles className="w-3 h-3" /> ALL-TIME LEGENDS
+              </span>
+            )}
           </div>
-          <h1 className="font-display font-black text-xl sm:text-2xl text-slate-100">
+          <h1 className="font-display font-black text-xl sm:text-2xl text-slate-100 flex items-center gap-2">
             LIVE BIDDING ARENA
+            {room.settings.era === 'All-Time' && <span className="text-amber-300">· PRIME ERA</span>}
           </h1>
         </div>
 
