@@ -2566,11 +2566,7 @@ async function startServer() {
   });
 }
 
-// Vercel Node runtime captures this server and upgrades WebSocket connections.
+// The same Node process serves HTTP, static assets, and WebSocket upgrades.
 export default server;
 
-// Vercel's zero-config Node server runtime uses this root server.ts directly.
-// The listener is also required for local development.
-if (!process.env.VERCEL) {
-  startServer();
-}
+startServer();
