@@ -14,7 +14,7 @@ Keeping the frontend and game server on one origin is the simplest setup and avo
 ## Production commands
 
 `npm install`
-`npm run build`
+`npm run build:full`
 `NODE_ENV=production npm start`
 
 The server listens on `process.env.PORT` and `0.0.0.0`.
