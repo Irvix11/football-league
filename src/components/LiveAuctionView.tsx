@@ -84,8 +84,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
   // The auction is staged globally: GK -> DEF -> MID -> ATT.
-  // Each stage continues until every manager has filled that formation's
-  // full squad allowance, including the seven-player bench.
+  // Each stage continues until every manager has filled the exact XI quota.
   const auctionStage = (['GK', 'DEF', 'MID', 'ATT'] as const).find((cat) =>
     room.managers.some((manager) => {
       const required = getFormationSquadCategoryLimits(manager.formation)[cat];
@@ -133,7 +132,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
   const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
-  const isSquadFull = currentManager.squad.length >= 18;
+  const isSquadFull = currentManager.squad.length >= 11;
   const isWinning = auction.highestBidderId === managerId;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
@@ -615,10 +614,10 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
-              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
             </div>
             {currentManager.squad.length === 0 ? (
-              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 18/18.</div>
+              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 11/11.</div>
             ) : (
               <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
                 {currentManager.squad.map((entry) => (
