@@ -135,6 +135,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   const [activeTab, setActiveTab] = useState<'pitch' | 'tactics' | 'roles'>('pitch');
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [selectedBenchIndex, setSelectedBenchIndex] = useState<number | null>(null);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // Mobile Bottom Sheet modal for inspected player
   const [inspectedPlayer, setInspectedPlayer] = useState<{
@@ -251,6 +252,68 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     setSelectedSlotIndex(null);
     setSelectedBenchIndex(null);
     setInspectedPlayer(null);
+  };
+
+  // Tap one player and then another to swap them, matching the quick
+  // squad-edit interaction used by modern football lineup builders.
+  const handlePlayerSwapById = (firstId: string, secondId: string) => {
+    if (firstId === secondId) return;
+    const firstIndex = currentManager.squad.findIndex((s) => s.player.id === firstId);
+    const secondIndex = currentManager.squad.findIndex((s) => s.player.id === secondId);
+    if (firstIndex < 0 || secondIndex < 0) return;
+
+    const next = [...currentManager.squad];
+    const first = next[firstIndex];
+    const second = next[secondIndex];
+
+    if (first.isStarting && second.isStarting) {
+      const firstSlot = first.startingSlotIndex ?? 0;
+      const secondSlot = second.startingSlotIndex ?? 0;
+      const firstSlotPos = formationConfig.slots.find((s) => s.index === firstSlot)?.position || first.player.position;
+      const secondSlotPos = formationConfig.slots.find((s) => s.index === secondSlot)?.position || second.player.position;
+      next[firstIndex] = { ...second, startingSlotIndex: firstSlot, assignedPosition: secondSlotPos };
+      next[secondIndex] = { ...first, startingSlotIndex: secondSlot, assignedPosition: firstSlotPos };
+    } else if (first.isStarting !== second.isStarting) {
+      const starter = first.isStarting ? first : second;
+      const bench = first.isStarting ? second : first;
+      const starterIndex = first.isStarting ? firstIndex : secondIndex;
+      const benchIndex = first.isStarting ? secondIndex : firstIndex;
+      const slotIndex = starter.startingSlotIndex ?? 0;
+      const slotPos = formationConfig.slots.find((s) => s.index === slotIndex)?.position || starter.assignedPosition || starter.player.position;
+      const bIndex = bench.benchIndex ?? 0;
+
+      next[starterIndex] = {
+        ...bench,
+        isStarting: true,
+        startingSlotIndex: slotIndex,
+        benchIndex: undefined,
+        assignedPosition: slotPos,
+      };
+      next[benchIndex] = {
+        ...starter,
+        isStarting: false,
+        startingSlotIndex: undefined,
+        benchIndex: bIndex,
+        assignedPosition: starter.player.position,
+      };
+    } else {
+      const firstBench = first.benchIndex ?? 0;
+      const secondBench = second.benchIndex ?? 0;
+      next[firstIndex] = { ...second, benchIndex: firstBench };
+      next[secondIndex] = { ...first, benchIndex: secondBench };
+    }
+
+    const checked = validateSquadFormation(currentManager.formation, next);
+    if (!checked.isValid) {
+      setActionError(checked.errors.join(' '));
+      return;
+    }
+    setActionError(null);
+    setSelectedPlayerId(null);
+    setSelectedSlotIndex(null);
+    setSelectedBenchIndex(null);
+    setInspectedPlayer(null);
+    onUpdateLineup(next);
   };
 
   const handlePositionChange = (playerId: string, position: Position) => {
@@ -422,8 +485,13 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
-                AUTO-FILL uses OVR + attributes + positional fit. You can manually assign supported positions and swap players.
+                AUTO-FILL uses OVR + attributes + positional fit. Tap one player, then another to swap. You can also assign any outfield role.
               </p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-mono font-black">
+                <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">NATURAL 90–100</span>
+                <span className="px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">ALT 70–89</span>
+                <span className="px-2 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">OOP &lt;70</span>
+              </div>
             </div>
 
             {actionError && (
@@ -463,20 +531,22 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                         effectiveOverall={starter ? getEffectiveOvr(starter, slot.position) : undefined}
                         size="md"
                         onClick={() => {
-                          if (selectedBenchIndex !== null) {
-                            handleSwap(slot.index, selectedBenchIndex);
+                          if (starter && selectedPlayerId && selectedPlayerId !== starter.player.id) {
+                            handlePlayerSwapById(selectedPlayerId, starter.player.id);
+                            return;
+                          }
+                          if (starter) {
+                            setSelectedPlayerId(selectedPlayerId === starter.player.id ? null : starter.player.id);
+                            setInspectedPlayer({
+                              entry: starter,
+                              slotIndex: slot.index,
+                              isStarter: true,
+                            });
+                            setSelectedSlotIndex(isSelected ? null : slot.index);
                           } else {
-                            const nextSelected = isSelected ? null : slot.index;
-                            setSelectedSlotIndex(nextSelected);
-                            if (starter) {
-                              setInspectedPlayer({
-                                entry: starter,
-                                slotIndex: slot.index,
-                                isStarter: true,
-                              });
-                            } else {
-                              setInspectedPlayer(null);
-                            }
+                            setSelectedPlayerId(null);
+                            setSelectedSlotIndex(null);
+                            setInspectedPlayer(null);
                           }
                         }}
                       />
@@ -598,16 +668,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                       <div
                         key={sub.player.id}
                         onClick={() => {
-                          if (selectedSlotIndex !== null) {
-                            handleSwap(selectedSlotIndex, sub.benchIndex ?? idx);
-                          } else {
-                            const bIdx = sub.benchIndex ?? idx;
-                            setSelectedBenchIndex(isBenchSelected ? null : bIdx);
-                            setInspectedPlayer({
-                              entry: sub,
-                              isStarter: false,
-                            });
+                          if (selectedPlayerId && selectedPlayerId !== sub.player.id) {
+                            handlePlayerSwapById(selectedPlayerId, sub.player.id);
+                            return;
                           }
+                          const bIdx = sub.benchIndex ?? idx;
+                          setSelectedPlayerId(selectedPlayerId === sub.player.id ? null : sub.player.id);
+                          setSelectedBenchIndex(isBenchSelected ? null : bIdx);
+                          setInspectedPlayer({
+                            entry: sub,
+                            isStarter: false,
+                          });
                         }}
                         className={`p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer active:scale-95 ${
                           isBenchSelected
@@ -618,13 +689,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center font-mono font-black text-xs text-emerald-400">
-                            {sub.player.overall}
+                          <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 flex flex-col items-center justify-center font-mono font-black text-emerald-400">
+                            <span className="text-sm">{sub.player.overall}</span>
+                            <span className="text-[7px] text-slate-500">OVR</span>
                           </div>
                           <div>
                             <div className="font-bold text-xs text-slate-100">{sub.player.name}</div>
                             <div className="text-[10px] text-slate-400 font-mono">
                               {sub.assignedPosition || sub.player.position} · {sub.player.club}
+                            </div>
+                            <div className="text-[8px] text-slate-600 font-mono">
+                              NAT {sub.player.position} · ALT {sub.player.alternatePositions.join(', ') || '—'}
                             </div>
                           </div>
                         </div>
