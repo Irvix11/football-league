@@ -409,6 +409,9 @@ function removeManagerFromRoom(room: GameRoom, managerId: string) {
   if (room.auction?.highestBidderId === managerId) {
     room.auction.highestBidderId = null;
     room.auction.highestBidderName = null;
+    // The departed bidder no longer controls the current price. Reset to the
+    // lot's starting price so the remaining managers can bid normally.
+    room.auction.currentBid = room.auction.currentPlayer?.startingPrice || 0;
   }
   room.leagueTable = room.leagueTable.filter(row => row.managerId !== managerId);
 }
