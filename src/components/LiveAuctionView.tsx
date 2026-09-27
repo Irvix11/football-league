@@ -170,7 +170,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const handleBlindBid = (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseInt(blindBidInput, 10);
-    if (!isNaN(val) && val >= (player?.startingPrice || 10) && val <= currentManager.budget) {
+    if (!isNaN(val) && val >= (player?.startingPrice ?? 0) && val <= currentManager.budget) {
       onSubmitBlindBid(val);
       setBlindBidInput('');
     }
