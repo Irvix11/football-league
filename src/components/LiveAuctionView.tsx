@@ -83,11 +83,12 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const starterCategoryCounts = getFormationStarterCategoryCounts(currentManager.formation);
   const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
-  // The auction itself is staged globally: GK -> DEF -> MID -> ATT for the
-  // exact starting XI only.
+  // The auction is staged globally: GK -> DEF -> MID -> ATT.
+  // Each stage continues until every manager has filled that formation's
+  // full squad allowance, including the seven-player bench.
   const auctionStage = (['GK', 'DEF', 'MID', 'ATT'] as const).find((cat) =>
     room.managers.some((manager) => {
-      const required = getFormationStarterCategoryCounts(manager.formation)[cat];
+      const required = getFormationSquadCategoryLimits(manager.formation)[cat];
       const count = manager.squad.filter((entry) => entry.player.category === cat).length;
       return count < required;
     })
@@ -118,7 +119,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           : 'MYSTERY LOT';
   const activeReadyManagers = activeCategory
     ? room.managers.filter((m) => {
-        const required = getFormationStarterCategoryCounts(m.formation)[activeCategory];
+        const required = getFormationSquadCategoryLimits(m.formation)[activeCategory];
         return m.squad.filter((s) => s.player.category === activeCategory).length >= required;
       }).length
     : 0;
@@ -126,13 +127,13 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   // In Blind mode the real category is server-private, so the client never
   // disables bidding based on a masked category. The server remains authoritative.
   const isCategoryFull = !isBlind && player
-    ? player.category === 'GK' && categoryCounts.GK >= 2
+    ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
     : false;
 
   const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
   const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
-  const isSquadFull = currentManager.squad.length >= 11;
+  const isSquadFull = currentManager.squad.length >= 18;
   const isWinning = auction.highestBidderId === managerId;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
@@ -187,7 +188,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   })();
 
   return (
-    <div className="min-h-screen bg-[#040812] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto select-none">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#10251f_0%,#040812_42%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto select-none">
       {/* Top Bar: Live Auction status, User budget, Team metrics */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
         <div>
@@ -378,11 +379,11 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     {/* Bid Action Buttons */}
                     {isSquadFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-amber-400 font-semibold">
-                        Your 11-player squad is full (11/11). You cannot bid on further players.
+                        Your 18-player squad is full (18/18). You cannot bid on further players.
                       </div>
                     ) : isCategoryFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-rose-400 font-semibold">
-                        Your goalkeeper limit is full (2 GK).
+                        Your ${player?.category || 'position'} quota is full for ${currentManager.formation}.
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -540,7 +541,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
               <div className="mt-2 flex items-center justify-between text-[9px] uppercase tracking-wider font-black">
                 <span className="text-emerald-400">{categoryLabel}</span>
                 {!isBlind && (
-                  <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} ready</span>
+                  <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} squads complete</span>
                 )}
               </div>
             </div>
@@ -614,10 +615,10 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
-              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
             </div>
             {currentManager.squad.length === 0 ? (
-              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 11/11.</div>
+              <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately. The auction ends at 18/18.</div>
             ) : (
               <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
                 {currentManager.squad.map((entry) => (
