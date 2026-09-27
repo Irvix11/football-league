@@ -14,6 +14,7 @@ interface LiveAuctionViewProps {
   onPlaceBid: (amount: number) => void;
   onSubmitBlindBid: (amount: number) => void;
   onMarkDone: () => void;
+  onLeaveMatch: () => void;
 }
 
 export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
@@ -22,6 +23,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   onPlaceBid,
   onSubmitBlindBid,
   onMarkDone,
+  onLeaveMatch,
 }) => {
   const currentManager = room.managers.find((m) => m.id === managerId);
   const auction = room.auction;
@@ -207,6 +209,18 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,#10251f_0%,#040812_42%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto select-none">
+      <div className="fixed top-3 right-3 z-50">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Leave this match? You will be removed from the lobby and your auction progress will be lost.')) onLeaveMatch();
+          }}
+          className="rounded-xl border border-rose-500/30 bg-slate-950/90 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-rose-300 shadow-xl backdrop-blur hover:border-rose-400/60 hover:bg-rose-950/40 active:scale-95 transition-all"
+        >
+          Leave Match
+        </button>
+      </div>
+
       {/* Top Bar: Live Auction status, User budget, Team metrics */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
         <div>
