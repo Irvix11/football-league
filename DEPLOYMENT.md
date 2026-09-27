@@ -1,44 +1,64 @@
 # Football Auction League — production deployment
 
-Football Auction League is a React/Vite frontend served by the same long-running Node/Express process that owns the WebSocket multiplayer server.
+## Vercel (primary)
 
-## Recommended architecture
+The production app is designed for Vercel with Fluid Compute.
 
-- GitHub: source code
-- One long-running Node host: frontend + REST API + WebSocket server
-- Supabase: durable room snapshots/database
-- Optional separate static frontend: set `VITE_GAME_SERVER_URL` to the game-server origin
+### Required configuration
 
-Keeping the frontend and game server on one origin is the simplest setup and avoids CORS and WebSocket routing problems.
+- Node.js: **24.x**
+- Build command: `npm run build`
+- `vercel.json` enables Fluid Compute and configures the API function duration.
+- WebSocket endpoint: `/api/ws`
+- REST API: `/api/*`
 
-## Production commands
+The browser and realtime server should use the same origin in production.
 
-`npm install`
-`npm run build:full`
-`NODE_ENV=production npm start`
+### Persistence
 
-The server listens on `process.env.PORT` and `0.0.0.0`.
+Active room state lives in the Node process for low-latency gameplay and is snapshotted to Supabase for reconnect/recovery.
 
-## Docker
+Set:
 
-The included `Dockerfile` uses Node 24, builds the Vite frontend, and starts the production Node server on port 8080. A hosting provider may override `PORT` automatically.
+```
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+```
 
-## Important multiplayer requirement
+### Optional AI
 
-The current game keeps active room state in the Node process and persists snapshots to Supabase. Run the game server as **one long-lived instance** unless a shared realtime state/pub-sub layer is added. Multiple independent Node instances can split WebSocket room state.
+The tactical assistant is server-side only.
 
-## Reverse proxy
+```
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=openrouter/auto
+OPENROUTER_SITE_URL=https://football-league-nine.vercel.app
+```
 
-If the host provides a VM, put Nginx/Caddy in front of the Node process and proxy both HTTP and WebSocket traffic to the same Node port. HTTPS must terminate at the proxy so browsers can use `wss://`.
+### WebSocket origins
 
-## Health check
+For same-origin production hosting, no custom origin override is normally required. When using a separate frontend, set:
 
-`GET /api/health` returns the server status and active room count.
+```
+ALLOWED_WS_ORIGINS=https://example.com
+```
 
-## CI
+### Health check
 
-Every push/PR runs the TypeScript check, Vite production build, and deterministic football-engine smoke test.
+`GET /api/health` returns the server status and current active-room count.
 
-## Hosting
+## Local production test
 
-The game no longer depends on Vercel-specific API functions. Deploy the repository as a normal long-running Node service or Docker container.
+```bash
+npm install
+npm run build:full
+npm run smoke
+NODE_ENV=production npm start
+```
+
+## Docker / Render fallback
+
+The repository still contains a Dockerfile and `render.yaml` for a long-running Node deployment. Use that architecture when you need a single persistent Node instance outside Vercel.
+
+For multiplayer reliability, do not run multiple independent Node instances without adding a shared realtime state/pub-sub layer.
