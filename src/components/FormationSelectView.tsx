@@ -29,6 +29,12 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
   const starterCounts = getFormationStarterCategoryCounts(selectedFormation);
   const squadLimits = getFormationSquadCategoryLimits(selectedFormation);
   const botManager = room.managers.find((m) => m.isBot);
+  const squad = currentManager?.squad || [];
+  const starters = squad.filter((s) => s.isStarting);
+  const xiOvr = starters.length
+    ? Math.round(starters.reduce((sum, s) => sum + s.player.overall, 0) / starters.length)
+    : 0;
+  const teamOvr = currentManager?.teamOverall || 0;
 
   return (
     <div className="min-h-screen bg-[#040812] text-slate-100 p-4 sm:p-6 md:p-8 flex flex-col justify-between max-w-6xl mx-auto select-none">
@@ -89,6 +95,21 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
           </div>
 
           {/* Formation Requirements Breakdown */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">TEAM OVR</div>
+              <div className="font-mono font-black text-emerald-400 text-lg">{teamOvr || '—'}</div>
+            </div>
+            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">XI OVR</div>
+              <div className="font-mono font-black text-slate-100 text-lg">{xiOvr || '—'}</div>
+            </div>
+            <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
+              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/18</div>
+            </div>
+          </div>
+
           <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 shadow-lg">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
               Auction Roster Rules: {selectedFormation}
