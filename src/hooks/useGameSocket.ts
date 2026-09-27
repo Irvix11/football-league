@@ -8,19 +8,33 @@ export interface SavedSession {
   managerName: string;
 }
 
+const DEFAULT_REALTIME_BACKEND = 'https://footballleague.antideploy.com';
+
 function getGameServerBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
-  return configured ? configured.replace(/\/$/, '') : window.location.origin;
+  if (configured) return configured.replace(/\/$/, '');
+
+  // Vercel is currently the static/frontend deployment. Keep the durable
+  // WebSocket/room backend on the existing Node server unless an explicit
+  // VITE_GAME_SERVER_URL is configured.
+  if (window.location.hostname.endsWith('.vercel.app')) {
+    return DEFAULT_REALTIME_BACKEND;
+  }
+
+  return window.location.origin;
 }
 
 function getWebSocketBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
-  if (configured) {
-    const url = new URL(configured);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    return url.toString().replace(/\/$/, '');
-  }
-  return `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+  const base = configured
+    ? configured
+    : window.location.hostname.endsWith('.vercel.app')
+      ? DEFAULT_REALTIME_BACKEND
+      : window.location.origin;
+
+  const url = new URL(base);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString().replace(/\/$/, '');
 }
 
 export function useGameSocket() {
