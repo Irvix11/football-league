@@ -1,29 +1,40 @@
 # Football Auction League
 
-A real-time browser football auction and league game with multiplayer lobbies, solo AI, live auctions, team management, a seeded match simulation engine, animated 2D matches, transfers, knockout stages and season awards.
+A production-focused real-time football auction and league game with multiplayer lobbies, solo AI, live positional auctions, 11-player tactical squads, transfers, a seeded 2D match engine, knockout competitions and season awards.
+
+## Production stack
+
+- **Frontend:** React + Vite
+- **Realtime:** Node/Express + WebSocket
+- **Hosting:** Vercel Fluid Compute
+- **Persistence:** Supabase room snapshots
+- **Runtime:** Node 24
+- **Player database:** 510 FC27 players rated 80+ in the checked-in generated dataset, plus 200 curated all-time players
 
 ## Run locally
 
-Requirements: Node.js 22+.
+Requirements: Node.js 24+.
 
 ```bash
 npm install
 npm run build:full
+npm run smoke
 npm start
 ```
 
-Open the address printed by the server. The Node/Express server hosts the React build and the WebSocket game server from the same origin.
+Open the address printed by the server. The Node/Express server hosts the React build and WebSocket game server from the same origin.
 
-## Deploy on Render
+## Vercel deployment
 
-This repository includes `render.yaml` and a Dockerfile.
+Push to the `main` branch and let the Vercel project deploy the repository using `vercel.json`.
 
-1. Create a new Web Service in Render from this GitHub repository.
-2. Let Render use the repository Dockerfile.
-3. Deploy.
-4. Share the generated HTTPS URL with friends.
+The production build command is:
 
-The game uses WebSockets, so deploy it as a long-running web service rather than a static-site deployment.
+```bash
+npm run build
+```
+
+The realtime WebSocket endpoint is served from `/api/ws`. Durable room snapshots are written to Supabase so reconnects can recover across function instances.
 
 ## Development
 
@@ -35,33 +46,19 @@ npm run smoke
 
 ## Player data
 
-The checked-in `src/data/players.ts` file is a small development dataset and is **not** the complete EA SPORTS FC 27 database. The game is structured so a properly licensed/authorized FC 27 data import can replace it without changing the auction or simulation engine.
+The checked-in FC27 generated dataset contains **510 players rated 80+** from the imported ratings snapshot used by this project. The separate all-time dataset contains **200 curated players**.
 
-EA SPORTS FC 27's official ratings database is maintained by EA: https://www.ea.com/games/ea-sports-fc/ratings
+The import tooling lives in `scripts/import-fc27.ts` and writes `src/data/fc27.generated.ts`.
 
+For official EA SPORTS FC ratings information, see:
+https://www.ea.com/games/ea-sports-fc/ratings
 
-<!-- production-deploy-trigger -->
+## Release checks
 
-<!-- Vercel deployment trigger: 2026-09-27T10:37:54.677Z -->
+Before shipping a release, verify:
 
-<!-- FORCE VERCEL REDEPLOY: 2026-09-27T2026-09-27T10:52:57.798Z -->
-
-<!-- deployment trigger: knockout websocket fix -->
-
-
-
-
-
-
-
-
-
-
-
-<!-- force-deploy-1790507484915 -->
-
-<!-- auction forced-purchase deployment trigger: 2026-09-27T12:55:42.153Z -->
-
-<!-- deploy trigger: 2026-09-27T13:06:53.845Z -->
-
-<!-- force production deployment -->
+1. `npm run build:full`
+2. `npm run smoke`
+3. Vercel deployment is **READY**
+4. Production runtime logs show no new errors
+5. A fresh browser can create/join a lobby, reconnect, run an auction, confirm an 11-player XI, simulate a match, and complete a knockout match
