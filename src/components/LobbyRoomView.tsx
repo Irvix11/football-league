@@ -241,7 +241,7 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-slate-400">League Format</span>
-                <span className="font-semibold text-slate-200">{room.settings.competitionFormat === 'Knockout' ? 'Knockout Cup' : room.settings.competitionFormat === 'Champions Cup' ? 'Champions Cup' : room.settings.leagueType}</span>
+                <span className="font-semibold text-slate-200">{room.settings.competitionFormat === 'Knockout' ? 'Knockout Cup' : room.settings.competitionFormat === 'Champions Cup' ? 'Champions Cup' : 'Double Round Robin · Home + Away'}</span>
               </div>
             </div>
           </div>
@@ -411,14 +411,20 @@ export const LobbyRoomView: React.FC<LobbyRoomViewProps> = ({
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
                     League Type
                   </label>
-                  <select
-                    value={leagueType}
-                    onChange={(e) => setLeagueType(e.target.value as LeagueType)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
-                  >
-                    <option value="Round Robin">Round Robin</option>
-                    <option value="Double Round Robin">Double Round Robin</option>
-                  </select>
+                  {competitionFormat === 'League' ? (
+                    <div className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+                      Double Round Robin · Home + Away
+                    </div>
+                  ) : (
+                    <select
+                      value={leagueType}
+                      onChange={(e) => setLeagueType(e.target.value as LeagueType)}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none"
+                    >
+                      <option value="Round Robin">Round Robin</option>
+                      <option value="Double Round Robin">Double Round Robin</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
