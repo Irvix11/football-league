@@ -515,7 +515,9 @@ export function simulateMatch(
   isKnockout = false,
   roundName?: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final'
 ): Fixture {
-  homeManager = normalizeManagerForMatch(homeManager);\n  awayManager = normalizeManagerForMatch(awayManager);\n  const seed = customSeed || (Date.now() ^ (matchday * 1337));
+  homeManager = normalizeManagerForMatch(homeManager);
+  awayManager = normalizeManagerForMatch(awayManager);
+  const seed = customSeed || (Date.now() ^ (matchday * 1337));
   const rand = createPrng(seed);
 
   const homeStarters = homeManager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
