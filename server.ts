@@ -64,7 +64,7 @@ const wss = new WebSocketServer({
   server,
   maxPayload: 64 * 1024,
   perMessageDeflate: false,
-  verifyClient: ({ origin, req }) => {
+  verifyClient: ({ origin, req }: { origin: string; secure: boolean; req: import('http').IncomingMessage }) => {
     if (process.env.NODE_ENV !== 'production' && !origin) return true;
     if (allowedWsOrigins.length > 0) return allowedWsOrigins.includes(origin);
     if (!origin) return false;
@@ -533,13 +533,13 @@ function tacticalCompatibility(player: any, style: string, mentality: string): n
   return bonus;
 }
 
-function bestFormationPlayerValue(player: any, manager: Manager): { score: number; position: string } {
+function bestFormationPlayerValue(player: any, manager: Manager): { score: number; position: Position } {
   const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
   const candidates = config.slots.filter((slot: any) =>
     slot.category === player.category || (slot.category !== 'GK' && player.category !== 'GK')
   );
   const pool = candidates.length ? candidates : config.slots;
-  let best = { score: -Infinity, position: player.position };
+  let best: { score: number; position: Position } = { score: -Infinity, position: player.position as Position };
 
   for (const slot of pool) {
     const fit = calculatePositionFit(player.position, player.alternatePositions || [], slot.position);
