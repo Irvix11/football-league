@@ -15,6 +15,13 @@ export interface PlayerAttributes {
   phy: number; // Physical or Positioning (GK)
 }
 
+export type BlindStatKey = keyof PlayerAttributes;
+
+export interface BlindStatClue {
+  key: BlindStatKey;
+  value: number;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -33,6 +40,8 @@ export interface Player {
   valueSource: string;
   valueVersion: string;
   updatedAt: string;
+  /** Present only for a masked Blind Auction player. */
+  blindClues?: BlindStatClue[];
 }
 
 export type Formation = 
@@ -170,6 +179,8 @@ export interface AuctionState {
   auctionHistory: AuctionHistoryItem[];
   // For blind auction
   hasSubmittedSecretBid?: Record<string, boolean>; // public indicator that a manager submitted
+  /** Two server-selected attributes shown before a Blind Auction reveal. */
+  blindClues?: BlindStatClue[];
 }
 
 export type MatchEventType = 
