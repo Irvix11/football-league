@@ -245,19 +245,29 @@ export function useGameSocket() {
   const startSoloGame = useCallback(async (managerName: string, formation: Formation = '4-3-3') => {
     try {
       setErrorMessage(null);
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({
-          type: 'START_SOLO_GAME',
-          payload: { managerName: managerName.trim(), soloFormation: formation }
-        }));
-      } else {
-        throw new Error('Connection failed. Please try again.');
+
+      // Do not fail instantly while the realtime backend is waking up or the
+      // browser is completing the WebSocket handshake. Antideploy can scale the
+      // Node service to zero when idle, so a fresh visit can legitimately take
+      // a few seconds before the socket becomes OPEN.
+      const deadline = Date.now() + 8000;
+      while ((!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) && Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 200));
       }
+
+      if (socketRef.current?.readyState !== WebSocket.OPEN) {
+        throw new Error('Game server is offline. Wait a few seconds and try again.');
+      }
+
+      socketRef.current.send(JSON.stringify({
+        type: 'START_SOLO_GAME',
+        payload: { managerName: managerName.trim(), soloFormation: formation }
+      }));
     } catch (err: any) {
       console.error('Error starting solo game:', err);
       setErrorMessage(err.message || 'Failed to start Solo Game. Please try again.');
     }
-  }, [saveSession]);
+  }, []);
 
   const createLobby = useCallback((managerName: string, isSolo = false, soloFormation?: Formation, settings?: Partial<LobbySettings>) => {
     if (isSolo) {
