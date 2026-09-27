@@ -864,29 +864,42 @@ function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
   };
 }
 
+function playoffQualifierCount(teamCount: number): 2 | 4 | 8 {
+  // League playoffs:
+  // 2-5 teams -> top 2 straight to the Final
+  // 6-9 teams -> top 4 to Semi-Finals
+  // 10-16 teams -> top 8 to Quarter-Finals
+  if (teamCount >= 10) return 8;
+  if (teamCount >= 6) return 4;
+  return 2;
+}
+
 function knockoutRoundForTeamCount(teamCount: number): 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final' {
-  // Pick the smallest standard bracket that can contain every manager.
-  // This gives 2 teams a Final, 3-4 a Semi-Final, 5-8 a Quarter-Final,
-  // and 9-16 a Round of 16, with byes for non-power-of-two fields.
-  if (teamCount >= 9) return 'Round of 16';
-  if (teamCount >= 5) return 'Quarter-Final';
-  if (teamCount >= 3) return 'Semi-Final';
+  const qualifiers = playoffQualifierCount(teamCount);
+  if (qualifiers === 8) return 'Quarter-Final';
+  if (qualifiers === 4) return 'Semi-Final';
   return 'Final';
 }
 
-function nextKnockoutRound(round: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final') {
+function nextKnockoutRound(round: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final') {
   if (round === 'Round of 16') return 'Quarter-Final';
   if (round === 'Quarter-Final') return 'Semi-Final';
-  if (round === 'Semi-Final') return 'Final';
+  if (round === 'Semi-Final') return 'Third-Place';
+  if (round === 'Third-Place') return 'Final';
   return null;
 }
 
-function buildKnockoutFixtures(managers: Manager[], roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final', matchday: number): Fixture[] {
-  const seeded = [...managers].sort((a, b) => b.teamOverall - a.teamOverall || a.name.localeCompare(b.name));
+function buildKnockoutFixtures(
+  managers: Manager[],
+  roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final',
+  matchday: number
+): Fixture[] {
+  // The input order is authoritative: league playoffs pass teams in league-table
+  // order, and later rounds pass winners/losers in bracket order. Never reseed by OVR.
   const bracketSize = roundName === 'Round of 16' ? 16 : roundName === 'Quarter-Final' ? 8 : roundName === 'Semi-Final' ? 4 : 2;
   const slots: (Manager | null)[] = Array(bracketSize).fill(null);
-  seeded.forEach((manager, index) => {
-    if (index < bracketSize) slots[index] = manager;
+  managers.slice(0, bracketSize).forEach((manager, index) => {
+    slots[index] = manager;
   });
 
   const fixtures: Fixture[] = [];
@@ -908,7 +921,7 @@ function buildKnockoutFixtures(managers: Manager[], roundName: 'Round of 16' | '
         isKnockout: true,
         roundName,
       });
-    } else {
+    } else if (home || away) {
       const winner = home || away!;
       fixtures.push({
         id,
@@ -930,8 +943,12 @@ function buildKnockoutFixtures(managers: Manager[], roundName: 'Round of 16' | '
 }
 
 function initializeKnockout(room: GameRoom) {
-  const firstRound = knockoutRoundForTeamCount(room.managers.length);
-  const fixtures = buildKnockoutFixtures(room.managers, firstRound, 1);
+  // Used by explicitly selected non-league knockout formats.
+  const seeded = [...room.managers].sort((a, b) => b.teamOverall - a.teamOverall || a.name.localeCompare(b.name));
+  const qualifierCount = playoffQualifierCount(seeded.length);
+  const firstRound = qualifierCount === 8 ? 'Quarter-Final' : qualifierCount === 4 ? 'Semi-Final' : 'Final';
+  const qualifiers = seeded.slice(0, qualifierCount);
+  const fixtures = buildKnockoutFixtures(qualifiers, firstRound, 1);
   const round: KnockoutRound = {
     roundName: firstRound,
     fixtures,
@@ -949,6 +966,44 @@ function initializeKnockout(room: GameRoom) {
   room.phase = 'knockout';
 }
 
+function initializeLeaguePlayoffs(room: GameRoom) {
+  const qualifiers = playoffQualifierCount(room.managers.length);
+  const ranked = [...room.leagueTable]
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.goalDifference - a.goalDifference ||
+      b.goalsFor - a.goalsFor ||
+      a.managerName.localeCompare(b.managerName)
+    )
+    .slice(0, qualifiers)
+    .map(row => room.managers.find(m => m.id === row.managerId))
+    .filter(Boolean) as Manager[];
+
+  if (ranked.length < 2) {
+    room.phase = 'season_end';
+    room.awards = calculateSeasonAwards(room);
+    return;
+  }
+
+  const firstRound = qualifiers === 8 ? 'Quarter-Final' : qualifiers === 4 ? 'Semi-Final' : 'Final';
+  const fixtures = buildKnockoutFixtures(ranked, firstRound, room.currentMatchday + 1);
+
+  const round: KnockoutRound = {
+    roundName: firstRound,
+    fixtures,
+    isComplete: fixtures.every(f => f.played),
+  };
+
+  room.knockoutStage = {
+    currentRound: firstRound,
+    rounds: [round],
+  };
+  room.fixtures = fixtures;
+  room.currentMatchday += 1;
+  room.totalMatchdays = room.currentMatchday;
+  room.phase = 'knockout';
+}
+
 function advanceKnockoutRound(room: GameRoom) {
   const stage = room.knockoutStage;
   if (!stage) return;
@@ -957,33 +1012,88 @@ function advanceKnockoutRound(room: GameRoom) {
   currentRound.isComplete = currentRound.fixtures.every(f => f.played);
   if (!currentRound.isComplete) return;
 
-  const winners = currentRound.fixtures
-    .map(f => f.winnerManagerId)
-    .filter(Boolean)
-    .map(id => room.managers.find(m => m.id === id))
-    .filter(Boolean) as Manager[];
+  // A Final ends the season.
+  if (currentRound.roundName === 'Final') {
+    const champion = currentRound.fixtures
+      .map(f => f.winnerManagerId)
+      .filter(Boolean)
+      .map(id => room.managers.find(m => m.id === id))
+      .filter(Boolean)[0] as Manager | undefined;
 
-  if (winners.length <= 1) {
-    const champion = winners[0];
     stage.championId = champion?.id;
     stage.championName = champion?.name;
-    room.leagueTable = calculateInitialTable(room.managers);
-    if (champion) {
-      room.leagueTable = room.leagueTable.map(row =>
-        row.managerId === champion.id ? { ...row, points: 1 } : row
-      ).sort((a, b) => b.points - a.points);
-    }
     room.phase = 'season_end';
     room.awards = calculateSeasonAwards(room);
     return;
   }
 
+  let nextManagers: Manager[] = [];
+
+  if (currentRound.roundName === 'Semi-Final') {
+    // Winners go to the Final; losers go to the Third-Place match.
+    const winners = currentRound.fixtures
+      .map(f => f.winnerManagerId)
+      .filter(Boolean)
+      .map(id => room.managers.find(m => m.id === id))
+      .filter(Boolean) as Manager[];
+
+    const losers = currentRound.fixtures
+      .map(f => {
+        const winnerId = f.winnerManagerId;
+        const loserId = winnerId === f.homeManagerId ? f.awayManagerId : f.homeManagerId;
+        return room.managers.find(m => m.id === loserId);
+      })
+      .filter(Boolean) as Manager[];
+
+    const thirdFixtures = buildKnockoutFixtures(losers, 'Third-Place', currentRound.fixtures[0]?.matchday + 1 || room.currentMatchday + 1);
+    stage.rounds.push({
+      roundName: 'Third-Place',
+      fixtures: thirdFixtures,
+      isComplete: thirdFixtures.every(f => f.played),
+    });
+    stage.currentRound = 'Third-Place';
+    room.fixtures = thirdFixtures;
+    room.currentMatchday = (currentRound.fixtures[0]?.matchday || room.currentMatchday) + 1;
+    room.totalMatchdays = room.currentMatchday;
+    // Store finalists indirectly in the completed Semi-Final round; they will be
+    // read when the Third-Place match finishes.
+    void winners;
+    return;
+  }
+
+  if (currentRound.roundName === 'Third-Place') {
+    const semiRound = stage.rounds[stage.rounds.length - 2];
+    const finalists = (semiRound?.fixtures || [])
+      .map(f => f.winnerManagerId)
+      .filter(Boolean)
+      .map(id => room.managers.find(m => m.id === id))
+      .filter(Boolean) as Manager[];
+
+    const finalFixtures = buildKnockoutFixtures(finalists, 'Final', currentRound.fixtures[0]?.matchday + 1 || room.currentMatchday + 1);
+    stage.rounds.push({
+      roundName: 'Final',
+      fixtures: finalFixtures,
+      isComplete: finalFixtures.every(f => f.played),
+    });
+    stage.currentRound = 'Final';
+    room.fixtures = finalFixtures;
+    room.currentMatchday = (currentRound.fixtures[0]?.matchday || room.currentMatchday) + 1;
+    room.totalMatchdays = room.currentMatchday;
+    return;
+  }
+
+  nextManagers = currentRound.fixtures
+    .map(f => f.winnerManagerId)
+    .filter(Boolean)
+    .map(id => room.managers.find(m => m.id === id))
+    .filter(Boolean) as Manager[];
+
   const nextRoundName = nextKnockoutRound(currentRound.roundName);
   if (!nextRoundName) return;
 
   const nextMatchday = (currentRound.fixtures[0]?.matchday ?? room.currentMatchday) + 1;
-  const nextFixtures = buildKnockoutFixtures(winners, nextRoundName, nextMatchday);
-    stage.rounds.push({
+  const nextFixtures = buildKnockoutFixtures(nextManagers, nextRoundName, nextMatchday);
+  stage.rounds.push({
     roundName: nextRoundName,
     fixtures: nextFixtures,
     isComplete: nextFixtures.every(f => f.played),
@@ -991,6 +1101,7 @@ function advanceKnockoutRound(room: GameRoom) {
   stage.currentRound = nextRoundName;
   room.fixtures = nextFixtures;
   room.currentMatchday = nextMatchday;
+  room.totalMatchdays = nextMatchday;
 }
 
 function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadPlayerEntry[], formation: Formation, tactics: any, roles: any) {
