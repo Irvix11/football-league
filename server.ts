@@ -431,6 +431,11 @@ function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRo
   if (sanitized.auction) {
     sanitized.auction.highestBidderId = ref(sanitized.auction.highestBidderId) as string | null;
     sanitized.auction.winnerId = ref(sanitized.auction.winnerId) as string | null;
+    sanitized.auction.forcedWinnerId = ref(sanitized.auction.forcedWinnerId) as string | null;
+    sanitized.auction.auctionHistory = sanitized.auction.auctionHistory.map(item => ({
+      ...item,
+      winnerId: ref(item.winnerId) as string,
+    }));
     if (sanitized.auction.hasSubmittedSecretBid) {
       sanitized.auction.hasSubmittedSecretBid = Object.fromEntries(
         Object.entries(sanitized.auction.hasSubmittedSecretBid).map(([id, value]) => [ref(id) as string, value])
@@ -447,6 +452,7 @@ function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRo
   }
 
   if (sanitized.knockoutStage) {
+    sanitized.knockoutStage.championId = ref(sanitized.knockoutStage.championId) as string | undefined;
     sanitized.knockoutStage.rounds = sanitized.knockoutStage.rounds.map(round => ({
       ...round,
       fixtures: round.fixtures.map(f => ({
