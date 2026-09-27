@@ -20,6 +20,7 @@ export default function App() {
     startSoloGame,
     createLobby,
     joinLobby,
+    resumeLobby,
     updateSettings,
     toggleReady,
     kickPlayer,
@@ -140,7 +141,7 @@ export default function App() {
           onJoinLobby={(code, name) => joinLobby(code, name)}
           onSoloPlay={(name, formation) => startSoloGame(name, formation)}
           savedSession={savedSession}
-          onResumeSession={(code, name) => joinLobby(code, name)}
+          onResumeSession={(code, name) => resumeLobby({ roomCode: code, managerId: savedSession?.managerId || '', managerName: name })}
           isConnected={isConnected}
         />
       ) : room.phase === 'lobby' ? (
