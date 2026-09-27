@@ -5,57 +5,287 @@
     --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --fal-bg: #02040a;
+    --fal-panel: rgba(9, 14, 26, 0.78);
+    --fal-panel-strong: rgba(12, 18, 32, 0.94);
+    --fal-border: rgba(148, 163, 184, 0.10);
+    --fal-border-strong: rgba(16, 185, 129, 0.22);
+    --fal-accent: #00e5a0;
+    --fal-accent-2: #17d6c2;
+    --fal-gold: #f6c453;
+    --fal-muted: #71809a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--fal-bg);
+    color-scheme: dark;
+    scroll-behavior: smooth;
   }
 
   body {
+    margin: 0;
+    min-width: 320px;
     font-family: var(--font-body);
-    background-color: #030712;
+    background:
+      radial-gradient(900px 500px at 50% -15%, rgba(0, 229, 160, 0.10), transparent 65%),
+      radial-gradient(700px 500px at 100% 45%, rgba(23, 214, 194, 0.055), transparent 70%),
+      radial-gradient(700px 500px at 0% 75%, rgba(59, 130, 246, 0.035), transparent 70%),
+      #02040a;
     color: #f8fafc;
   }
 
-  h1, h2, h3, .font-display {
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, h4, .font-display {
     font-family: var(--font-display);
   }
 
   .font-mono, .tabular-nums {
     font-family: var(--font-mono);
   }
+
+  ::selection {
+    background: rgba(0, 229, 160, 0.28);
+    color: #fff;
+  }
 }
 
-/* Custom football pitch grass pattern */
+/* =========================================================
+   FOOTBALL AUCTION LEAGUE — PREMIUM DARK SYSTEM
+   ========================================================= */
+
+#root {
+  min-height: 100vh;
+  background: #02040a;
+}
+
+/* The phase root gets a cinematic stadium backdrop without
+   forcing every screen to use the same flat color. */
+#root > div:first-child {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(800px 420px at 50% -10%, rgba(0, 229, 160, 0.075), transparent 68%),
+    radial-gradient(650px 500px at 100% 30%, rgba(23, 214, 194, 0.035), transparent 72%),
+    linear-gradient(180deg, #03060d 0%, #02040a 100%) !important;
+}
+
+#root > div:first-child::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+#root > div:first-child::after {
+  content: "";
+  position: fixed;
+  width: 46vw;
+  height: 46vw;
+  max-width: 720px;
+  max-height: 720px;
+  left: 50%;
+  top: -18vw;
+  transform: translateX(-50%);
+  border: 1px solid rgba(0, 229, 160, 0.055);
+  border-radius: 999px;
+  box-shadow:
+    0 0 100px rgba(0, 229, 160, 0.035),
+    inset 0 0 80px rgba(0, 229, 160, 0.025);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Premium glass surfaces. */
+[class*="bg-slate-900"],
+[class*="bg-slate-950"],
+[class*="bg-[#040812]"],
+[class*="bg-white/"],
+[class*="bg-emerald-950/"] {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+[class*="bg-slate-900"] {
+  background-color: rgba(10, 16, 29, 0.78) !important;
+}
+
+[class*="bg-slate-950"] {
+  background-color: rgba(3, 7, 15, 0.84) !important;
+}
+
+/* Turn ordinary borders into subtle illuminated edges. */
+[class*="border-slate-800"],
+[class*="border-slate-900"],
+[class*="border-white/10"] {
+  border-color: rgba(148, 163, 184, 0.095) !important;
+}
+
+[class*="border-emerald-500/"] {
+  border-color: rgba(0, 229, 160, 0.24) !important;
+}
+
+/* Cards get depth without looking like giant glowing rectangles. */
+[class*="rounded-2xl"][class*="border"],
+[class*="rounded-3xl"][class*="border"] {
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+/* Interactive controls feel like a real game UI. */
+button {
+  transition:
+    transform 160ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.035);
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(0, 229, 160, 0.75);
+  outline-offset: 2px;
+}
+
+/* Primary emerald actions: darker, cleaner, premium rather than neon. */
+[class*="bg-emerald-400"],
+[class*="bg-emerald-500"] {
+  box-shadow:
+    0 10px 30px rgba(0, 229, 160, 0.12),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+}
+
+/* Inputs / selects. */
+input:not([type="range"]),
+select,
+textarea {
+  background-color: rgba(3, 7, 15, 0.82) !important;
+  border-color: rgba(148, 163, 184, 0.13) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+input:not([type="range"]):hover,
+select:hover,
+textarea:hover {
+  border-color: rgba(148, 163, 184, 0.23) !important;
+}
+
+input:not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(0, 229, 160, 0.58) !important;
+  box-shadow:
+    0 0 0 3px rgba(0, 229, 160, 0.08),
+    inset 0 1px 0 rgba(255,255,255,0.025);
+}
+
+/* Range controls. */
+input[type="range"] {
+  accent-color: var(--fal-accent);
+}
+
+/* Tables. */
+table tr {
+  transition: background-color 150ms ease;
+}
+
+table tbody tr:hover {
+  background: rgba(255,255,255,0.025);
+}
+
+/* Live match / pitch surfaces retain their own visual identity. */
 .pitch-pattern {
-  background: 
+  background:
     repeating-linear-gradient(
       0deg,
-      rgba(16, 185, 129, 0.08) 0px,
-      rgba(16, 185, 129, 0.08) 32px,
-      rgba(5, 150, 105, 0.14) 32px,
-      rgba(5, 150, 105, 0.14) 64px
+      rgba(16, 185, 129, 0.07) 0px,
+      rgba(16, 185, 129, 0.07) 32px,
+      rgba(5, 150, 105, 0.12) 32px,
+      rgba(5, 150, 105, 0.12) 64px
     ),
     radial-gradient(circle at 50% 50%, #064e3b 0%, #022c22 75%, #021e17 100%);
 }
 
 .pitch-lines {
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.38),
+    0 0 45px rgba(16, 185, 129, 0.06);
 }
 
-/* Gold shimmer for star players */
+/* Auction / score emphasis. */
 .gold-shimmer {
-  background: linear-gradient(135deg, #fbbf24 0%, #d97706 50%, #b45309 100%);
+  background: linear-gradient(135deg, #f7d774 0%, #d8a92e 50%, #9c7118 100%);
+  box-shadow: 0 8px 30px rgba(246, 196, 83, 0.12);
 }
 
-/* Smooth custom scrollbars */
+/* Premium scrollbar. */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #02040a;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 9999px;
+  background: linear-gradient(180deg, #172033, #0b1220);
+  border: 1px solid rgba(148,163,184,0.08);
+  border-radius: 999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #22304a;
+}
+
+/* Reduce the visual noise of giant mobile blocks while preserving touch targets. */
+@media (max-width: 640px) {
+  #root > div:first-child::after {
+    width: 125vw;
+    height: 125vw;
+    top: 8vh;
+  }
+
+  [class*="shadow-2xl"] {
+    box-shadow: 0 14px 40px rgba(0,0,0,0.28) !important;
+  }
+}
+
+/* Respect reduced-motion settings. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
