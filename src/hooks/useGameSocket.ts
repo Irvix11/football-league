@@ -155,6 +155,27 @@ export function useGameSocket() {
     };
   }, [connect]);
 
+  // Vercel WebSocket instances are not guaranteed to share in-memory state.
+  // Poll the durable room snapshot so reconnects and multi-instance updates stay synchronized.
+  useEffect(() => {
+    if (!room?.code) return;
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const response = await fetch(`/api/room/${encodeURIComponent(room.code)}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const snapshot = await response.json() as GameRoom;
+        if (cancelled) return;
+        setRoom(current => {
+          if (!current || snapshot.updatedAt >= current.updatedAt) return snapshot;
+          return current;
+        });
+      } catch {}
+    };
+    const timer = window.setInterval(sync, 1800);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [room?.code]);
+
   // Actions
   const send = useCallback((type: string, payload: any) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
