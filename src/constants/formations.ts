@@ -326,14 +326,10 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   if (starters.length !== 11) errors.push('Starting XI must contain exactly 11 players.');
   if (substitutes.length !== 0) errors.push('Squad cannot contain substitutes.');
 
-  const naturalCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
-  for (const entry of squad) naturalCategoryCounts[entry.player.category] += 1;
-  const squadLimits = getFormationSquadCategoryLimits(formation);
-  for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
-    if (naturalCategoryCounts[cat] > squadLimits[cat]) {
-      errors.push(`Too many ${cat} players for ${formation} (maximum ${squadLimits[cat]} in the 18-player squad)`);
-    }
-  }
+  // Natural player categories are enforced by the auction. After the auction,
+  // managers are allowed to move any outfield player into any outfield slot.
+  // This makes formation changes and transfers flexible; positional fit/OVR
+  // handles the performance penalty for playing out of position.
 
   const gkCount = naturalCategoryCounts.GK;
   if (gkCount > squadLimits.GK) errors.push(`Squad can contain at most ${squadLimits.GK} goalkeepers.`);
