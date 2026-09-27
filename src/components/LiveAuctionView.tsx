@@ -13,6 +13,7 @@ interface LiveAuctionViewProps {
   managerId: string;
   onPlaceBid: (amount: number) => void;
   onSubmitBlindBid: (amount: number) => void;
+  onMarkDone: () => void;
 }
 
 export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
@@ -20,6 +21,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   managerId,
   onPlaceBid,
   onSubmitBlindBid,
+  onMarkDone,
 }) => {
   const currentManager = room.managers.find((m) => m.id === managerId);
   const auction = room.auction;
@@ -134,6 +136,10 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const canAfford = currentManager.budget >= minNextBid;
   const isSquadFull = currentManager.squad.length >= 11;
   const isWinning = auction.highestBidderId === managerId;
+  const readyIds = room.phaseReadyIds || [];
+  const auctionDone = readyIds.includes(managerId);
+  const auctionReadyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
+  const squadComplete = currentManager.squad.length === 11;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
 
@@ -215,6 +221,11 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div>
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">SQUAD</div>
             <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 11</div>
+          </div>
+          <div className="h-8 w-[1px] bg-slate-800" />
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">READY</div>
+            <div className="font-mono font-black text-amber-300 text-lg sm:text-xl">{auctionReadyCount}/{room.managers.length}</div>
           </div>
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
