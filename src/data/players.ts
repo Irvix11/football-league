@@ -1141,6 +1141,15 @@ export const DEVELOPMENT_PLAYERS: Player[] = [
 ];
 
 /**
+ * Auction pricing is intentionally independent of market value.
+ * The game economy is driven by OVR with a simple bounded starting-price curve.
+ */
+export function getAuctionStartingPrice(player: Player): number {
+  const overall = Math.max(80, Math.min(99, Number(player.overall) || 80));
+  return Math.max(5, Math.min(100, Math.round(8 + (overall - 80) * 5)));
+}
+
+/**
  * Filter players by pool and era.
  */
 export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
@@ -1179,5 +1188,9 @@ export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
     list = [...list, ...globalFill];
   }
 
-  return list;
+  // Market value is legacy data only. Auction lots are priced from OVR.
+  return list.map(player => ({
+    ...player,
+    startingPrice: getAuctionStartingPrice(player),
+  }));
 }
