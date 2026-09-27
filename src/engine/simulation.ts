@@ -75,9 +75,21 @@ function calculateTeamPower(manager: Manager): TeamPower {
     risk: 50,
   };
 
-  let effectiveAttack = attack + (tactics.tempo - 50) * 0.06 + (tactics.risk - 50) * 0.05;
-  let effectiveMidfield = midfield + (tactics.attackWidth - 50) * 0.03;
-  let effectiveDefense = defense + (tactics.defensiveLine - 50) * 0.03;
+  // Tactical sliders have real trade-offs rather than being free upgrades.
+  let effectiveAttack =
+    attack +
+    (tactics.tempo - 50) * 0.045 +
+    (tactics.risk - 50) * 0.055 +
+    (tactics.attackWidth - 50) * 0.012;
+  let effectiveMidfield =
+    midfield +
+    (tactics.attackWidth - 50) * 0.018 +
+    (tactics.pressingIntensity - 50) * 0.018;
+  let effectiveDefense =
+    defense +
+    (tactics.defensiveLine - 50) * 0.022 -
+    (tactics.risk - 50) * 0.032 -
+    Math.max(0, tactics.attackWidth - 65) * 0.018;
 
   if (tactics.style === 'Possession') effectiveMidfield += 5;
   if (tactics.style === 'High Press') {
@@ -110,7 +122,11 @@ function calculateTeamPower(manager: Manager): TeamPower {
 
   // High fatigue slightly reduces effective output without making tired players useless.
   const fatigue = average(starters.map(s => s.condition.fatigue || 0), 0);
-  const fatigueFactor = Math.max(0.90, 1 - fatigue * 0.0015);
+  const intensityLoad =
+    Math.max(0, tactics.pressingIntensity - 50) * 0.0007 +
+    Math.max(0, tactics.tempo - 50) * 0.00035 +
+    Math.max(0, tactics.risk - 50) * 0.00025;
+  const fatigueFactor = Math.max(0.84, 1 - fatigue * 0.0015 - intensityLoad);
 
   effectiveAttack *= fatigueFactor;
   effectiveMidfield *= fatigueFactor;
@@ -562,7 +578,8 @@ export function simulateMatch(
   const homePower = calculateTeamPower(homeManager);
   const awayPower = calculateTeamPower(awayManager);
 
-  const homeAdvantage = isKnockout ? 0.5 : 2.0; // Neutral ground feel in tournament finals
+  // Modest home advantage: it affects match dynamics/probability, not raw player quality.
+  const homeAdvantage = isKnockout ? 0.5 : 2.75;
   const homeTactics = homeManager.tactics;
   const awayTactics = awayManager.tactics;
 
@@ -870,19 +887,39 @@ export function simulateMatch(
     // Calculate Tactical Turnover Modifier (High Press vs Low Block vs Possession)
     const atkPower = isHome ? homePower : awayPower;
     const defPower = isHome ? awayPower : homePower;
-    let turnoverThreshold = 0.34 + (defPower.midfield - atkPower.midfield) * 0.003;
-    if (defTactics.style === 'High Press' || defTactics.pressingIntensity > 70) {
-      turnoverThreshold += 0.12;
-    }
-    if (atkTactics.style === 'Possession') {
-      turnoverThreshold -= 0.08;
-    }
-    if (defTactics.style === 'Low Block') {
-      turnoverThreshold -= 0.05;
-    }
-    if (atkTactics.mentality === 'Defensive') turnoverThreshold += 0.02;
+    let turnoverThreshold = 0.44 + (defPower.midfield - atkPower.midfield) * 0.003;
+    if (defTactics.style === 'High Press') turnoverThreshold += 0.08;
+    turnoverThreshold += (defTactics.pressingIntensity - 50) * 0.0022;
+    if (atkTactics.style === 'Possession') turnoverThreshold -= 0.05;
+    if (defTactics.style === 'Low Block') turnoverThreshold -= 0.03;
+    if (atkTactics.mentality === 'Defensive') turnoverThreshold += 0.015;
     if (atkTactics.mentality === 'Aggressive') turnoverThreshold += 0.02;
-    turnoverThreshold = Math.max(0.18, Math.min(0.62, turnoverThreshold));
+    turnoverThreshold += Math.max(0, atkTactics.tempo - 50) * 0.0012;
+    turnoverThreshold += Math.max(0, atkTactics.risk - 50) * 0.0015;
+    turnoverThreshold = Math.max(0.30, Math.min(0.62, turnoverThreshold));
+
+    // Keep chance volume in a realistic range instead of making most possessions shots.
+    const crossChance = Math.max(
+      0.08,
+      Math.min(
+        0.17,
+        0.11 +
+          (atkTactics.attackWidth - 50) * 0.001 +
+          (atkTactics.style === 'Long Ball' ? 0.03 : 0)
+      )
+    );
+    const shotChance = Math.max(
+      0.15,
+      Math.min(
+        0.25,
+        0.19 +
+          (atkTactics.tempo - 50) * 0.0009 +
+          (atkTactics.risk - 50) * 0.0008 +
+          (isCounterAttacking ? 0.035 : 0)
+      )
+    );
+    const crossCutoff = Math.min(0.82, turnoverThreshold + crossChance);
+    const shotCutoff = Math.min(0.96, crossCutoff + shotChance);
 
     const actionRoll = rand();
 
@@ -897,11 +934,30 @@ export function simulateMatch(
         if (isCard) {
           defStats.yellowCards++;
           const defStat = playerStatsMap.get(defender.player.id);
-          if (defStat) defStat.yellowCard = true;
-          pushEvent({
-            minute: actionMin,
-            second: actionSec,
-            type: 'yellow_card',
+          if (defStat?.yellowCard) {
+            defStat.redCard = true;
+            pushEvent({
+              minute: actionMin,
+              second: actionSec,
+              type: 'red_card',
+              team: isHome ? 'away' : 'home',
+              playerId: defender.player.id,
+              playerName: defender.player.name,
+              commentary: `🟥 SECOND YELLOW! ${defender.player.name} is sent off after receiving a second caution.`,
+              ballCoordinates: { x: ballX, y: ballY },
+              ballStartCoordinates: { x: ballX, y: ballY },
+              playerCoordinates: generate22PlayerCoordinates(
+                homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+                homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
+              ),
+              momentum: isHome ? momentum - 5 : momentum + 5,
+            });
+          } else {
+            if (defStat) defStat.yellowCard = true;
+            pushEvent({
+              minute: actionMin,
+              second: actionSec,
+              type: 'yellow_card',
             team: isHome ? 'away' : 'home',
             playerId: defender.player.id,
             playerName: defender.player.name,
@@ -913,7 +969,8 @@ export function simulateMatch(
               homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
             ),
             momentum: isHome ? momentum + 3 : momentum - 3,
-          });
+            });
+          }
         } else {
           pushEvent({
             minute: actionMin,
@@ -970,7 +1027,7 @@ export function simulateMatch(
       }
     }
     // ACTION B: Cross & Box Play (Aerial duels / Long balls)
-    else if (actionRoll < (isLongBallStyle ? 0.68 : 0.60)) {
+    else if (actionRoll < crossCutoff) {
       const winger = receiver;
       const striker = pick(atkAtts.length > 0 ? atkAtts : attackingStarters);
       const crossTargetX = isHome ? 91 : 9;
@@ -1004,10 +1061,11 @@ export function simulateMatch(
       const finishSec = currentTotalSeconds % 60;
 
       atkStats.shots++;
-      let crossGoalProbability = 0.22 + (atkPower.attack - defPower.defense) * 0.003;
-      if (defTactics.style === 'Low Block') crossGoalProbability *= 0.78;
-      if (atkTactics.mentality === 'Aggressive') crossGoalProbability *= 1.08;
-      crossGoalProbability = Math.max(0.08, Math.min(0.55, crossGoalProbability));
+      let crossGoalProbability = 0.105 + (atkPower.attack - defPower.defense) * 0.0018;
+      if (defTactics.style === 'Low Block') crossGoalProbability *= 0.74;
+      if (atkTactics.attackWidth > 65) crossGoalProbability *= 1.08;
+      if (atkTactics.mentality === 'Aggressive') crossGoalProbability *= 1.05;
+      crossGoalProbability = Math.max(0.045, Math.min(0.30, crossGoalProbability));
       const isGoal = rand() < crossGoalProbability;
 
       if (isGoal) {
@@ -1093,9 +1151,20 @@ export function simulateMatch(
         }
       }
     }
-    // ACTION C: Shot on Goal (Rating-based Chance Quality - Requirement 20)
-    else {
-      const shooter = receiver;
+    // ACTION C: Shot on Goal (rating-based chance quality).
+    else if (actionRoll < shotCutoff) {
+      // Open-play goals are weighted toward attackers, but midfielders and
+      // occasional defenders can score too.
+      const chanceShooters = [
+        ...atkAtts,
+        ...atkAtts,
+        ...atkMids,
+        ...(isHome ? homeDefs : awayDefs).slice(0, 1),
+      ];
+      const shooter = pick(
+        chanceShooters.length > 0 ? chanceShooters : attackingStarters,
+        'shot taker'
+      );
       const targetGoalX = isHome ? 97 : 3;
       atkStats.shots++;
       const shooterStat = playerStatsMap.get(shooter.player.id);
@@ -1127,14 +1196,18 @@ export function simulateMatch(
       } else {
         atkStats.shotsOnTarget++;
         // Low Block cuts goal probability, Possession/Counter increases chance quality
-        let goalProbability = 0.28 + (shooterQuality - gkReflexes) * 0.010 + (atkPower.attack - defPower.defense) * 0.0035;
-        goalProbability = Math.max(0.10, Math.min(0.72, goalProbability));
-        if (defTactics.style === 'Low Block') goalProbability *= 0.75;
-        if (atkTactics.style === 'Possession') goalProbability *= 1.10;
-        if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.18;
-        if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.08;
-        if (atkTactics.mentality === 'Defensive') goalProbability *= 0.95;
-        goalProbability = Math.max(0.08, Math.min(0.78, goalProbability));
+        // Non-penalty conversion is tuned toward realistic match-level scoring.
+        let goalProbability =
+          0.145 +
+          (shooterQuality - gkReflexes) * 0.0065 +
+          (atkPower.attack - defPower.defense) * 0.0018;
+        goalProbability = Math.max(0.055, Math.min(0.42, goalProbability));
+        if (defTactics.style === 'Low Block') goalProbability *= 0.72;
+        if (atkTactics.style === 'Possession') goalProbability *= 1.05;
+        if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.14;
+        if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.05;
+        if (atkTactics.mentality === 'Defensive') goalProbability *= 0.94;
+        goalProbability = Math.max(0.045, Math.min(0.50, goalProbability));
 
         if (rand() < goalProbability) {
           // GOAL!
@@ -1220,8 +1293,9 @@ export function simulateMatch(
   let winnerManagerId: string | undefined;
 
   if ((isKnockout && homeScore === awayScore) || forcePenalties) {
-    wentToExtraTime = true;
-    currentTotalSeconds = 5400; // 90:00
+    if (!forcePenalties) {
+      wentToExtraTime = true;
+      currentTotalSeconds = 5400; // 90:00
 
     pushEvent({
       minute: 90,
@@ -1353,8 +1427,9 @@ export function simulateMatch(
       momentum,
     });
 
-    // PENALTY SHOOTOUT SIMULATION (Sequential 5 rounds + sudden death) only if ET is still level.
-    if (homeScore === awayScore) {
+    }
+    // PENALTY SHOOTOUT SIMULATION: five kicks each, then sudden death.
+    if (forcePenalties || homeScore === awayScore) {
       wentToPenalties = true;
       penaltyShootout = [];
     let hPens = 0;
@@ -1362,11 +1437,16 @@ export function simulateMatch(
 
     // Pick 5 penalty takers per team
     const sortTakers = (starters: SquadPlayerEntry[], prefId?: string) => {
-      return [...starters].sort((a, b) => {
-        if (a.player.id === prefId) return -1;
-        if (b.player.id === prefId) return 1;
-        return b.player.attributes.sho - a.player.attributes.sho;
-      });
+      const preferred = starters.find(s => s.player.id === prefId);
+      const outfield = starters.filter(
+        s => getPositionCategory(s.assignedPosition || s.player.position) !== 'GK'
+      );
+      const pool = preferred
+        ? [preferred, ...outfield.filter(s => s.player.id !== preferred.player.id)]
+        : outfield.length > 0
+          ? outfield
+          : starters;
+      return pool.sort((a, b) => b.player.attributes.sho - a.player.attributes.sho);
     };
 
     const homeTakers = sortTakers(homeStarters, homeManager.roles?.penaltyTakerId);
