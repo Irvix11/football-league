@@ -85,3 +85,5 @@ Before shipping a release, verify:
 - 10–16 managers: top 8 advance to the Quarter-Finals.
 - Knockout draws are decided by extra time and then a visual penalty shootout.
 - Semi-Finals are followed by a Third-Place match, then the Final.
+
+<!-- vercel-force-deploy: 2026-09-27T19:58 -->
