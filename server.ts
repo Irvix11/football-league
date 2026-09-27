@@ -1057,10 +1057,7 @@ function simulateBotBids(room: GameRoom) {
     // then adjusts for its chosen tactical style/mentality. OVR is only a small
     // sanity signal instead of the main pricing mechanism.
     const meta = bestFormationPlayerValue(currentPl, bot);
-    const ovrSignal = currentPl.overall * 0.22;
-    const metaSignal = meta.score * 0.78;
     const roleFit = calculatePositionFit(currentPl.position, currentPl.alternatePositions || [], meta.position);
-    const valuePerPoint = 0.72 + roleFit / 100 * 0.20;
     const tacticalValue = Math.max(-12, Math.min(12,
       tacticalCompatibility(currentPl, bot.tactics?.style || 'Balanced', bot.tactics?.mentality || 'Balanced')
     ));
