@@ -39,13 +39,12 @@ const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
 // The production frontend may be hosted separately from the realtime Node server.
 // Keep explicit origins by default, while allowing additional deployments through
 // ALLOWED_WS_ORIGINS on the backend.
-const allowedWsOrigins = configuredOrigins.length > 0
-  ? configuredOrigins
-  : [
-      'https://football-league-nine.vercel.app',
-      'https://football-league-irvix1.vercel.app',
-      'https://football-league-git-main-irvix1.vercel.app',
-    ];
+const allowedWsOrigins = Array.from(new Set([
+  ...configuredOrigins,
+  'https://football-league-nine.vercel.app',
+  'https://football-league-irvix1.vercel.app',
+  'https://football-league-git-main-irvix1.vercel.app',
+]));
 
 app.use((req, res, next) => {
   const origin = String(req.headers.origin || '');
