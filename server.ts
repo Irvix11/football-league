@@ -20,7 +20,7 @@ import {
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football.js';
-import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
+import { FORMATIONS_CONFIG, BENCH_CATEGORY_ALLOCATION, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
 import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot } from './server/persistence.js';
@@ -435,7 +435,7 @@ function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTab
   return newTable;
 }
 
-// Automatic 11-player XI generator for Skip Auction or Bot Setup
+// Automatic 18-player squad generator for Skip Auction or Bot Setup
 function createFitCondition(): SquadPlayerEntry['condition'] {
   return {
     state: 'FIT',
@@ -521,7 +521,7 @@ function bestFormationPlayerValue(player: any, manager: Manager): { score: numbe
 
 function autoFillManagerLineup(manager: Manager) {
   const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
-  if (manager.squad.length < 11) return;
+  if (manager.squad.length < 18) return;
 
   const remaining = [...manager.squad];
   const starters: SquadPlayerEntry[] = [];
@@ -553,35 +553,43 @@ function autoFillManagerLineup(manager: Manager) {
     });
   }
 
-  manager.squad = starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
+  const bench: SquadPlayerEntry[] = [];
+  for (const category of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
+    const needed = BENCH_CATEGORY_ALLOCATION[category];
+    const candidates = remaining
+      .filter(entry => entry.player.category === category)
+      .sort((a, b) => playerSlotScore(b.player, { category, position: b.player.position }) - playerSlotScore(a.player, { category, position: a.player.position }) || b.player.overall - a.player.overall);
+    for (const chosen of candidates.slice(0, needed)) {
+      remaining.splice(remaining.findIndex(e => e.player.id === chosen.player.id), 1);
+      bench.push({
+        ...chosen,
+        isStarting: false,
+        startingSlotIndex: undefined,
+        benchIndex: bench.length,
+        assignedPosition: chosen.assignedPosition || chosen.player.position,
+        condition: chosen.condition || createFitCondition(),
+      });
+    }
+  }
+
+  if (starters.length !== 11 || bench.length !== 7) return;
+  manager.squad = [
+    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
+    ...bench.sort((a, b) => (a.benchIndex ?? 99) - (b.benchIndex ?? 99)),
+  ];
   manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
-  manager.roles = setupManagerRoles(manager.squad);
+  manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
 }
 
 function normalizeRoomToXI(room: GameRoom): boolean {
   let changed = false;
 
   for (const manager of room.managers) {
-    if (manager.squad.length > 11) {
-      // Migrate legacy 18-player saves by rebuilding the starting XI from the
-      // existing owned players. This removes substitutes without inventing players.
+    if (manager.squad.length >= 18) {
+      const normalized = manager.squad.slice(0, 18);
+      manager.squad = normalized;
       autoFillManagerLineup(manager);
       changed = true;
-    } else if (manager.squad.length === 11) {
-      const normalized = manager.squad.map(entry => ({
-        ...entry,
-        isStarting: true,
-        benchIndex: undefined,
-      }));
-      if (normalized.some((entry, index) =>
-        entry.isStarting !== manager.squad[index].isStarting ||
-        entry.benchIndex !== manager.squad[index].benchIndex
-      )) {
-        manager.squad = normalized;
-        manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
-        manager.roles = setupManagerRoles(manager.squad);
-        changed = true;
-      }
     }
   }
 
@@ -608,7 +616,6 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
   const usedIds = new Set<string>();
   const squad: SquadPlayerEntry[] = [];
 
-  // Fill exactly the formation's starting XI. There are no substitutes.
   for (const slot of config.slots) {
     const candidates = shuffled
       .filter(p => !usedIds.has(p.id) && (slot.category === 'GK' ? p.category === 'GK' : p.category !== 'GK'))
@@ -626,7 +633,25 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
     });
   }
 
-  return squad.slice(0, 11);
+  for (const category of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
+    const needed = BENCH_CATEGORY_ALLOCATION[category];
+    const candidates = shuffled
+      .filter(p => !usedIds.has(p.id) && p.category === category)
+      .sort((a, b) => b.overall - a.overall);
+    for (const chosen of candidates.slice(0, needed)) {
+      usedIds.add(chosen.id);
+      squad.push({
+        player: chosen,
+        isStarting: false,
+        startingSlotIndex: undefined,
+        benchIndex: squad.length - 11,
+        assignedPosition: chosen.position,
+        condition: createFitCondition(),
+      });
+    }
+  }
+
+  return squad.slice(0, 18);
 }
 
 // Auction runs in four synchronized blocks: GK -> DEF -> MID -> ATT.
@@ -658,7 +683,7 @@ function advanceAuction(room: GameRoom) {
   }
 
   // Check if all managers have complete XI-only squads
-  const allFull = room.managers.every(m => m.squad.length >= 11);
+  const allFull = room.managers.every(m => m.squad.length >= 18);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
@@ -770,7 +795,7 @@ function simulateBotBlindBids(room: GameRoom) {
 
   const bids = blindSecretBids.get(room.code) || {};
 
-  for (const bot of room.managers.filter(m => m.isBot && m.squad.length < 11)) {
+  for (const bot of room.managers.filter(m => m.isBot && m.squad.length < 18)) {
     // One secret bid per lot. Repeated timer ticks must not overwrite it.
     if (bids[bot.id] !== undefined) continue;
     if (bot.budget < currentPl.startingPrice) continue;
@@ -852,7 +877,7 @@ function simulateBotBids(room: GameRoom) {
     );
 
     // Scarcity matters: bots spend more aggressively when they still need a role.
-    const targetNeed = Math.max(0, 11 - bot.squad.length);
+    const targetNeed = Math.max(0, 18 - bot.squad.length);
     const scarcityMultiplier = 1 + Math.min(0.18, targetNeed * 0.015);
     const adjustedValuation = Math.min(bot.budget, maxValuation * scarcityMultiplier);
 
@@ -2145,7 +2170,7 @@ wss.on('connection', (ws) => {
           }
 
           const auctionPoolSize = getPlayersForLobby(room.settings.playerPool, room.settings.era).length;
-          const requiredAuctionPlayers = room.managers.length * 11;
+          const requiredAuctionPlayers = room.managers.length * 18;
           if (auctionPoolSize < requiredAuctionPlayers) {
             sendSocketError(
               ws,
@@ -2243,8 +2268,8 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if (manager.squad.length >= 11) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 11-player squad is already full (11/11 players).' }));
+          if (manager.squad.length >= 18) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 18-player squad is already full (18/18 players).' }));
             return;
           }
 
@@ -2343,7 +2368,7 @@ wss.on('connection', (ws) => {
           const required = getFormationSquadCategoryLimits(manager.formation);
           const counts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
           for (const entry of manager.squad) counts[entry.player.category] += 1;
-          const complete = manager.squad.length === 11 && (['GK','DEF','MID','ATT'] as PositionCategory[]).every(cat => counts[cat] >= getFormationStarterCategoryCounts(manager.formation)[cat]);
+          const complete = manager.squad.length === 18 && (['GK','DEF','MID','ATT'] as PositionCategory[]).every(cat => counts[cat] >= getFormationStarterCategoryCounts(manager.formation)[cat]);
           if (!complete) {
             sendSocketError(ws, 'Finish your 11-player squad before pressing I\'M DONE.');
             return;
@@ -2402,10 +2427,10 @@ wss.on('connection', (ws) => {
             const unavailableStarter = manager.squad.some(
               s => s.isStarting && (s.condition.state === 'SUSPENDED' || s.condition.state === 'INJURED')
             );
-            if (!validation.isValid || manager.squad.length !== 11 || unavailableStarter) {
+            if (!validation.isValid || manager.squad.length !== 18 || unavailableStarter) {
               sendSocketError(ws, unavailableStarter
                 ? 'Your starting XI contains an unavailable player.'
-                : 'Complete your 11-player squad and 11-player starting XI before confirming.');
+                : 'Complete your 18-player squad with 11 starters and 7 substitutes before confirming.');
               return;
             }
             manager.confirmedTeam = true;
