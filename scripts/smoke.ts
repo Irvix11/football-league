@@ -17,6 +17,9 @@ const condition = () => ({
 // current players that already have a curated prime version.
 const currentPool = getPlayersForLobby('Global', 'Current');
 const allTimePool = getPlayersForLobby('Global', 'All-Time');
+if (currentPool.length < 500) throw new Error(`FC27 current pool is incomplete: expected 500+ 80+ players, got ${currentPool.length}`);
+if (currentPool.some(p => p.overall < 80 || p.overall > 99)) throw new Error('FC27 current pool contains a player outside the required 80+ OVR range');
+if (new Set(currentPool.map(p => p.id)).size !== currentPool.length) throw new Error('FC27 current pool contains duplicate player IDs');
 if (allTimePool.length < 200) throw new Error('All-Time pool lost part of the 200-player legend set');
 if (allTimePool.some(p => p.age === 0)) throw new Error('All-Time pool contains invalid age 0');
 const normalizeName = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -28,7 +31,7 @@ if (allTimePool.find(p => normalizeName(p.name) === normalizeName('Lionel Messi'
   throw new Error('All-Time Messi prime override is missing');
 }
 if (currentPool.length <= DEVELOPMENT_PLAYERS.length && DEVELOPMENT_PLAYERS.length > 20) {
-  console.warn('FC27_IMPORTED_PLAYERS is empty; using the bundled development/current fallback pool. Release builds should replace this with an authorized current-player export.');
+  throw new Error('FC27 imported player pool is missing; release builds must ship the generated FC27 dataset.');
 }
 
 function buildManager(id: string, name: string): Manager {
@@ -38,7 +41,7 @@ function buildManager(id: string, name: string): Manager {
   const squad: SquadPlayerEntry[] = [];
 
   for (const slot of config.slots) {
-    const player = DEVELOPMENT_PLAYERS.find(
+    const player = currentPool.find(
       p => !used.has(p.id) && p.category === slot.category
     );
     if (!player) throw new Error(`Smoke test could not find player for ${slot.category}`);
