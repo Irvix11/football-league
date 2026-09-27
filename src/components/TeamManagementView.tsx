@@ -460,6 +460,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                         isSelected={isSelected}
                         isSubTarget={selectedBenchIndex !== null}
                         fitPercentage={starter ? fit : undefined}
+                        effectiveOverall={starter ? getEffectiveOvr(starter, slot.position) : undefined}
                         size="md"
                         onClick={() => {
                           if (selectedBenchIndex !== null) {
@@ -496,7 +497,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                     <div className="text-[10px] text-slate-300 truncate">{entry.player.name}</div>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-[9px] font-mono text-slate-500">{entry.assignedPosition || entry.player.position}</span>
-                      <span className="text-[11px] font-mono font-black text-emerald-400">{entry.player.overall}</span>
+                      <span className="text-[11px] font-mono font-black text-emerald-400">
+                        {entry.player.overall} OVR
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1 mt-0.5">
+                      <span className="text-[8px] text-slate-600">
+                        NAT {entry.player.position}
+                      </span>
+                      <span className="text-[8px] font-mono font-bold text-sky-300">
+                        EFFECTIVE {getEffectiveOvr(entry, formationConfig.slots.find(s => s.index === entry.startingSlotIndex)?.position || entry.assignedPosition || entry.player.position)}
+                      </span>
                     </div>
                   </button>
                 ))}
