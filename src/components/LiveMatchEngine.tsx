@@ -853,9 +853,136 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             </div>
           )}
 
-          {showPenaltyShootout && fixture.wentToPenalties && (
-            <div className="absolute inset-0 z-40 flex items-center justify-center p-3 sm:p-5 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-500">
-              <div className="w-full max-w-3xl rounded-3xl bg-slate-900/98 border border-amber-400/30 shadow-[0_25px_100px_rgba(0,0,0,.65)] overflow-hidden">
+          {halfTimeOverlay && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+              <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
+                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-400 text-xs font-mono font-black uppercase tracking-widest">
+                  ⏸ HALF TIME (45:00)
+                </div>
+
+                {/* Score Display */}
+                <div className="flex items-center justify-around py-2 border-y border-slate-800">
+                  <div className="flex-1 text-center truncate">
+                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.homeManagerName}</div>
+                    <div className="font-mono font-black text-2xl text-emerald-400">{currentScore.home}</div>
+                  </div>
+                  <div className="text-slate-600 font-bold text-base px-2">—</div>
+                  <div className="flex-1 text-center truncate">
+                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.awayManagerName}</div>
+                    <div className="font-mono font-black text-2xl text-sky-400">{currentScore.away}</div>
+                  </div>
+                </div>
+
+                {/* Stats Summary */}
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
+                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
+                    <div>Possession</div>
+                    <div className="font-bold text-slate-100">{fixture.homeStats?.possession || 50}% - {fixture.awayStats?.possession || 50}%</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
+                    <div>Shots (On Target)</div>
+                    <div className="font-bold text-slate-100">
+                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={dismissHalfTimeOverlay}
+                  className="w-full py-2.5 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>CONTINUE SECOND HALF</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* 7. COMPACT GLASS FULL-TIME SUMMARY (Requirement 16)                       */}
+          {/* ========================================================================= */}
+          {fullTimeOverlay && fixture.wentToPenalties && !showPenaltyShootout && !penaltyIsOver && (
+            <div className="absolute inset-0 z-35 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+              <div className="p-6 rounded-3xl bg-slate-900 border border-amber-500/30 text-center">
+                <div className="text-amber-400 text-xs uppercase tracking-widest font-black">120:00 — Level after extra time</div>
+                <div className="font-display font-black text-2xl mt-2">PENALTY SHOOTOUT</div>
+                <p className="text-xs text-slate-400 mt-2">The actual takers will step up one by one.</p>
+                <button type="button" onClick={() => { setFullTimeOverlay(false); setPenaltyIndex(0); setShowPenaltyShootout(true); }} className="mt-5 px-7 py-3 rounded-xl bg-amber-400 text-slate-950 font-display font-black text-xs uppercase tracking-wider">
+                  START SHOOTOUT
+                </button>
+              </div>
+            </div>
+          )}
+
+          {fullTimeOverlay && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+              <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
+                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-black uppercase tracking-widest">
+                  🏁 FULL TIME ({fixture.wentToExtraTime ? '120:00' : '90:00'})
+                </div>
+
+                {/* Score Display */}
+                <div className="flex items-center justify-around py-2 border-y border-slate-800">
+                  <div className="flex-1 text-center truncate">
+                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.homeManagerName}</div>
+                    <div className="font-mono font-black text-2xl text-emerald-400">{currentScore.home}</div>
+                  </div>
+                  <div className="text-slate-600 font-bold text-base px-2">—</div>
+                  <div className="flex-1 text-center truncate">
+                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.awayManagerName}</div>
+                    <div className="font-mono font-black text-2xl text-sky-400">{currentScore.away}</div>
+                  </div>
+                </div>
+
+                {/* Penalty Shootout outcome banner if applicable */}
+                {fixture.wentToPenalties && (
+                  <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold">
+                    Penalties: {fixture.homePenaltyScore} — {fixture.awayPenaltyScore}
+                  </div>
+                )}
+
+                {/* Stats Summary */}
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
+                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
+                    <div>Shots (Target)</div>
+                    <div className="font-bold text-slate-100">
+                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
+                    <div>Fouls / Cards</div>
+                    <div className="font-bold text-slate-100">
+                      {fixture.homeStats?.fouls || 0}(🟨{fixture.homeStats?.yellowCards || 0}) - {fixture.awayStats?.fouls || 0}(🟨{fixture.awayStats?.yellowCards || 0})
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => setShowStatsModal(true)}
+                    className="flex-1 py-2 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                  >
+                    MATCH STATS
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFullTimeOverlay(false);
+                      if (onMatchComplete) onMatchComplete(fixture.id);
+                    }}
+                    className="flex-1 py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
+                  >
+                    CONTINUE
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+{showPenaltyShootout && fixture.wentToPenalties && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/95 backdrop-blur-md animate-in fade-in duration-500 overflow-y-auto overscroll-contain">
+              <div className="w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-3xl bg-slate-900/98 border border-amber-400/30 shadow-[0_25px_100px_rgba(0,0,0,.65)]">
                 <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
                   <div>
                     <div className="text-[10px] uppercase tracking-[0.3em] text-amber-400 font-black">Penalty Shootout</div>
@@ -995,7 +1122,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                       </div>
                       <button
                         type="button"
-                        onClick={() => setShowPenaltyShootout(false)}
+                        onClick={() => { setShowPenaltyShootout(false); setPenaltyRevealStage("walkup"); if (onMatchComplete) onMatchComplete(fixture.id); }}
                         className="mt-4 px-6 py-2.5 rounded-xl bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase"
                       >
                         CONTINUE
@@ -1009,132 +1136,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           {/* ========================================================================= */}
           {/* 6. COMPACT GLASS HALF-TIME OVERLAY (Requirement 15)                       */}
           {/* ========================================================================= */}
-          {halfTimeOverlay && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-              <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
-                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-400 text-xs font-mono font-black uppercase tracking-widest">
-                  ⏸ HALF TIME (45:00)
-                </div>
-
-                {/* Score Display */}
-                <div className="flex items-center justify-around py-2 border-y border-slate-800">
-                  <div className="flex-1 text-center truncate">
-                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.homeManagerName}</div>
-                    <div className="font-mono font-black text-2xl text-emerald-400">{currentScore.home}</div>
-                  </div>
-                  <div className="text-slate-600 font-bold text-base px-2">—</div>
-                  <div className="flex-1 text-center truncate">
-                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.awayManagerName}</div>
-                    <div className="font-mono font-black text-2xl text-sky-400">{currentScore.away}</div>
-                  </div>
-                </div>
-
-                {/* Stats Summary */}
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
-                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <div>Possession</div>
-                    <div className="font-bold text-slate-100">{fixture.homeStats?.possession || 50}% - {fixture.awayStats?.possession || 50}%</div>
-                  </div>
-                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <div>Shots (On Target)</div>
-                    <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={dismissHalfTimeOverlay}
-                  className="w-full py-2.5 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>CONTINUE SECOND HALF</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* 7. COMPACT GLASS FULL-TIME SUMMARY (Requirement 16)                       */}
-          {/* ========================================================================= */}
-          {fullTimeOverlay && fixture.wentToPenalties && !showPenaltyShootout && !penaltyIsOver && (
-            <div className="absolute inset-0 z-35 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-              <div className="p-6 rounded-3xl bg-slate-900 border border-amber-500/30 text-center">
-                <div className="text-amber-400 text-xs uppercase tracking-widest font-black">120:00 — Level after extra time</div>
-                <div className="font-display font-black text-2xl mt-2">PENALTY SHOOTOUT</div>
-                <p className="text-xs text-slate-400 mt-2">The actual takers will step up one by one.</p>
-                <button type="button" onClick={() => { setFullTimeOverlay(false); setPenaltyIndex(0); setShowPenaltyShootout(true); }} className="mt-5 px-7 py-3 rounded-xl bg-amber-400 text-slate-950 font-display font-black text-xs uppercase tracking-wider">
-                  START SHOOTOUT
-                </button>
-              </div>
-            </div>
-          )}
-
-          {fullTimeOverlay && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
-              <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
-                <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-black uppercase tracking-widest">
-                  🏁 FULL TIME ({fixture.wentToExtraTime ? '120:00' : '90:00'})
-                </div>
-
-                {/* Score Display */}
-                <div className="flex items-center justify-around py-2 border-y border-slate-800">
-                  <div className="flex-1 text-center truncate">
-                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.homeManagerName}</div>
-                    <div className="font-mono font-black text-2xl text-emerald-400">{currentScore.home}</div>
-                  </div>
-                  <div className="text-slate-600 font-bold text-base px-2">—</div>
-                  <div className="flex-1 text-center truncate">
-                    <div className="font-bold text-xs text-slate-300 truncate">{fixture.awayManagerName}</div>
-                    <div className="font-mono font-black text-2xl text-sky-400">{currentScore.away}</div>
-                  </div>
-                </div>
-
-                {/* Penalty Shootout outcome banner if applicable */}
-                {fixture.wentToPenalties && (
-                  <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold">
-                    Penalties: {fixture.homePenaltyScore} — {fixture.awayPenaltyScore}
-                  </div>
-                )}
-
-                {/* Stats Summary */}
-                <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
-                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <div>Shots (Target)</div>
-                    <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
-                    </div>
-                  </div>
-                  <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
-                    <div>Fouls / Cards</div>
-                    <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.fouls || 0}(🟨{fixture.homeStats?.yellowCards || 0}) - {fixture.awayStats?.fouls || 0}(🟨{fixture.awayStats?.yellowCards || 0})
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={() => setShowStatsModal(true)}
-                    className="flex-1 py-2 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-                  >
-                    MATCH STATS
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFullTimeOverlay(false);
-                      if (onMatchComplete) onMatchComplete(fixture.id);
-                    }}
-                    className="flex-1 py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
-                  >
-                    CONTINUE
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+          
 
       {/* Floating Player Info Popup (Tapping a player on the pitch) */}
       {inspectedPlayer && (
