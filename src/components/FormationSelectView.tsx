@@ -106,7 +106,7 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
             </div>
             <div className="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
               <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/18</div>
+              <div className="font-mono font-black text-slate-100 text-lg">{squad.length}/11</div>
             </div>
           </div>
 
@@ -122,13 +122,13 @@ export const FormationSelectView: React.FC<FormationSelectViewProps> = ({
                     {starterCounts[cat]} STARTERS
                   </div>
                   <div className="text-[9px] text-slate-500 mt-0.5">
-                    Squad cap {squadLimits[cat]}
+                    XI limit {squadLimits[cat]}
                   </div>
                 </div>
               ))}
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Your formation locks the exact starting XI positions. The auction also reserves 7 bench slots, so you can bid for substitutes without breaking the formation. After the auction, the game auto-fills the best XI using OVR, attributes and position fit — and you can edit it.
+              Your formation defines the exact 11-player XI quota. The auction runs GK → DEF → MID → ATT until every manager has a complete XI. After the auction, the game auto-fills the best XI using OVR, attributes and positional fit — and you can edit every player's role.
             </p>
           </div>
         </div>
