@@ -1470,7 +1470,7 @@ export function simulateMatch(
 
     // Sudden death if tied after 5 kicks
     let sdRound = 6;
-    while (hPens === aPens && sdRound <= 11) {
+    while (hPens === aPens && sdRound <= 51) {
       const hTaker = homeTakers[(sdRound - 1) % homeTakers.length];
       const hRoll = rand();
       const hOutcome: 'goal' | 'saved' | 'missed' = hRoll < 0.72 ? 'goal' : 'saved';
@@ -1513,6 +1513,17 @@ export function simulateMatch(
 
     homePenaltyScore = hPens;
     awayPenaltyScore = aPens;
+    // The random shootout normally resolves quickly. Keep a deterministic
+    // safety net so an extreme sequence can never leave a knockout fixture
+    // without a winner.
+    if (hPens === aPens) {
+      const homePenaltyPower = average(homeTakers.slice(0, 5).map(t => t.player.attributes.sho || t.player.overall));
+      const awayPenaltyPower = average(awayTakers.slice(0, 5).map(t => t.player.attributes.sho || t.player.overall));
+      if (homePenaltyPower === awayPenaltyPower) hPens++;
+      else if (homePenaltyPower > awayPenaltyPower) hPens++;
+      else aPens++;
+    }
+
     winnerManagerId = hPens > aPens ? homeManager.id : awayManager.id;
   }
 
