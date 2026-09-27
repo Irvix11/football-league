@@ -1258,7 +1258,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
   };
 
   rooms.set(roomCode, room);
-  await saveRoomSnapshot(room);
+  void saveRoomSnapshot(room);
 
   return { roomCode, managerId: hostId, room };
 }
