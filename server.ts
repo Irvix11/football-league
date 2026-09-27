@@ -359,7 +359,7 @@ function playerSlotScore(player: any, slot: any): number {
       : slot.category === 'MID'
         ? (attributes.pas * 0.35 + attributes.dri * 0.25 + attributes.def * 0.15 + attributes.sho * 0.15 + attributes.pac * 0.10)
         : (attributes.sho * 0.40 + attributes.pac * 0.20 + attributes.dri * 0.25 + attributes.pas * 0.15);
-  return player.overall * 0.62 + fit * 0.28 + relevant * 0.10;
+  return player.overall * 0.55 + fit * 0.35 + relevant * 0.10;
 }
 
 function autoFillManagerLineup(manager: Manager) {
@@ -381,7 +381,9 @@ function autoFillManagerLineup(manager: Manager) {
   });
 
   for (const slot of orderedSlots) {
-    const candidates = remaining.filter(p => p.category === slot.category);
+    const candidates = remaining.filter(p =>
+      slot.category === 'GK' ? p.category === 'GK' : p.category !== 'GK'
+    );
     const pool = candidates.length ? candidates : remaining;
     const chosen = [...pool].sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot) || b.overall - a.overall)[0];
     if (!chosen) continue;
