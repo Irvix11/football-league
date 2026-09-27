@@ -399,7 +399,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-950 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-400/60 transition-all font-display font-black text-xs uppercase tracking-wider active:scale-[0.98]"
               >
                 <Shuffle className="w-4 h-4" />
-                AUTO-FILL BEST XI + BENCH
+                AUTO-FILL BEST XI
               </button>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
@@ -540,29 +540,29 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
 
             <div className="mt-3 w-full rounded-2xl bg-gradient-to-br from-slate-900/95 to-slate-950/95 border border-white/10 p-3 shadow-xl shadow-black/20 backdrop-blur-xl">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">SUBSTITUTES · 7</span>
-                <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.filter(s => !s.isStarting).length}/7</span>
+                <span className="text-[10px] uppercase tracking-wider font-black text-slate-400">SQUAD · 11 PLAYERS</span>
+                <span className="font-mono text-sky-300 text-xs font-black">{currentManager.squad.length}/11</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
-                {currentManager.squad.filter(s => !s.isStarting).sort((a,b) => (a.benchIndex ?? 99) - (b.benchIndex ?? 99)).map((entry) => (
+                {currentManager.squad.map((entry) => (
                   <button
                     key={entry.player.id}
                     type="button"
                     onClick={() => {
                       setSelectedPlayerId(entry.player.id);
-                      setInspectedPlayer({ entry, isStarter: false });
+                      setInspectedPlayer({ entry, isStarter: true });
                     }}
                     className="flex items-center justify-between gap-2 rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-2 text-left hover:border-sky-400/50 transition-all"
                   >
                     <div className="min-w-0">
                       <div className="text-[10px] font-bold text-slate-100 truncate">{entry.player.name}</div>
-                      <div className="text-[9px] font-mono text-slate-500">{entry.player.position} · {entry.player.club}</div>
+                      <div className="text-[9px] font-mono text-slate-500">{entry.assignedPosition || entry.player.position} · {entry.player.club}</div>
                     </div>
                     <div className="font-mono font-black text-emerald-400 text-xs shrink-0">{entry.player.overall}</div>
                   </button>
                 ))}
               </div>
-              <div className="mt-2 text-[9px] text-slate-500 text-center">Tap a substitute, then tap a starter on the pitch to swap them.</div>
+              <div className="mt-2 text-[9px] text-slate-500 text-center">Tap any player to inspect or change their tactical position. Tap another player on the pitch to swap slots.</div>
             </div>
           </div>
 
