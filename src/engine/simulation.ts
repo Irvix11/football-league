@@ -89,7 +89,8 @@ function calculateTeamPower(manager: Manager): TeamPower {
     defense +
     (tactics.defensiveLine - 50) * 0.022 -
     (tactics.risk - 50) * 0.032 -
-    Math.max(0, tactics.attackWidth - 65) * 0.018;
+    Math.max(0, tactics.attackWidth - 65) * 0.018 -
+    Math.max(0, tactics.defensiveLine - 65) * 0.040;
 
   if (tactics.style === 'Possession') effectiveMidfield += 5;
   if (tactics.style === 'High Press') {
