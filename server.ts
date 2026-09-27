@@ -2885,6 +2885,98 @@ wss.on('connection', (ws) => {
   });
 });
 
+// REST simulation controls are the reliable fallback for production deployments.
+// They also let the match start when the browser's WebSocket connection is temporarily
+// unavailable. The mutation is still authoritative on the server and is persisted.
+app.post('/api/room/:code/run-matchday', async (req, res) => {
+  try {
+    const code = String(req.params.code || '').toUpperCase();
+    const managerId = String(req.body?.managerId || '');
+    const requestedMatchday = Number(req.body?.matchday);
+
+    let room = rooms.get(code);
+    if (!room) {
+      room = await loadRoomSnapshot(code) || undefined;
+      if (room) rooms.set(code, room);
+    }
+    if (!room) return res.status(404).json({ error: 'Lobby not found' });
+    if (room.phase !== 'league') return res.status(409).json({ error: 'League is not active.' });
+    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    if (room.transferWindowOpen) return res.status(409).json({ error: 'Mid-season management window is open.' });
+
+    const matchday = Number.isInteger(requestedMatchday) && requestedMatchday > 0
+      ? requestedMatchday
+      : room.currentMatchday;
+    if (matchday !== room.currentMatchday || matchday < 1 || matchday > room.totalMatchdays) {
+      return res.status(400).json({ error: 'Invalid matchday.' });
+    }
+
+    const fix = room.fixtures.find(f => f.matchday === matchday && !f.played);
+    if (!fix) return res.status(409).json({ error: 'This matchday is already complete.' });
+
+    const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+    const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+    if (!homeMgr || !awayMgr) return res.status(409).json({ error: 'Unable to load both teams for this fixture.' });
+
+    const result = simulateMatch(homeMgr, awayMgr, fix.id, matchday);
+    Object.assign(fix, result);
+    room.leagueTable = updateLeagueTable(room.leagueTable, fix);
+
+    const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
+    const midpointMatchday = getMidSeasonWindowMatchday(room);
+    const midpointComplete = midpointMatchday > 0 &&
+      matchday === midpointMatchday &&
+      room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
+
+    if (midpointComplete && !leagueComplete) openMidSeasonWindow(room);
+    if (leagueComplete) initializeLeaguePlayoffs(room);
+
+    broadcastRoom(room.code);
+    return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
+  } catch (error: any) {
+    console.error('[REST] run-matchday failed:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to simulate match.' });
+  }
+});
+
+app.post('/api/room/:code/run-knockout-match', async (req, res) => {
+  try {
+    const code = String(req.params.code || '').toUpperCase();
+    const managerId = String(req.body?.managerId || '');
+    const fixtureId = String(req.body?.fixtureId || '');
+
+    let room = rooms.get(code);
+    if (!room) {
+      room = await loadRoomSnapshot(code) || undefined;
+      if (room) rooms.set(code, room);
+    }
+    if (!room) return res.status(404).json({ error: 'Lobby not found' });
+    if (room.phase !== 'knockout') return res.status(409).json({ error: 'Knockout phase is not active.' });
+    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+
+    const stage = room.knockoutStage;
+    if (!stage) return res.status(409).json({ error: 'Knockout stage is unavailable.' });
+    const round = stage.rounds[stage.rounds.length - 1];
+    const fix = round?.fixtures.find(f => f.id === fixtureId);
+    if (!fix) return res.status(404).json({ error: 'Fixture not found.' });
+    if (fix.played) return res.status(409).json({ error: 'This match has already been played.', room: JSON.parse(JSON.stringify(room)) });
+
+    const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
+    const awayMgr = room.managers.find(m => m.id === fix.awayManagerId);
+    if (!homeMgr || !awayMgr) return res.status(409).json({ error: 'Unable to load both teams for this fixture.' });
+
+    const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+    Object.assign(fix, result);
+    room.fixtures = round.fixtures;
+
+    broadcastRoom(room.code);
+    return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
+  } catch (error: any) {
+    console.error('[REST] run-knockout-match failed:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to simulate knockout match.' });
+  }
+});
+
 // API Endpoints
 app.get('/api/room/:code', async (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
