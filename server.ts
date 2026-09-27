@@ -171,8 +171,8 @@ const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation
 const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
 const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
 const SUPPORTED_AUCTION_MODES = new Set(['Classic', 'Blind', 'Quick'] as const);
-const SUPPORTED_LEAGUE_TYPES = new Set(['Round Robin', 'Double Round Robin'] as const);
-const SUPPORTED_COMPETITIONS = new Set(['League', 'Knockout', 'Champions Cup'] as const);
+const SUPPORTED_LEAGUE_TYPES = new Set(['Double Round Robin'] as const);
+const SUPPORTED_COMPETITIONS = new Set(['League'] as const);
 
 function clampFiniteNumber(value: unknown, fallback: number, min: number, max: number) {
   const parsed = Number(value);
@@ -196,7 +196,7 @@ function sanitizeLobbySettings(raw: Partial<LobbySettings> | null | undefined, b
     era: 'Current',
     auctionMode: 'Classic',
     transfersEnabled: true,
-    leagueType: 'Round Robin',
+    leagueType: 'Double Round Robin',
     competitionFormat: 'League',
   };
 
@@ -205,12 +205,10 @@ function sanitizeLobbySettings(raw: Partial<LobbySettings> | null | undefined, b
   const playerPool = SUPPORTED_PLAYER_POOLS.has(raw?.playerPool as any) ? raw!.playerPool! : fallback.playerPool;
   const era = SUPPORTED_ERAS.has(raw?.era as any) ? raw!.era! : fallback.era;
   const auctionMode = SUPPORTED_AUCTION_MODES.has(raw?.auctionMode as any) ? raw!.auctionMode! : fallback.auctionMode;
-  const competitionFormat = SUPPORTED_COMPETITIONS.has(raw?.competitionFormat as any)
-    ? raw!.competitionFormat!
-    : fallback.competitionFormat || 'League';
-  const leagueType = competitionFormat === 'League'
-    ? 'Double Round Robin'
-    : (SUPPORTED_LEAGUE_TYPES.has(raw?.leagueType as any) ? raw!.leagueType! : fallback.leagueType);
+  // There is only one competition now: a double round-robin league.
+  // Keep accepting legacy room snapshots, but normalize them immediately.
+  const competitionFormat = 'League' as const;
+  const leagueType = 'Double Round Robin' as const;
 
   return {
     maxManagers,
@@ -381,7 +379,7 @@ function createBotManager(nameIndex = 0, initialBudget = 500): Manager {
 }
 
 // Generate Fixtures (Round Robin or Double Round Robin)
-function generateLeagueFixtures(managers: Manager[], leagueType: 'Round Robin' | 'Double Round Robin'): Fixture[] {
+function generateLeagueFixtures(managers: Manager[]): Fixture[] {
   const fixtures: Fixture[] = [];
   const teamIds = managers.map(m => m.id);
   const n = teamIds.length;
@@ -423,20 +421,20 @@ function generateLeagueFixtures(managers: Manager[], leagueType: 'Round Robin' |
     matchday++;
   }
 
-  if (leagueType === 'Double Round Robin') {
-    const firstLegCount = fixtures.length;
-    for (let i = 0; i < firstLegCount; i++) {
-      const firstFix = fixtures[i];
-      fixtures.push({
-        id: `fix-rev-${firstFix.matchday + numRounds}-${firstFix.awayManagerId}-${firstFix.homeManagerId}`,
-        matchday: firstFix.matchday + numRounds,
-        homeManagerId: firstFix.awayManagerId,
-        homeManagerName: firstFix.awayManagerName,
-        awayManagerId: firstFix.homeManagerId,
-        awayManagerName: firstFix.homeManagerName,
-        played: false,
-      });
-    }
+  // Every manager plays every other manager twice:
+  // once at home and once away. No alternate league format exists.
+  const firstLegCount = fixtures.length;
+  for (let i = 0; i < firstLegCount; i++) {
+    const firstFix = fixtures[i];
+    fixtures.push({
+      id: `fix-rev-${firstFix.matchday + numRounds}-${firstFix.awayManagerId}-${firstFix.homeManagerId}`,
+      matchday: firstFix.matchday + numRounds,
+      homeManagerId: firstFix.awayManagerId,
+      homeManagerName: firstFix.awayManagerName,
+      awayManagerId: firstFix.homeManagerId,
+      awayManagerName: firstFix.homeManagerName,
+      played: false,
+    });
   }
 
   return fixtures;
@@ -2706,10 +2704,8 @@ wss.on('connection', (ws) => {
           // Check if all confirmed
           const allConfirmed = room.managers.every(m => m.confirmedTeam);
           if (allConfirmed) {
-            if (room.settings.competitionFormat !== 'League') {
-              initializeKnockout(room);
-            } else {
-              room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
+            {
+              room.fixtures = generateLeagueFixtures(room.managers);
               room.currentMatchday = 1;
               const maxMd = Math.max(...room.fixtures.map(f => f.matchday), 1);
               room.totalMatchdays = maxMd;
@@ -2845,9 +2841,8 @@ wss.on('connection', (ws) => {
           Object.assign(fix, result);
           room.leagueTable = updateLeagueTable(room.leagueTable, fix);
 
-          // The league is always a double round robin. Once the final league
-          // fixture is completed, immediately build the correct playoff bracket:
-          // 2-5 teams -> Final, 6-9 -> top 4 Semi-Finals, 10-16 -> top 8 Quarter-Finals.
+          // The league is always a double round robin. Once every home/away
+          // fixture is complete, build the playoff bracket from the final table.
           const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
           room.currentMatchday = targetMatchday;
 
@@ -3084,14 +3079,12 @@ wss.on('connection', (ws) => {
           }
 
           room.awards = null;
-          if (room.settings.competitionFormat !== 'League') {
-            initializeKnockout(room);
-          } else {
-            room.fixtures = generateLeagueFixtures(room.managers, room.settings.leagueType);
-            room.currentMatchday = 1;
-            room.leagueTable = calculateInitialTable(room.managers);
-            room.phase = 'league';
-          }
+          room.fixtures = generateLeagueFixtures(room.managers);
+          room.currentMatchday = 1;
+          room.totalMatchdays = Math.max(...room.fixtures.map(f => f.matchday), 1);
+          room.leagueTable = calculateInitialTable(room.managers);
+          room.knockoutStage = undefined;
+          room.phase = 'league';
 
           broadcastRoom(room.code);
           break;
