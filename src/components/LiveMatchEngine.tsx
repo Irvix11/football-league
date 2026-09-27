@@ -132,7 +132,10 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   // Animation Engine state (Real Continuous Smooth Interpolation)
   const [animatedPlayers, setAnimatedPlayers] = useState<LivePlayerPosition[]>([]);
   const [animatedBall, setAnimatedBall] = useState<{ x: number; y: number; arc: number }>({ x: 50, y: 50, arc: 0 });
-  const [ballTrail, setBallTrail] = useState<{ x: number; y: number }[]>([]);
+  const pitchRef = useRef<HTMLDivElement | null>(null);
+  const playerNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const ballNodeRef = useRef<HTMLDivElement | null>(null);
+  const ballShadowRef = useRef<HTMLDivElement | null>(null);
 
   // Subtle broadcast camera offset for dynamic action focus (Requirement 14)
   const [cameraOffset, setCameraOffset] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
@@ -147,6 +150,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const startClockSecsRef = useRef<number>(0);
   const targetClockSecsRef = useRef<number>(0);
   const goalTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const clockUiUpdateRef = useRef<number>(0);
 
   // Initialize and synchronize state when fixture or events change
   useEffect(() => {
@@ -264,17 +268,19 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const targets = targetPlayersRef.current;
 
       if (targets.length > 0) {
-        const interpolated = targets.map((target) => {
+        const pitch = pitchRef.current;
+        const width = pitch?.clientWidth || 0;
+        const height = pitch?.clientHeight || 0;
+
+        for (const target of targets) {
           const start = starts.find(s => s.id === target.id) || target;
           const currX = start.x + (target.x - start.x) * easedT;
           const currY = start.y + (target.y - start.y) * easedT;
-          return {
-            ...target,
-            x: Number(currX.toFixed(2)),
-            y: Number(currY.toFixed(2)),
-          };
-        });
-        setAnimatedPlayers(interpolated);
+          const node = playerNodesRef.current.get(target.id);
+          if (node && width > 0 && height > 0) {
+            node.style.transform = `translate3d(${(currX / 100) * width}px, ${(currY / 100) * height}px, 0)`;
+          }
+        }
       }
 
       // 2. Smoothly interpolate ball position & parabolic height arc
@@ -288,25 +294,23 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const maxArc = isHighBall ? 4.5 : isGroundPass ? 1.0 : 2.5;
       const arc = Math.sin(progress * Math.PI) * maxArc;
 
-      setAnimatedBall({
-        x: Number(bCurrX.toFixed(2)),
-        y: Number(bCurrY.toFixed(2)),
-        arc,
-      });
-
-      // Update ball speed trail (keep last 3 positions when moving fast)
-      const moveDist = Math.hypot(tBall.x - sBall.x, tBall.y - sBall.y);
-      if (moveDist > 6 && progress > 0.05 && progress < 0.95) {
-        setBallTrail(prev => [{ x: bCurrX, y: bCurrY }, ...prev.slice(0, 2)]);
-      } else if (progress >= 0.95) {
-        setBallTrail([]);
+      if (pitch && width > 0 && height > 0 && ballNodeRef.current) {
+        ballNodeRef.current.style.transform = `translate3d(${(bCurrX / 100) * width}px, ${((bCurrY - arc) / 100) * height}px, 0)`;
+        if (ballShadowRef.current) {
+          const shadowScale = Math.max(0.55, 1 - arc * 0.08);
+          ballShadowRef.current.style.transform = `translate3d(-50%, -50%, 0) scaleX(${shadowScale})`;
+          ballShadowRef.current.style.opacity = String(Math.max(0.16, 0.62 - arc * 0.08));
+        }
       }
 
-      // 3. Smooth Clock Interpolation matching the current event
+      // Update the visible clock at a low cadence; movement itself remains frame-perfect.
       const sSecs = startClockSecsRef.current;
       const tSecs = targetClockSecsRef.current;
       const currentInterpolatedSecs = Math.round(sSecs + (tSecs - sSecs) * easedT);
-      setDisplaySeconds(currentInterpolatedSecs);
+      if (now - (clockUiUpdateRef.current || 0) > 80 || progress >= 1) {
+        clockUiUpdateRef.current = now;
+        setDisplaySeconds(currentInterpolatedSecs);
+      }
 
       // 4. Event completion check (Requirements 4, 5: Goal Pause Mechanic)
       if (progress >= 1 && isPlaying && !goalOverlay && !halfTimeOverlay && !fullTimeOverlay) {
@@ -555,52 +559,17 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* 1B. MATCH MODEL INDICATORS */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800">
-          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">HOME WIN</div>
-          <div className="text-lg font-mono font-black text-emerald-400">{fixture.homeWinProbability ?? 33}%</div>
-          <div className="h-1 rounded-full bg-slate-800 overflow-hidden mt-1">
-            <div className="h-full bg-emerald-400" style={{ width: `${fixture.homeWinProbability ?? 33}%` }} />
-          </div>
-        </div>
-        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-center">
-          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">MOMENTUM</div>
-          <div className="text-lg font-mono font-black text-amber-400">{Math.abs(currentEvent?.momentum || 0)}%</div>
-          <div className="text-[9px] font-mono text-slate-500 truncate">
-            {(currentEvent?.momentum || 0) >= 0 ? fixture.homeManagerName : fixture.awayManagerName}
-          </div>
-        </div>
-        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-right">
-          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">AWAY WIN</div>
-          <div className="text-lg font-mono font-black text-sky-400">{fixture.awayWinProbability ?? 33}%</div>
-          <div className="h-1 rounded-full bg-slate-800 overflow-hidden mt-1">
-            <div className="h-full bg-sky-400" style={{ width: `${fixture.awayWinProbability ?? 33}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {currentEvent?.chanceQuality !== undefined && ['shot', 'shot_saved', 'goal', 'shot_missed'].includes(currentEvent.type) && (
-        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <span className="text-[9px] uppercase tracking-wider text-amber-400 font-black">CHANCE QUALITY</span>
-          <div className="flex-1 h-1.5 rounded-full bg-slate-900 overflow-hidden">
-            <div className="h-full bg-amber-400 transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, currentEvent.chanceQuality))}%` }} />
-          </div>
-          <span className="font-mono font-black text-xs text-amber-300">{currentEvent.chanceQuality}%</span>
-        </div>
-      )}
-
       {/* 2. THE 2D LIVE FOOTBALL PITCH (Broadcast Arena)                           */}
       {/* ========================================================================= */}
       <div 
-        className="relative w-full rounded-2xl overflow-hidden shadow-2xl border border-emerald-950/80 bg-emerald-950 select-none transition-transform duration-700 ease-out"
+        className="relative w-full rounded-2xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.38)] border border-white/10 bg-emerald-950 select-none transition-transform duration-700 ease-out"
         style={{
           transform: `scale(${cameraOffset.scale}) translate(${cameraOffset.x}%, ${cameraOffset.y}%)`,
         }}
       >
-        <div 
-          className="relative w-full overflow-hidden" 
+        <div
+          ref={pitchRef}
+          className="relative w-full overflow-hidden live-pitch-surface"
           style={{ aspectRatio: '105 / 68' }}
         >
           {/* Alternating lawn mowing stripes (12 vertical turf bands) */}
@@ -694,13 +663,16 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                     screenY: rect.top - 10,
                   });
                 }}
-                className="absolute -translate-x-1/2 -translate-y-1/2 z-10 cursor-pointer transition-transform duration-75 active:scale-95"
+                ref={(node) => {
+                  if (node) playerNodesRef.current.set(player.id, node);
+                  else playerNodesRef.current.delete(player.id);
+                }}
+                className="absolute left-0 top-0 z-10 cursor-pointer will-change-transform"
                 style={{
-                  left: `${player.x}%`,
-                  top: `${player.y}%`,
+                  transform: `translate3d(0, 0, 0)`,
                 }}
               >
-                <div className="relative flex flex-col items-center">
+                <div className="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
                   {/* Ball Possession Glowing Halo */}
                   {hasBall && (
                     <span className="absolute -inset-1.5 rounded-full ring-2 ring-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.8)] animate-pulse pointer-events-none" />
@@ -724,39 +696,18 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             );
           })}
 
-          {/* 4. SPEED MOTION TRAIL FOR FAST BALL TRAVEL */}
-          {ballTrail.map((dot, idx) => (
-            <div
-              key={idx}
-              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40 pointer-events-none"
-              style={{
-                left: `${dot.x}%`,
-                top: `${dot.y}%`,
-                width: `${10 - idx * 2.5}px`,
-                height: `${10 - idx * 2.5}px`,
-                opacity: 0.5 - idx * 0.15,
-              }}
-            />
-          ))}
-
           {/* 5. VISIBLE FOOTBALL WITH REAL FLIGHT ARC & DYNAMIC SHADOW */}
           <div
-            className="absolute -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none transition-transform"
-            style={{
-              left: `${animatedBall.x}%`,
-              top: `${animatedBall.y - animatedBall.arc}%`,
-            }}
+            ref={ballNodeRef}
+            className="absolute left-0 top-0 z-20 pointer-events-none will-change-transform"
+            style={{ transform: 'translate3d(0, 0, 0)' }}
           >
-            <div className="relative flex items-center justify-center">
+            <div className="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2">
               {/* Dynamic Ground Drop Shadow on the pitch turf directly beneath */}
-              <div 
-                className="absolute left-1/2 -translate-x-1/2 rounded-full bg-black/70 blur-[1.5px]"
-                style={{
-                  top: `${animatedBall.arc * 2.2 + 12}px`,
-                  width: `${Math.max(6, 16 - animatedBall.arc * 1.5)}px`,
-                  height: '4px',
-                  opacity: Math.max(0.18, 0.75 - animatedBall.arc * 0.09),
-                }}
+              <div
+                ref={ballShadowRef}
+                className="absolute left-1/2 top-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/65 blur-[2px] will-change-transform"
+                style={{ width: '14px', height: '4px', opacity: 0.62 }}
               />
               
               {/* Bold, Visible Football Sphere (White + Black Pentagon Pattern) */}
@@ -1053,9 +1004,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         </div>
       </div>
 
-      {/* Developer Branding Credit (Requirement 7 & 23) */}
-      <div className="text-center text-[10px] text-slate-600 font-mono tracking-widest uppercase">
-        FOOTBALL AUCTION LEAGUE · MADE BY IRVIX
+      <div className="text-center text-[9px] text-slate-700 font-mono tracking-[0.28em] uppercase">
+        FAL · IRVIX
       </div>
 
       {/* Full Match Stats Modal */}
