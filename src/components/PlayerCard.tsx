@@ -1,12 +1,6 @@
 import React from 'react';
 import { Player } from '../types/football';
 
-function BlindLockIcon() {
-  return (
-    <div className="w-11 h-11 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-300 text-xl font-black">?</div>
-  );
-}
-
 interface PlayerCardProps {
   player: Player;
   size?: 'sm' | 'md' | 'lg';
@@ -23,13 +17,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   onClick,
 }) => {
   const isGK = player.category === 'GK';
-  const isBlindMystery = player.id.startsWith('blind-');
   const isHighOvr = player.overall >= 88;
-
-  const blindLabels: Record<string, string> = {
-    pac: 'PACE', sho: 'SHOOTING', pas: 'PASSING',
-    dri: 'DRIBBLING', def: 'DEFENDING', phy: 'PHYSICAL',
-  };
   const isIcon = player.id.startsWith('fc-icon');
 
   if (size === 'sm') {
@@ -61,36 +49,6 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         </div>
         <div className="text-right">
           <div className="text-xs font-mono font-bold text-emerald-400">£{player.marketValue}M</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isBlindMystery && size !== 'sm') {
-    return (
-      <div onClick={onClick} className={`relative overflow-hidden rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-950/20 via-slate-900 to-slate-950 shadow-2xl ${className}`}>
-        <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] font-black text-amber-400">BLIND AUCTION</div>
-            <div className="font-display font-black text-2xl text-white mt-1">MYSTERY PLAYER</div>
-          </div>
-          <BlindLockIcon />
-        </div>
-        <div className="px-5 py-4 bg-slate-950/50">
-          <div className="text-xs text-slate-400">Name and OVR are hidden.</div>
-          <div className="text-[10px] text-slate-500 mt-1">Only two attributes are revealed before the bid.</div>
-        </div>
-        <div className="p-5 grid grid-cols-2 gap-3 bg-slate-900/60">
-          {(player.blindClues || []).slice(0, 2).map((clue) => (
-            <div key={clue.key} className="p-4 rounded-xl bg-slate-950/80 border border-amber-500/30 text-center">
-              <div className="text-[10px] text-amber-300 font-black tracking-wider">{blindLabels[clue.key] || clue.key.toUpperCase()}</div>
-              <div className="text-3xl font-black font-mono text-emerald-400 mt-1">{clue.value}</div>
-            </div>
-          ))}
-        </div>
-        <div className="px-5 py-3 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs">
-          <span className="text-slate-400">Starting Price</span>
-          <span className="font-mono font-black text-amber-400">£{player.startingPrice}M</span>
         </div>
       </div>
     );
