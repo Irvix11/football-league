@@ -387,6 +387,8 @@ export interface SeasonAwards {
 }
 
 export interface GameRoom {
+  /** True for the server-authoritative Solo Play mode. */
+  isSolo?: boolean;
   code: string;
   hostId: string;
   settings: LobbySettings;
