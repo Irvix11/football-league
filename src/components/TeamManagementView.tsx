@@ -10,7 +10,13 @@ interface TeamManagementViewProps {
   room: GameRoom;
   managerId: string;
   onUpdateLineup: (squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => void;
-  onConfirmTeam: () => void;
+  onConfirmTeam?: () => void;
+  /** Mid-season mode keeps the league paused and lets managers finish their review. */
+  managementOnly?: boolean;
+  onFinishManagement?: () => void;
+  onOpenTransfers?: () => void;
+  windowReadyCount?: number;
+  windowManagerCount?: number;
 }
 
 /**
@@ -107,6 +113,11 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   managerId,
   onUpdateLineup,
   onConfirmTeam,
+  managementOnly = false,
+  onFinishManagement,
+  onOpenTransfers,
+  windowReadyCount = 0,
+  windowManagerCount = 0,
 }) => {
   const currentManager = room.managers.find((m) => m.id === managerId);
   if (!currentManager) return null;
@@ -1084,35 +1095,66 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
         </div>
       )}
 
-      {/* Bottom Sticky Action Bar: Confirm Team & Proceed to Competition */}
-      <div className="sticky bottom-0 z-20 mt-4 p-3 rounded-2xl bg-[#040812]/95 border border-slate-800 shadow-2xl flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          {validation.isValid ? (
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" />
-              Starting XI Valid & Ready
-            </span>
-          ) : (
-            <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4" />
-              Adjust Lineup to Fill Missing Roles
-            </span>
-          )}
-        </div>
+      {/* Bottom Sticky Action Bar */}
+      <div className="sticky bottom-0 z-20 mt-4 p-3 rounded-2xl bg-[#040812]/95 border border-slate-800 shadow-2xl flex flex-wrap items-center justify-between gap-3 backdrop-blur-md">
+        {managementOnly ? (
+          <>
+            <div className="flex flex-col gap-1">
+              <div className="text-xs font-black uppercase tracking-wider text-amber-300">MID-SEASON MANAGEMENT</div>
+              <div className="text-[10px] text-slate-400">
+                {windowReadyCount}/{windowManagerCount} managers finished their review
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {onOpenTransfers && (
+                <button
+                  type="button"
+                  onClick={onOpenTransfers}
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                >
+                  TRANSFERS
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onFinishManagement}
+                className="px-5 py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-display font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+              >
+                I'M DONE
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              {validation.isValid ? (
+                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Starting XI Valid & Ready
+                </span>
+              ) : (
+                <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" />
+                  Adjust Lineup to Fill Missing Roles
+                </span>
+              )}
+            </div>
 
-        <button
-          onClick={onConfirmTeam}
-          disabled={!validation.isValid}
-          className={`px-6 py-2.5 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 ${
-            currentManager.confirmedTeam
-              ? 'bg-amber-400 text-slate-950'
-              : validation.isValid
-              ? 'bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-lg shadow-emerald-500/25'
-              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-          }`}
-        >
-          {currentManager.confirmedTeam ? 'TEAM CONFIRMED (WAITING FOR OTHERS)' : 'CONFIRM TEAM & PROCEED'}
-        </button>
+            <button
+              onClick={onConfirmTeam}
+              disabled={!validation.isValid || !onConfirmTeam}
+              className={`px-6 py-2.5 rounded-xl font-display font-black text-xs uppercase tracking-wider transition-all cursor-pointer active:scale-95 ${
+                currentManager.confirmedTeam
+                  ? 'bg-amber-400 text-slate-950'
+                  : validation.isValid && onConfirmTeam
+                  ? 'bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-lg shadow-emerald-500/25'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              {currentManager.confirmedTeam ? 'TEAM CONFIRMED (WAITING FOR OTHERS)' : 'CONFIRM TEAM & PROCEED'}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Developer Branding Credit (Requirement 7 & 23) */}
