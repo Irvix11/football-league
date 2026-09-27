@@ -946,6 +946,7 @@ export function simulateMatch(
           const defStat = playerStatsMap.get(defender.player.id);
           if (defStat?.yellowCard) {
             defStat.redCard = true;
+            defStats.redCards++;
             sentOffIds.add(defender.player.id);
             pushEvent({
               minute: actionMin,
@@ -1040,7 +1041,12 @@ export function simulateMatch(
     // ACTION B: Cross & Box Play (Aerial duels / Long balls)
     else if (actionRoll < crossCutoff) {
       const winger = receiver;
-      const striker = pick(atkAtts.length > 0 ? atkAtts : attackingStarters);
+      const strikerPool = (atkAtts.length > 0 ? atkAtts : attackingStarters)
+        .filter(p => p.player.id !== winger.player.id);
+      const striker = pick(
+        strikerPool.length > 0 ? strikerPool : attackingStarters,
+        'cross target'
+      );
       const crossTargetX = isHome ? 91 : 9;
       const crossTargetY = 44 + rand() * 12;
 
