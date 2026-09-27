@@ -63,34 +63,18 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
       ...chosen,
       isStarting: true,
       startingSlotIndex: slot.index,
-      benchIndex: undefined,
       assignedPosition: slot.position,
     });
   }
 
-  const bench = remaining
-    .sort((a, b) => b.player.overall - a.player.overall)
-    .slice(0, 7)
-    .map((entry, index) => ({
-      ...entry,
-      isStarting: false,
-      startingSlotIndex: undefined,
-      benchIndex: index,
-      assignedPosition: entry.player.position,
-    }));
-
-  return [
-    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
-    ...bench,
-  ];
+  return starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
 }
-
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
 
 function allowedPositionsForPlayer(player: Player, _starterCategory?: 'GK' | 'DEF' | 'MID' | 'ATT'): Position[] {
-  // The formation owns the slot; the manager owns the tactical role.
+  // The formation owns the slot; the manager chooses the tactical role.
   // Any outfield player may be played anywhere on the pitch. Natural and
   // alternate positions are listed first, followed by every other outfield
   // role. Out-of-position play is legal and is reflected in Effective OVR.
@@ -110,21 +94,10 @@ function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF'
   )[0] || entry.player.position;
 }
 
-function normalizeBenchForFormation(squad: SquadPlayerEntry[], _formation: Formation): SquadPlayerEntry[] {
-  // Bench positions are flexible. Only the starting XI must match the selected formation.
-  return [
-    ...squad.filter((entry) => entry.isStarting),
-    ...squad.filter((entry) => !entry.isStarting).map((entry, index) => ({
-      ...entry,
-      benchIndex: index,
-      assignedPosition: entry.assignedPosition || entry.player.position,
-    })),
-  ];
+function reassignStartersToFormation(squad: SquadPlayerEntry[], newFormation: Formation): SquadPlayerEntry[] {
+  return autoFillBestLineup(squad, newFormation);
 }
 
-function reassignStartersToFormation(squad: SquadPlayerEntry[], newFormation: Formation): SquadPlayerEntry[] {
-  return normalizeBenchForFormation(autoFillBestLineup(squad, newFormation), newFormation);
-}
 
 export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   room,
@@ -137,7 +110,6 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
 
   const [activeTab, setActiveTab] = useState<'pitch' | 'tactics' | 'roles'>('pitch');
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
-  const [selectedBenchIndex, setSelectedBenchIndex] = useState<number | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
   // Mobile Bottom Sheet modal for inspected player
@@ -152,7 +124,6 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   const validation = validateSquadFormation(currentManager.formation, currentManager.squad);
 
   const starters = currentManager.squad.filter((s) => s.isStarting);
-  const substitutes = currentManager.squad.filter((s) => !s.isStarting);
   const getEffectiveOvr = (entry: SquadPlayerEntry, slotPosition: Position) => {
     const fit = calculatePositionFit(entry.player.position, entry.player.alternatePositions, entry.assignedPosition || slotPosition);
     const conditionMultiplier = entry.condition.state === 'INJURED' || entry.condition.state === 'SUSPENDED'
@@ -223,42 +194,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     onUpdateLineup(currentManager.squad, currentManager.formation, currentManager.tactics, updatedRoles);
   };
 
-  // Swap Starter & Bench player
-  const handleSwap = (starterSlotIdx: number, benchIdx: number) => {
-    const newSquad = [...currentManager.squad];
-    const starterEntryIdx = newSquad.findIndex((s) => s.isStarting && s.startingSlotIndex === starterSlotIdx);
-    const benchEntryIdx = newSquad.findIndex((s) => !s.isStarting && s.benchIndex === benchIdx);
-
-    if (starterEntryIdx !== -1 && benchEntryIdx !== -1) {
-      const starter = newSquad[starterEntryIdx];
-      const sub = newSquad[benchEntryIdx];
-
-      newSquad[starterEntryIdx] = {
-        ...sub,
-        isStarting: true,
-        startingSlotIndex: starterSlotIdx,
-        benchIndex: undefined,
-        assignedPosition: formationConfig.slots.find((slot) => slot.index === starterSlotIdx)?.position ?? sub.assignedPosition ?? sub.player.position,
-      };
-
-      newSquad[benchEntryIdx] = {
-        ...starter,
-        isStarting: false,
-        startingSlotIndex: undefined,
-        benchIndex: benchIdx,
-        assignedPosition: starter.player.position,
-      };
-
-      onUpdateLineup(newSquad);
-    }
-
-    setSelectedSlotIndex(null);
-    setSelectedBenchIndex(null);
-    setInspectedPlayer(null);
-  };
-
-  // Tap one player and then another to swap them, matching the quick
-  // squad-edit interaction used by modern football lineup builders.
+  // Tap one player and then another to swap two starting-XI players.
   const handlePlayerSwapById = (firstId: string, secondId: string) => {
     if (firstId === secondId) return;
     const firstIndex = currentManager.squad.findIndex((s) => s.player.id === firstId);
@@ -268,53 +204,17 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const next = [...currentManager.squad];
     const first = next[firstIndex];
     const second = next[secondIndex];
+    const firstSlot = first.startingSlotIndex ?? firstIndex;
+    const secondSlot = second.startingSlotIndex ?? secondIndex;
+    const firstSlotPos = formationConfig.slots.find((s) => s.index === firstSlot)?.position || first.assignedPosition || first.player.position;
+    const secondSlotPos = formationConfig.slots.find((s) => s.index === secondSlot)?.position || second.assignedPosition || second.player.position;
 
-    if (first.isStarting && second.isStarting) {
-      const firstSlot = first.startingSlotIndex ?? 0;
-      const secondSlot = second.startingSlotIndex ?? 0;
-      const firstSlotPos = formationConfig.slots.find((s) => s.index === firstSlot)?.position || first.player.position;
-      const secondSlotPos = formationConfig.slots.find((s) => s.index === secondSlot)?.position || second.player.position;
-      next[firstIndex] = { ...second, startingSlotIndex: firstSlot, assignedPosition: secondSlotPos };
-      next[secondIndex] = { ...first, startingSlotIndex: secondSlot, assignedPosition: firstSlotPos };
-    } else if (first.isStarting !== second.isStarting) {
-      const starter = first.isStarting ? first : second;
-      const bench = first.isStarting ? second : first;
-      const starterIndex = first.isStarting ? firstIndex : secondIndex;
-      const benchIndex = first.isStarting ? secondIndex : firstIndex;
-      const slotIndex = starter.startingSlotIndex ?? 0;
-      const slotPos = formationConfig.slots.find((s) => s.index === slotIndex)?.position || starter.assignedPosition || starter.player.position;
-      const bIndex = bench.benchIndex ?? 0;
+    next[firstIndex] = { ...second, isStarting: true, startingSlotIndex: firstSlot, assignedPosition: secondSlotPos };
+    next[secondIndex] = { ...first, isStarting: true, startingSlotIndex: secondSlot, assignedPosition: firstSlotPos };
 
-      next[starterIndex] = {
-        ...bench,
-        isStarting: true,
-        startingSlotIndex: slotIndex,
-        benchIndex: undefined,
-        assignedPosition: slotPos,
-      };
-      next[benchIndex] = {
-        ...starter,
-        isStarting: false,
-        startingSlotIndex: undefined,
-        benchIndex: bIndex,
-        assignedPosition: starter.player.position,
-      };
-    } else {
-      const firstBench = first.benchIndex ?? 0;
-      const secondBench = second.benchIndex ?? 0;
-      next[firstIndex] = { ...second, benchIndex: firstBench };
-      next[secondIndex] = { ...first, benchIndex: secondBench };
-    }
-
-    const checked = validateSquadFormation(currentManager.formation, next);
-    if (!checked.isValid) {
-      setActionError(checked.errors.join(' '));
-      return;
-    }
     setActionError(null);
     setSelectedPlayerId(null);
     setSelectedSlotIndex(null);
-    setSelectedBenchIndex(null);
     setInspectedPlayer(null);
     onUpdateLineup(next);
   };
@@ -394,7 +294,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
           }`}
         >
           <Users className="w-3.5 h-3.5" />
-          <span className="truncate">Starting XI & Bench</span>
+          <span className="truncate">Starting XI</span>
         </button>
 
         <button
@@ -484,11 +384,11 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                 </div>
                 <div className="rounded-xl bg-slate-950 border border-slate-800 p-2 text-center">
                   <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">SQUAD</div>
-                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/18</div>
+                  <div className="text-xl font-mono font-black text-slate-100">{currentManager.squad.length}/11</div>
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-500">
-                AUTO-FILL uses OVR + attributes + positional fit. Tap a player to inspect them, choose any outfield position, or tap another player to swap. Effective OVR updates for the selected role.
+                TEAM BUILDER uses OVR + attributes + positional fit. Tap a player to inspect them, swap two starters, or assign any outfield position. Effective OVR updates instantly.
               </p>
               <div className="mt-2 flex flex-wrap gap-2 text-[9px] font-mono font-black">
                 <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">NATURAL 90–100</span>
@@ -529,7 +429,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                         positionLabel={(starter?.assignedPosition || slot.position)}
                         slotIndex={slot.index}
                         isSelected={isSelected}
-                        isSubTarget={selectedBenchIndex !== null}
+                        isSubTarget={false}
                         fitPercentage={starter ? fit : undefined}
                         effectiveOverall={starter ? getEffectiveOvr(starter, slot.position) : undefined}
                         size="md"
@@ -608,7 +508,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
               <div className="hidden lg:block p-4 rounded-2xl bg-slate-900 border border-emerald-500/40 shadow-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    {inspectedPlayer.isStarter ? 'Starting XI Player' : 'Bench Substitute'}
+                    Starting XI Player
                   </span>
                   <button
                     onClick={() => setInspectedPlayer(null)}
@@ -680,75 +580,49 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
               </div>
             )}
 
-            {/* Bench Substitutes List */}
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3 shadow-xl">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                  Bench Substitutes ({substitutes.length})
-                </h3>
-                {selectedSlotIndex !== null && (
-                  <span className="text-xs font-bold text-amber-400 animate-pulse">
-                    Select substitute to swap
-                  </span>
-                )}
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">STARTING XI · 11 PLAYERS</h3>
+                <span className="font-mono text-emerald-400 text-xs font-black">TEAM OVR {currentManager.teamOverall}</span>
               </div>
-
-              {substitutes.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-500">
-                  No players on the bench.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 max-h-[360px] overflow-y-auto pr-1">
-                  {substitutes.map((sub, idx) => {
-                    const isBenchSelected = selectedBenchIndex === (sub.benchIndex ?? idx);
-                    return (
-                      <div
-                        key={sub.player.id}
-                        onClick={() => {
-                          if (selectedPlayerId && selectedPlayerId !== sub.player.id) {
-                            handlePlayerSwapById(selectedPlayerId, sub.player.id);
-                            return;
-                          }
-                          const bIdx = sub.benchIndex ?? idx;
-                          setSelectedPlayerId(selectedPlayerId === sub.player.id ? null : sub.player.id);
-                          setSelectedBenchIndex(isBenchSelected ? null : bIdx);
-                          setInspectedPlayer({
-                            entry: sub,
-                            isStarter: false,
-                          });
-                        }}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer active:scale-95 ${
-                          isBenchSelected
-                            ? 'bg-amber-500/20 border-amber-400 shadow-md ring-2 ring-amber-400/40'
-                            : selectedSlotIndex !== null
-                            ? 'bg-slate-950 border-emerald-500/50 hover:border-emerald-400'
-                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-700 flex flex-col items-center justify-center font-mono font-black text-emerald-400">
-                            <span className="text-sm">{sub.player.overall}</span>
-                            <span className="text-[7px] text-slate-500">OVR</span>
-                          </div>
-                          <div>
-                            <div className="font-bold text-xs text-slate-100">{sub.player.name}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              {sub.assignedPosition || sub.player.position} · {sub.player.club}
-                            </div>
-                            <div className="text-[8px] text-slate-600 font-mono">
-                              NAT {sub.player.position} · ALT {sub.player.alternatePositions.join(', ') || '—'}
-                            </div>
-                          </div>
+              <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                {starters.slice().sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).map((entry) => {
+                  const slot = formationConfig.slots.find(s => s.index === entry.startingSlotIndex);
+                  const assigned = entry.assignedPosition || slot?.position || entry.player.position;
+                  const effective = getEffectiveOvr(entry, slot?.position || assigned);
+                  const fit = calculatePositionFit(entry.player.position, entry.player.alternatePositions, assigned);
+                  return (
+                    <button key={entry.player.id} type="button"
+                      onClick={() => setInspectedPlayer({ entry, slotIndex: entry.startingSlotIndex, isStarter: true })}
+                      className="w-full text-left p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 transition-all">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs text-slate-100 truncate">{entry.player.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{assigned} · {entry.player.club}</div>
                         </div>
-
-                        <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-slate-900 text-slate-400">
-                          SUB
-                        </span>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono font-black text-emerald-400 text-sm">{entry.player.overall} OVR</div>
+                          <div className="font-mono text-[9px] text-sky-300">EFFECTIVE {effective}</div>
+                        </div>
                       </div>
-                    );
-                  })}
+                      <div className="mt-1 flex justify-between text-[9px] font-mono">
+                        <span className="text-slate-600">NAT {entry.player.position} · ALT {entry.player.alternatePositions.join(', ') || '—'}</span>
+                        <span className={fit >= 90 ? 'text-emerald-400' : fit >= 70 ? 'text-amber-400' : 'text-rose-400'}>{fit}% FIT</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="rounded-lg bg-slate-950 border border-slate-800 px-2 py-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">XI OVR AVG</div>
+                  <div className="font-mono font-black text-slate-100 text-lg">{starters.length ? Math.round(starters.reduce((sum, s) => sum + s.player.overall, 0) / starters.length) : 0}</div>
                 </div>
-              )}
+                <div className="rounded-lg bg-slate-950 border border-emerald-500/20 px-2 py-2 text-center">
+                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-black">TEAM OVR</div>
+                  <div className="font-mono font-black text-emerald-400 text-lg">{currentManager.teamOverall}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
