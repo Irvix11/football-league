@@ -136,6 +136,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const playerNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const ballNodeRef = useRef<HTMLDivElement | null>(null);
   const ballShadowRef = useRef<HTMLDivElement | null>(null);
+  const visualPlayerCoordsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const visualBallCoordsRef = useRef<{ x: number; y: number }>({ x: 50, y: 50 });
 
   // Subtle broadcast camera offset for dynamic action focus (Requirement 14)
   const [cameraOffset, setCameraOffset] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
@@ -169,11 +171,14 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       startPlayersRef.current = initialSeparated;
       targetPlayersRef.current = initialSeparated;
       setAnimatedPlayers(initialSeparated);
+      visualPlayerCoordsRef.current.clear();
+      initialSeparated.forEach(p => visualPlayerCoordsRef.current.set(p.id, { x: p.x, y: p.y }));
 
       const bPos = firstEvent.ballCoordinates || { x: 50, y: 50 };
       startBallRef.current = bPos;
       targetBallRef.current = bPos;
       setAnimatedBall({ x: bPos.x, y: bPos.y, arc: 0 });
+      visualBallCoordsRef.current = { x: bPos.x, y: bPos.y };
 
       const firstSecs = (firstEvent.minute || 0) * 60 + (firstEvent.second || 0);
       startClockSecsRef.current = firstSecs;
@@ -209,12 +214,15 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     // The target players are separated to guarantee ZERO overlap
     const targetSeparated = separatePlayerPositions(currentEvent.playerCoordinates || []);
 
-    // Start from current animated positions to avoid teleporting
-    startPlayersRef.current = animatedPlayers.length > 0 ? animatedPlayers : targetSeparated;
+    // Start from the exact last rendered positions so the next event never teleports.
+    startPlayersRef.current = targetSeparated.map(target => {
+      const visual = visualPlayerCoordsRef.current.get(target.id);
+      return visual ? { ...target, x: visual.x, y: visual.y } : target;
+    });
     targetPlayersRef.current = targetSeparated;
 
-    // Start ball from current animated ball position (or event ballStartCoordinates if available)
-    startBallRef.current = currentEvent.ballStartCoordinates || { x: animatedBall.x, y: animatedBall.y };
+    // Start the ball from the exact last rendered position when available.
+    startBallRef.current = currentEvent.ballStartCoordinates || visualBallCoordsRef.current;
     targetBallRef.current = currentEvent.ballCoordinates || { x: 50, y: 50 };
 
     // Synchronize clock endpoints for smooth interpolation
@@ -266,17 +274,17 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       // 1. Smoothly interpolate all 22 player positions
       const starts = startPlayersRef.current;
       const targets = targetPlayersRef.current;
+      const pitch = pitchRef.current;
+      const width = pitch?.clientWidth || 0;
+      const height = pitch?.clientHeight || 0;
 
       if (targets.length > 0) {
-        const pitch = pitchRef.current;
-        const width = pitch?.clientWidth || 0;
-        const height = pitch?.clientHeight || 0;
-
         for (const target of targets) {
           const start = starts.find(s => s.id === target.id) || target;
           const currX = start.x + (target.x - start.x) * easedT;
           const currY = start.y + (target.y - start.y) * easedT;
           const node = playerNodesRef.current.get(target.id);
+          visualPlayerCoordsRef.current.set(target.id, { x: currX, y: currY });
           if (node && width > 0 && height > 0) {
             node.style.transform = `translate3d(${(currX / 100) * width}px, ${(currY / 100) * height}px, 0)`;
           }
@@ -294,6 +302,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const maxArc = isHighBall ? 4.5 : isGroundPass ? 1.0 : 2.5;
       const arc = Math.sin(progress * Math.PI) * maxArc;
 
+      visualBallCoordsRef.current = { x: bCurrX, y: bCurrY };
       if (pitch && width > 0 && height > 0 && ballNodeRef.current) {
         ballNodeRef.current.style.transform = `translate3d(${(bCurrX / 100) * width}px, ${((bCurrY - arc) / 100) * height}px, 0)`;
         if (ballShadowRef.current) {
