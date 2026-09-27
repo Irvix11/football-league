@@ -107,6 +107,14 @@ export function useGameSocket() {
             break;
 
           case 'ERROR':
+            // A saved session can outlive an in-memory Vercel instance. Clear only
+            // genuinely expired rooms; ordinary gameplay errors should keep the session.
+            if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
+              saveSession(null);
+              managerIdRef.current = null;
+              setRoom(null);
+              setManagerId(null);
+            }
             setErrorMessage(message);
             setTimeout(() => setErrorMessage(null), 5000);
             break;
@@ -183,9 +191,23 @@ export function useGameSocket() {
     send('CREATE_LOBBY', { managerName, isSolo: false, settings });
   }, [send, startSoloGame]);
 
-  const joinLobby = useCallback((roomCode: string, managerName: string) => {
-    send('JOIN_LOBBY', { roomCode, managerName });
+  const joinLobby = useCallback((roomCode: string, managerName: string, reconnectId?: string) => {
+    send('JOIN_LOBBY', { roomCode: roomCode.trim().toUpperCase(), managerName, reconnectId });
   }, [send]);
+
+  const resumeLobby = useCallback((session: SavedSession) => {
+    if (!session?.roomCode || !session?.managerId) return;
+    saveSession(session);
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      send('JOIN_LOBBY', {
+        roomCode: session.roomCode.trim().toUpperCase(),
+        managerName: session.managerName,
+        reconnectId: session.managerId,
+      });
+    } else {
+      setErrorMessage('Connecting to game server...');
+    }
+  }, [saveSession, send]);
 
   const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
     if (!room) return;
@@ -359,6 +381,7 @@ export function useGameSocket() {
     startSoloGame,
     createLobby,
     joinLobby,
+    resumeLobby,
     updateSettings,
     toggleReady,
     kickPlayer,
