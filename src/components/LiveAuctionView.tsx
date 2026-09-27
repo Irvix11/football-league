@@ -473,7 +473,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                 <div className="text-right min-w-0">
                   <div className="text-[9px] uppercase text-slate-500 font-bold">CURRENT PLAYER</div>
                   <div className="text-xs font-black text-white truncate max-w-[150px]">{player.name}</div>
-                  <div className="text-[10px] text-slate-400 font-mono">{player.category} · OVR {player.overall}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">{isBlind && !auction.isSold ? '2 SCOUTING STATS REVEALED' : (player.category + ' · OVR ' + player.overall)}</div>
                 </div>
               )}
             </div>
@@ -492,7 +492,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                   <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black">NOW AUCTIONING</div>
                   <div className="text-base font-display font-black text-white truncate">{player.name}</div>
                   <div className="text-[10px] text-slate-400 mt-0.5">
-                    {player.position} · {player.overall} OVR · {player.club}
+                    {isBlind && !auction.isSold ? 'Identity hidden · 2 attributes revealed' : (player.position + ' · ' + player.overall + ' OVR · ' + player.club)}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
