@@ -91,7 +91,7 @@ function broadcastRoom(roomCode: string, excludeSocket?: WebSocket) {
     }
 
     const sourcePlayer = room.auction.currentPlayer;
-    if (sourcePlayer && !room.auction.isSold) {
+    if (sourcePlayer && !room.auction.isRevealed) {
       const genericPosition = sourcePlayer.category === 'GK'
         ? 'GK'
         : sourcePlayer.category === 'DEF'
@@ -628,6 +628,7 @@ function advanceAuction(room: GameRoom) {
     blindClues: room.settings.auctionMode === 'Blind'
       ? createBlindAuctionClues(nextPlayer)
       : undefined,
+    isRevealed: false,
   };
 
   blindSecretBids.set(room.code, {});
@@ -735,12 +736,16 @@ function finalizeAuctionItem(room: GameRoom) {
     }
 
     if (winningManagers.length > 0) {
-      // Deterministic tie-breaking: pick earliest or first in array
+      // Deterministic tie-breaking: pick earliest manager in room order.
       winnerId = winningManagers[0];
       finalPrice = highestBid;
     } else {
       winnerId = null;
     }
+
+    // The blind lot is revealed after the bidding window closes, even when
+    // nobody submitted a valid bid.
+    room.auction.isRevealed = true;
   }
 
   if (winnerId) {
