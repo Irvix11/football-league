@@ -84,7 +84,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const squadCategoryLimits = getFormationSquadCategoryLimits(currentManager.formation);
 
   // The auction itself is staged globally: GK -> DEF -> MID -> ATT for the
-  // starting XI, then the remaining seven bench spots.
+  // exact starting XI only.
   const auctionStage = (['GK', 'DEF', 'MID', 'ATT'] as const).find((cat) =>
     room.managers.some((manager) => {
       const required = getFormationStarterCategoryCounts(manager.formation)[cat];
@@ -94,7 +94,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   ) || null;
   const stageLabel = auctionStage
     ? ({ GK: 'GOALKEEPERS', DEF: 'DEFENDERS', MID: 'MIDFIELDERS', ATT: 'ATTACKERS' } as const)[auctionStage]
-    : 'BENCH SPOTS';
+    : 'XI COMPLETE';
 
   // Current category counts for user's squad
   const categoryCounts = {
@@ -131,7 +131,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
   const minNextBid = auction.highestBidderId ? auction.currentBid + 1 : auction.currentBid;
   const canAfford = currentManager.budget >= minNextBid;
-  const isSquadFull = currentManager.squad.length >= 18;
+  const isSquadFull = currentManager.squad.length >= 11;
   const isWinning = auction.highestBidderId === managerId;
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
@@ -213,7 +213,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
             <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">SQUAD</div>
-            <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 18</div>
+            <div className="font-mono font-black text-slate-200 text-lg sm:text-xl">{currentManager.squad.length} / 11</div>
           </div>
           <div className="h-8 w-[1px] bg-slate-800" />
           <div>
@@ -377,7 +377,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     {/* Bid Action Buttons */}
                     {isSquadFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-amber-400 font-semibold">
-                        Your squad is full (18/18). You cannot bid on further players.
+                        Your starting XI is full (11/11). You cannot bid on further players.
                       </div>
                     ) : isCategoryFull ? (
                       <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-center text-xs text-rose-400 font-semibold">
@@ -613,7 +613,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-slate-400 font-black">SIGNED PLAYERS</span>
-              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/18</span>
+              <span className="text-[10px] font-mono text-emerald-400">{currentManager.squad.length}/11</span>
             </div>
             {currentManager.squad.length === 0 ? (
               <div className="text-[10px] text-slate-600 text-center py-2">Players you win will appear here immediately.</div>
@@ -678,7 +678,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                         {m.name} {isMe && '(You)'}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        {m.squad.length}/18 Players · OVR {m.teamOverall}
+                        {m.squad.length}/11 Players · OVR {m.teamOverall}
                       </div>
                     </div>
                     <div className="text-right">
