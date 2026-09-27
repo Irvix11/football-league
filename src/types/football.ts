@@ -42,8 +42,6 @@ export interface Player {
   updatedAt: string;
   /** Present only for a masked Blind Auction player. */
   blindClues?: BlindStatClue[];
-  /** True once the current blind lot is revealed, even if nobody won it. */
-  isRevealed?: boolean;
 }
 
 export type Formation = 
