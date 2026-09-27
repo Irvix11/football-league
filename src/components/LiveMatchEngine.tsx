@@ -150,7 +150,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       window.clearTimeout(strikeTimer);
       window.clearTimeout(resultTimer);
     };
-  }, [showPenaltyShootout, penaltyIndex, currentPenalty?.id, penaltyIsOver]);
+  }, [showPenaltyShootout, penaltyIndex, penaltyIsOver]);
 
   // Interactive Player Inspection Tooltip (Tap on player)
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedPlayerState | null>(null);
