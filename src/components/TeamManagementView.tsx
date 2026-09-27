@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameRoom, Formation, TacticalStyle, TacticalMentality, SquadPlayerEntry, TeamTactics, TeamRoles, Player, Position } from '../types/football';
-import { FORMATIONS_CONFIG, validateSquadFormation, calculatePositionFit, getPositionCategory } from '../constants/formations';
+import { FORMATIONS_CONFIG, validateSquadFormation, calculatePositionFit } from '../constants/formations';
 import { PitchGraphic } from './PitchGraphic';
 import { PlayerCard } from './PlayerCard';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
@@ -75,6 +75,16 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
 
   return starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
 }
+// Local, dependency-free position categorizer. Keeping this helper in the view
+// prevents a runtime ReferenceError if a stale/cached module graph drops the
+// named export during a production hot update.
+function getPositionCategory(pos: Position): 'GK' | 'DEF' | 'MID' | 'ATT' {
+  if (pos === 'GK') return 'GK';
+  if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'DEF';
+  if (['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(pos)) return 'MID';
+  return 'ATT';
+}
+
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
