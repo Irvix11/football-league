@@ -1,64 +1,90 @@
-import React from 'react';
+import React, { Component, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-class AppErrorBoundary extends React.Component<
+class AppErrorBoundary extends Component<
   { children: React.ReactNode },
   { error: Error | null }
 > {
-  state = { error: null as Error | null };
+  state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[app] React render error', error, info);
+    console.error('[Football Auction League] render error:', error, info);
   }
 
   render() {
     if (this.state.error) {
+      const message = this.state.error.message || 'Unknown runtime error';
       return (
         <div style={{
           minHeight: '100vh',
           background: '#020617',
           color: '#e2e8f0',
-          display: 'grid',
-          placeItems: 'center',
-          padding: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
           fontFamily: 'system-ui, sans-serif',
         }}>
-          <div style={{ maxWidth: 560, width: '100%', border: '1px solid #334155', borderRadius: 16, padding: 20, background: '#0f172a' }}>
-            <div style={{ color: '#fbbf24', fontWeight: 800, letterSpacing: '.08em', fontSize: 12 }}>FOOTBALL AUCTION LEAGUE</div>
-            <h1 style={{ margin: '8px 0', fontSize: 24 }}>The game failed to render</h1>
+          <div style={{
+            width: '100%',
+            maxWidth: 620,
+            padding: 24,
+            border: '1px solid rgba(244,63,94,.35)',
+            borderRadius: 20,
+            background: '#0f172a',
+          }}>
+            <div style={{ color: '#fb7185', fontWeight: 800, fontSize: 12, letterSpacing: 1.5 }}>
+              APP RUNTIME ERROR
+            </div>
+            <h1 style={{ margin: '8px 0', fontSize: 22 }}>Football Auction League crashed</h1>
             <p style={{ color: '#94a3b8', lineHeight: 1.6 }}>
-              Reload the page. If this keeps happening, the error details below can be used to diagnose the deployment.
+              The page is still running, but a UI component failed. Reload once; if it repeats,
+              the error below tells us exactly where to look.
             </p>
-            <pre style={{ whiteSpace: 'pre-wrap', color: '#fda4af', fontSize: 12, overflow: 'auto' }}>
-              {this.state.error.message}
-            </pre>
+            <pre style={{
+              marginTop: 16,
+              padding: 14,
+              overflow: 'auto',
+              borderRadius: 12,
+              background: '#020617',
+              color: '#fda4af',
+              fontSize: 12,
+              whiteSpace: 'pre-wrap',
+            }}>{message}</pre>
             <button
               onClick={() => window.location.reload()}
-              style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, border: 0, background: '#34d399', color: '#020617', fontWeight: 800 }}
+              style={{
+                marginTop: 16,
+                border: 0,
+                borderRadius: 12,
+                padding: '10px 16px',
+                background: '#10b981',
+                color: '#022c22',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
             >
-              Reload game
+              Reload
             </button>
           </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }
 
-const root = document.getElementById('root');
-if (!root) throw new Error('Missing #root element');
-
-createRoot(root).render(
-  <React.StrictMode>
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
     <AppErrorBoundary>
       <App />
     </AppErrorBoundary>
-  </React.StrictMode>,
+  </StrictMode>,
 );
