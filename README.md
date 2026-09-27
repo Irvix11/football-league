@@ -63,7 +63,7 @@ Before shipping a release, verify:
 4. Production runtime logs show no new errors
 5. A fresh browser can create/join a lobby, reconnect, run an auction, confirm an 11-player XI, simulate a match, and complete a knockout match
 
-<!-- release: 2026-09-27 production-hardening -->
+
 
 
 <!-- release trigger: auction-economy-and-formation-fixes 2026-09-27 -->
@@ -74,4 +74,14 @@ Before shipping a release, verify:
 
 <!-- deploy: final-zero-price-crash-hardening-2026-09-27 -->
 
-<!-- release: auction-stuck-recovery 2026-09-27 -->
+
+
+
+## League Rules
+
+- Every manager plays every other manager twice: once home and once away.
+- 2–5 managers: top 2 advance to the Final.
+- 6–9 managers: top 4 advance to the Semi-Finals.
+- 10–16 managers: top 8 advance to the Quarter-Finals.
+- Knockout draws are decided by extra time and then a visual penalty shootout.
+- Semi-Finals are followed by a Third-Place match, then the Final.
