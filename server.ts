@@ -2035,9 +2035,9 @@ wss.on('connection', (ws) => {
           const required = getFormationSquadCategoryLimits(manager.formation);
           const counts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
           for (const entry of manager.squad) counts[entry.player.category] += 1;
-          const complete = manager.squad.length === 11 && (['GK','DEF','MID','ATT'] as PositionCategory[]).every(cat => counts[cat] === required[cat]);
+          const complete = manager.squad.length === 18 && (['GK','DEF','MID','ATT'] as PositionCategory[]).every(cat => counts[cat] >= getFormationStarterCategoryCounts(manager.formation)[cat]);
           if (!complete) {
-            sendSocketError(ws, 'Finish your 11-player formation quota before pressing I\'M DONE.');
+            sendSocketError(ws, 'Finish your 18-player squad before pressing I\'M DONE.');
             return;
           }
           const ready = new Set(room.phaseReadyIds || []);
