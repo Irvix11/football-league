@@ -27,6 +27,8 @@ export default function App() {
     startGame,
     selectFormation,
     beginAuction,
+    markFormationDone,
+    markAuctionDone,
     skipAuctionSolo,
     placeBid,
     submitBlindBid,
@@ -160,6 +162,7 @@ export default function App() {
           managerId={managerId}
           onSelectFormation={selectFormation}
           onBeginAuction={beginAuction}
+          onMarkDone={markFormationDone}
           onSkipAuctionSolo={skipAuctionSolo}
         />
       ) : room.phase === 'auction' ? (
@@ -168,6 +171,7 @@ export default function App() {
           managerId={managerId}
           onPlaceBid={placeBid}
           onSubmitBlindBid={submitBlindBid}
+          onMarkDone={markAuctionDone}
         />
       ) : room.phase === 'team_management' ? (
         <TeamManagementView
