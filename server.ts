@@ -2976,6 +2976,36 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
     return res.status(500).json({ error: error?.message || 'Failed to simulate knockout match.' });
   }
 });
+app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
+  try {
+    const code = String(req.params.code || '').toUpperCase();
+    const managerId = String(req.body?.managerId || '');
+    const fixtureId = String(req.body?.fixtureId || '');
+
+    let room = rooms.get(code);
+    if (!room) {
+      room = await loadRoomSnapshot(code) || undefined;
+      if (room) rooms.set(code, room);
+    }
+    if (!room) return res.status(404).json({ error: 'Lobby not found' });
+    if (room.phase !== 'knockout') return res.status(409).json({ error: 'Knockout phase is not active.' });
+    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+
+    const stage = room.knockoutStage;
+    if (!stage) return res.status(409).json({ error: 'Knockout stage is unavailable.' });
+    const round = stage.rounds[stage.rounds.length - 1];
+    const fix = round?.fixtures.find(f => f.id === fixtureId);
+    if (!fix || !fix.played) return res.status(409).json({ error: 'Match is not complete yet.' });
+
+    advanceKnockoutRound(room);
+    broadcastRoom(room.code);
+    return res.json({ success: true, room: JSON.parse(JSON.stringify(room)) });
+  } catch (error: any) {
+    console.error('[REST] complete-knockout-match failed:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to advance knockout round.' });
+  }
+});
+
 
 // API Endpoints
 app.get('/api/room/:code', async (req, res) => {
