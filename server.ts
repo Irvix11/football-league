@@ -400,10 +400,27 @@ function autoFillManagerLineup(manager: Manager) {
     });
   }
 
-  // There is no bench: every acquired player is part of the Starting XI.
-  manager.squad = starters
-    .sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99))
-    .slice(0, 11);
+  // Preserve the full 18-player squad: the best 11 become starters and the
+  // remaining 7 become substitutes. Every player can still be assigned to any
+  // outfield tactical role later.
+  const starterIds = new Set(starters.map(s => s.player.id));
+  const bench = remaining
+    .filter(entry => !starterIds.has(entry.player.id))
+    .sort((a, b) => b.player.overall - a.player.overall)
+    .slice(0, 7)
+    .map((entry, index) => ({
+      ...entry,
+      isStarting: false,
+      startingSlotIndex: undefined,
+      benchIndex: index,
+      assignedPosition: entry.player.category === 'GK' ? 'GK' : entry.assignedPosition || entry.player.position,
+      condition: entry.condition || createFitCondition(),
+    }));
+
+  manager.squad = [
+    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
+    ...bench,
+  ].slice(0, 18);
   manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
   manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
 }
@@ -415,7 +432,7 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
   const squad: SquadPlayerEntry[] = [];
 
   // Build the XI first from the formation's categories, then add seven
-  // substitutes without forcing a positional mix.
+  // substitutes within the formation-aware squad category limits.
   for (const slot of config.slots) {
     const candidates = shuffled
       .filter(p => !usedIds.has(p.id) && (slot.category === 'GK' ? p.category === 'GK' : p.category !== 'GK'))
@@ -432,6 +449,30 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
     });
   }
 
+  const limits = getFormationSquadCategoryLimits(formation);
+  const categoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
+  for (const entry of squad) categoryCounts[entry.player.category] += 1;
+
+  const benchCandidates = shuffled
+    .filter(p => !usedIds.has(p.id))
+    .filter(p => categoryCounts[p.category as PositionCategory] < limits[p.category as PositionCategory])
+    .sort((a, b) => b.overall - a.overall);
+
+  for (const player of benchCandidates) {
+    if (squad.length >= 18) break;
+    const cat = player.category as PositionCategory;
+    if (categoryCounts[cat] >= limits[cat]) continue;
+    usedIds.add(player.id);
+    categoryCounts[cat] += 1;
+    squad.push({
+      player,
+      isStarting: false,
+      benchIndex: squad.length - 11,
+      assignedPosition: player.category === 'GK' ? 'GK' : player.position,
+      condition: createFitCondition(),
+    });
+  }
+
   return squad;
 }
 
@@ -441,7 +482,7 @@ function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
   const ordered: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
   for (const category of ordered) {
     const needsCategory = room.managers.some(manager => {
-      const required = getFormationStarterCategoryCounts(manager.formation)[category];
+      const required = getFormationSquadCategoryLimits(manager.formation)[category];
       const count = manager.squad.filter(entry => entry.player.category === category).length;
       return count < required;
     });
@@ -463,8 +504,8 @@ function advanceAuction(room: GameRoom) {
     }
   }
 
-  // Check if all managers have complete 11-player squads
-  const allFull = room.managers.every(m => m.squad.length >= 11);
+  // Check if all managers have complete 18-player squads
+  const allFull = room.managers.every(m => m.squad.length >= 18);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
@@ -1217,6 +1258,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
   };
 
   rooms.set(roomCode, room);
+  await saveRoomSnapshot(room);
 
   return { roomCode, managerId: hostId, room };
 }
@@ -1339,6 +1381,7 @@ wss.on('connection', (ws) => {
           };
 
           rooms.set(roomCode, room);
+          await saveRoomSnapshot(room);
 
           if (!roomSockets.has(roomCode)) {
             roomSockets.set(roomCode, new Set());
@@ -1700,8 +1743,8 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if (manager.squad.length >= 11) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 11-player squad is already full (11/11 players).' }));
+          if (manager.squad.length >= 18) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your 18-player squad is already full (18/18 players).' }));
             return;
           }
 
@@ -1753,8 +1796,8 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Insufficient budget for secret bid.');
             return;
           }
-          if (manager.squad.length >= 11) {
-            sendSocketError(ws, 'Your 11-player squad is already full.');
+          if (manager.squad.length >= 18) {
+            sendSocketError(ws, 'Your 18-player squad is already full.');
             return;
           }
           const blindLimits = getFormationSquadCategoryLimits(manager.formation);
