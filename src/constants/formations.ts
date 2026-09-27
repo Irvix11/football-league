@@ -34,10 +34,11 @@ export function getFormationStarterCategoryCounts(formation: Formation): Record<
   return counts;
 }
 
-export function getFormationSquadCategoryLimits(formation: Formation): Record<PositionCategory, number> {
-  // Compatibility helper for auction code: XI-only means squad limits are exactly
-  // the formation's starting category counts.
-  return getFormationStarterCategoryCounts(formation);
+export function getFormationSquadCategoryLimits(_formation: Formation): Record<PositionCategory, number> {
+  // Squad acquisition is no longer locked to natural position categories.
+  // The formation controls the 11 starting slots; the 7-player bench may contain
+  // any outfield mix. Keep only a sensible two-GK ceiling for an 18-player squad.
+  return { GK: 2, DEF: 16, MID: 16, ATT: 16 };
 }
 
 export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
@@ -269,52 +270,62 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
 } {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const starters = squad.filter(s => s.isStarting);
+  const substitutes = squad.filter(s => !s.isStarting);
   const categoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
   const starterCategoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
 
   for (const entry of squad) {
-    // Squad limits follow the position the manager has assigned the player to,
-    // not the player's primary database category. This allows legitimate
-    // positional switches (including alternate positions and tactical
-    // out-of-position use) without making formation changes impossible.
     const cat = getEntryAssignedCategory(entry);
-    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-    if (entry.isStarting) {
-      starterCategoryCounts[cat] = (starterCategoryCounts[cat] || 0) + 1;
-    }
+    categoryCounts[cat] += 1;
+    if (entry.isStarting) starterCategoryCounts[cat] += 1;
   }
 
   const errors: string[] = [];
   const missingPositions: string[] = [];
-
-  // Formation category caps are auction acquisition limits. Once the XI is owned,
-  // assigned positions are flexible and are scored for positional fit.
   const starterRequirements = getFormationStarterCategoryCounts(formation);
-  // Formation structure is determined by the slot each starter occupies.
-  // Players may be assigned to different football positions and take a
-  // positional-fit penalty; the assigned position does not change the slot's
-  // DEF/MID/ATT structure.
-  for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
-    const requiredStarters = starterRequirements[cat];
-    const currentStarters = starters.filter((entry) => {
-      const slot = config.slots.find((s) => s.index === entry.startingSlotIndex);
-      return (slot?.category || getEntryAssignedCategory(entry)) === cat;
-    }).length;
-    if (currentStarters !== requiredStarters) {
-      const diff = requiredStarters - currentStarters;
-      if (diff > 0) {
-        missingPositions.push(`${diff} ${cat}`);
-        errors.push(`Missing ${diff} starting ${cat}`);
-      } else {
-        errors.push(`Too many starting ${cat} players for ${formation} (need exactly ${requiredStarters})`);
-      }
+
+  // Formation slots define the XI structure. A manager may put an outfield
+  // player into another outfield role; positional fit is reflected elsewhere.
+  const usedSlots = new Set<number>();
+  for (const entry of starters) {
+    if (entry.startingSlotIndex == null || usedSlots.has(entry.startingSlotIndex)) {
+      errors.push('Each starting player must occupy a unique formation slot.');
+      continue;
+    }
+    const slot = config.slots.find(s => s.index === entry.startingSlotIndex);
+    if (!slot) {
+      errors.push('A starting player has an invalid formation slot.');
+      continue;
+    }
+    usedSlots.add(slot.index);
+    if (slot.category === 'GK' && entry.player.category !== 'GK') {
+      errors.push('Only a goalkeeper can occupy the GK slot.');
     }
   }
 
+  for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
+    const required = starterRequirements[cat];
+    const occupied = config.slots.filter(s => s.category === cat && usedSlots.has(s.index)).length;
+    if (occupied < required) {
+      const diff = required - occupied;
+      missingPositions.push(`${diff} ${cat}`);
+      errors.push(`Missing ${diff} starting ${cat}`);
+    } else if (occupied > required) {
+      errors.push(`Too many starting ${cat} players for ${formation}`);
+    }
+  }
+
+  if (squad.length > 18) errors.push('Squad cannot exceed 18 players.');
+  if (starters.length !== 11) errors.push('Starting XI must contain exactly 11 players.');
+  if (substitutes.length !== 7) errors.push('Squad must contain exactly 7 substitutes.');
+
+  const gkCount = squad.filter(s => s.player.category === 'GK').length;
+  if (gkCount > 2) errors.push('Squad can contain at most 2 goalkeepers.');
+
   return {
-    isValid: errors.length === 0 && starters.length === 11 && squad.length === 11,
+    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 7 && squad.length === 18,
     startersCount: starters.length,
-    substitutesCount: 0,
+    substitutesCount: substitutes.length,
     totalCount: squad.length,
     missingPositions,
     categoryCounts,
