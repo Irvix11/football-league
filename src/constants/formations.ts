@@ -25,13 +25,12 @@ export interface FormationConfig {
 }
 
 
-// Every manager builds an 18-player squad: 11 starters + 7 substitutes.
-// The bench allocation is fixed so every formation has enough depth.
+// Every manager builds exactly an 11-player squad: the starting XI only.
 export const BENCH_CATEGORY_ALLOCATION: Record<PositionCategory, number> = {
-  GK: 1,
-  DEF: 2,
-  MID: 2,
-  ATT: 2,
+  GK: 0,
+  DEF: 0,
+  MID: 0,
+  ATT: 0,
 };
 
 export function getFormationStarterCategoryCounts(formation: Formation): Record<PositionCategory, number> {
@@ -42,13 +41,8 @@ export function getFormationStarterCategoryCounts(formation: Formation): Record<
 }
 
 export function getFormationSquadCategoryLimits(formation: Formation): Record<PositionCategory, number> {
-  const starters = getFormationStarterCategoryCounts(formation);
-  return {
-    GK: starters.GK + BENCH_CATEGORY_ALLOCATION.GK,
-    DEF: starters.DEF + BENCH_CATEGORY_ALLOCATION.DEF,
-    MID: starters.MID + BENCH_CATEGORY_ALLOCATION.MID,
-    ATT: starters.ATT + BENCH_CATEGORY_ALLOCATION.ATT,
-  };
+  // XI-only squads: the category limit is exactly the formation's starting XI.
+  return getFormationStarterCategoryCounts(formation);
 }
 
 export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
@@ -327,10 +321,10 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
     }
   }
 
-  if (squad.length > 18) errors.push('Squad cannot exceed 18 players.');
-  if (squad.length < 18) errors.push('Squad must contain 18 players before the match.');
+  if (squad.length > 11) errors.push('Squad cannot exceed 11 players.');
+  if (squad.length < 11) errors.push('Squad must contain 11 players before the match.');
   if (starters.length !== 11) errors.push('Starting XI must contain exactly 11 players.');
-  if (substitutes.length !== 7) errors.push('Squad must contain exactly 7 substitutes.');
+  if (substitutes.length !== 0) errors.push('Squad cannot contain substitutes.');
 
   // Natural player categories are enforced by the auction. After the auction,
   // managers are allowed to move any outfield player into any outfield slot.
@@ -350,7 +344,7 @@ export function validateSquadFormation(formation: Formation, squad: SquadPlayerE
   // Positional fit / Effective OVR accounts for out-of-position play.
 
   return {
-    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 7 && squad.length === 18,
+    isValid: errors.length === 0 && starters.length === 11 && substitutes.length === 0 && squad.length === 11,
     startersCount: starters.length,
     substitutesCount: substitutes.length,
     totalCount: squad.length,
