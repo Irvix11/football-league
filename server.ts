@@ -370,13 +370,14 @@ function autoFillManagerLineup(manager: Manager) {
   const remaining = [...allPlayers];
   const starters: SquadPlayerEntry[] = [];
 
-  // Fill exact formation slots with the highest-scoring available player for each slot.
-  // GK first, then the most position-specific slots before flexible ones.
+  // Fill exactly 11 formation slots with the best available players.
+  // Natural/alternate position fit matters, but any outfield player can be assigned
+  // to any outfield slot. The assigned position is editable later.
   const orderedSlots = [...config.slots].sort((a, b) => {
     if (a.category === 'GK') return -1;
     if (b.category === 'GK') return 1;
-    const aSpecific = a.position === 'CB' || a.position === 'LB' || a.position === 'RB' || a.position === 'LWB' || a.position === 'RWB';
-    const bSpecific = b.position === 'CB' || b.position === 'LB' || b.position === 'RB' || b.position === 'LWB' || b.position === 'RWB';
+    const aSpecific = ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(a.position);
+    const bSpecific = ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(b.position);
     return Number(bSpecific) - Number(aSpecific);
   });
 
@@ -385,53 +386,38 @@ function autoFillManagerLineup(manager: Manager) {
       slot.category === 'GK' ? p.category === 'GK' : p.category !== 'GK'
     );
     const pool = candidates.length ? candidates : remaining;
-    const chosen = [...pool].sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot) || b.overall - a.overall)[0];
+    const chosen = [...pool]
+      .sort((x, y) => playerSlotScore(y, slot) - playerSlotScore(x, slot) || y.overall - x.overall)[0];
     if (!chosen) continue;
+
     remaining.splice(remaining.findIndex(p => p.id === chosen.id), 1);
+    const existing = manager.squad.find(s => s.player.id === chosen.id);
     starters.push({
       player: chosen,
       isStarting: true,
       startingSlotIndex: slot.index,
-      benchIndex: undefined,
       assignedPosition: slot.position,
-      condition: manager.squad.find(s => s.player.id === chosen.id)?.condition || createFitCondition(),
+      condition: existing?.condition || createFitCondition(),
     });
   }
 
-  const starterIds = new Set(starters.map(s => s.player.id));
-  const benchPlayers = allPlayers
-    .filter(p => !starterIds.has(p.id))
-    .sort((a, b) => b.overall - a.overall || b.attributes.pac - a.attributes.pac)
-    .slice(0, 7);
-
-  const bench = benchPlayers.map((player, index) => ({
-    player,
-    isStarting: false,
-    startingSlotIndex: undefined,
-    benchIndex: index,
-    assignedPosition: player.position,
-    condition: manager.squad.find(s => s.player.id === player.id)?.condition || createFitCondition(),
-  }));
-
-  manager.squad = [...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)), ...bench];
+  manager.squad = starters.sort((x, y) => (x.startingSlotIndex ?? 99) - (y.startingSlotIndex ?? 99));
   manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
-  manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
+  manager.roles = setupManagerRoles(manager.squad);
 }
-
 function generateValidSquad(formation: Formation, availablePool: any[]): SquadPlayerEntry[] {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
-  const limits = getFormationSquadCategoryLimits(formation);
   const shuffled = [...availablePool].sort(() => Math.random() - 0.5);
   const usedIds = new Set<string>();
   const starters: SquadPlayerEntry[] = [];
 
-  // Build the XI by formation slots, prioritising positional fit and then stats/OVR.
   for (const slot of config.slots) {
     const candidates = shuffled
       .filter(p => !usedIds.has(p.id) && p.category === slot.category)
       .sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot) || b.overall - a.overall);
     const chosen = candidates[0] || shuffled.find(p => !usedIds.has(p.id));
     if (!chosen) continue;
+
     usedIds.add(chosen.id);
     starters.push({
       player: chosen,
@@ -442,53 +428,10 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
     });
   }
 
-  // Seven bench spots, respecting formation-aware squad caps.
-  const bench: SquadPlayerEntry[] = [];
-  for (const cat of ['GK', 'DEF', 'MID', 'ATT'] as PositionCategory[]) {
-    const target = Math.min(limits[cat], config.slots.filter(s => s.category === cat).length + ({ GK: 1, DEF: 2, MID: 2, ATT: 2 } as Record<PositionCategory, number>)[cat]);
-    const existing = starters.filter(s => s.player.category === cat).length;
-    const needed = Math.max(0, target - existing);
-    for (const player of shuffled
-      .filter(p => !usedIds.has(p.id) && p.category === cat)
-      .sort((a, b) => b.overall - a.overall)
-      .slice(0, needed)) {
-      usedIds.add(player.id);
-      bench.push({
-        player,
-        isStarting: false,
-        benchIndex: bench.length,
-        assignedPosition: player.position,
-        condition: createFitCondition(),
-      });
-    }
-  }
-
-  // If a sparse player pool prevents the exact category allocation, fill remaining slots
-  // from the best available players without duplicating ownership.
-  while (starters.length + bench.length < 18) {
-    const chosen = shuffled
-      .filter(p => !usedIds.has(p.id))
-      .filter(p => {
-        const category = p.category as PositionCategory;
-        const count = [...starters, ...bench].filter(s => s.player.category === category).length;
-        return count < limits[category];
-      })
-      .sort((a, b) => b.overall - a.overall)[0];
-    if (!chosen) break;
-    usedIds.add(chosen.id);
-    bench.push({
-      player: chosen,
-      isStarting: false,
-      benchIndex: bench.length,
-      assignedPosition: chosen.position,
-      condition: createFitCondition(),
-    });
-  }
-
-  return [...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)), ...bench.slice(0, 7)];
+  return starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)).slice(0, 11);
 }
 
-function fillAuctionSquadTo18(room: GameRoom) {
+function fillAuctionSquadTo11(room: GameRoom) {
   const pool = getPlayersForLobby(room.settings.playerPool, room.settings.era);
   const globallyOwned = new Set<string>();
   for (const manager of room.managers) {
@@ -497,7 +440,7 @@ function fillAuctionSquadTo18(room: GameRoom) {
 
   for (const manager of room.managers) {
     const limits = getFormationSquadCategoryLimits(manager.formation);
-    while (manager.squad.length < 18) {
+    while (manager.squad.length < 11) {
       const counts: Record<PositionCategory, number> = {
         GK: manager.squad.filter(s => s.player.category === 'GK').length,
         DEF: manager.squad.filter(s => s.player.category === 'DEF').length,
@@ -508,13 +451,13 @@ function fillAuctionSquadTo18(room: GameRoom) {
         .filter(p => !globallyOwned.has(p.id) && counts[p.category] < limits[p.category])
         .sort((a, b) => b.overall - a.overall);
       if (!candidates.length) break;
+
       const chosen = candidates[0];
       globallyOwned.add(chosen.id);
       manager.squad.push({
         player: chosen,
-        isStarting: false,
+        isStarting: true,
         startingSlotIndex: undefined,
-        benchIndex: manager.squad.length - 11,
         assignedPosition: chosen.position,
         condition: createFitCondition(),
       });
@@ -523,16 +466,10 @@ function fillAuctionSquadTo18(room: GameRoom) {
   }
 }
 
-// Auction is staged around the starting XI requirements:
-// 1) every manager gets the required GK count,
-// 2) then the required DEF count,
-// 3) then MID,
-// 4) then ATT,
-// 5) only after every manager has a complete XI do we auction the seven bench spots.
+// Auction runs in four synchronized blocks: GK -> DEF -> MID -> ATT.
+// Once every manager has the exact 11-player quota, the auction ends.
 function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
   const ordered: PositionCategory[] = ['GK', 'DEF', 'MID', 'ATT'];
-
-  // Phase 1: complete the exact starting-XI quota for everyone.
   for (const category of ordered) {
     const needsCategory = room.managers.some(manager => {
       const required = getFormationStarterCategoryCounts(manager.formation)[category];
@@ -541,20 +478,9 @@ function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
     });
     if (needsCategory) return category;
   }
-
-  // Phase 2: once every XI is complete, fill the seven bench spots
-  // in the same strict GK -> DEF -> MID -> ATT order.
-  for (const category of ordered) {
-    const needsBenchCategory = room.managers.some(manager => {
-      const limit = getFormationSquadCategoryLimits(manager.formation)[category];
-      const count = manager.squad.filter(entry => entry.player.category === category).length;
-      return count < limit;
-    });
-    if (needsBenchCategory) return category;
-  }
-
   return null;
 }
+
 // Centralized Auction Engine
 function advanceAuction(room: GameRoom) {
   if (room.phase !== 'auction') return;
@@ -568,8 +494,8 @@ function advanceAuction(room: GameRoom) {
     }
   }
 
-  // Check if all managers have full squads (18 players each)
-  const allFull = room.managers.every(m => m.squad.length >= 18);
+  // Check if all managers have complete XI squads
+  const allFull = room.managers.every(m => m.squad.length >= 11);
   if (allFull) {
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
@@ -579,7 +505,7 @@ function advanceAuction(room: GameRoom) {
 
   const unowned = pool.filter(p => !ownedIds.has(p.id));
   if (unowned.length === 0) {
-    fillAuctionSquadTo18(room);
+    fillAuctionSquadTo11(room);
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
     broadcastRoom(room.code);
@@ -587,8 +513,7 @@ function advanceAuction(room: GameRoom) {
   }
 
   // Stage the auction so every manager completes the same positional block
-  // before the next block begins. This prevents someone from collecting
-  // attackers while another manager still has no goalkeeper.
+  // before the next block begins: GK -> DEF -> MID -> ATT.
   const starterStage = getAuctionCategoryForStage(room);
   const eligibleByStage = starterStage
     ? unowned.filter(p => p.category === starterStage)
@@ -671,7 +596,7 @@ function simulateBotBids(room: GameRoom) {
   const currentPl = room.auction.currentPlayer;
   if (!currentPl) return;
 
-  const bots = room.managers.filter(m => m.isBot && m.squad.length < 18);
+  const bots = room.managers.filter(m => m.isBot && m.squad.length < 11);
   for (const bot of bots) {
     // Check if bot can afford
     const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + 2 : room.auction.currentBid;
@@ -747,7 +672,6 @@ function finalizeAuctionItem(room: GameRoom) {
         player,
         isStarting: false,
         startingSlotIndex: undefined,
-        benchIndex: winner.squad.length,
         assignedPosition: player.position,
         condition: {
           state: 'FIT',
@@ -781,7 +705,7 @@ function finalizeAuctionItem(room: GameRoom) {
 
   // Transition to next player after 3.5 seconds
   setTimeout(() => {
-    if (room.managers.every(m => m.squad.length >= 18)) {
+    if (room.managers.every(m => m.squad.length >= 11)) {
       room.managers.forEach(autoFillManagerLineup);
     }
     advanceAuction(room);
@@ -1110,7 +1034,6 @@ function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadP
       ...existing,
       isStarting: Boolean(entry.isStarting),
       startingSlotIndex: entry.isStarting ? entry.startingSlotIndex : undefined,
-      benchIndex: entry.isStarting ? undefined : entry.benchIndex,
       assignedPosition: entry.assignedPosition || existing.assignedPosition,
       // Conditions are server-authoritative and cannot be cleared by the client.
       condition: existing.condition,
@@ -1764,8 +1687,8 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if (manager.squad.length >= 18) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your squad is already full (18/18 players).' }));
+          if (manager.squad.length >= 11) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: 'Your starting XI is already full (11/11 players).' }));
             return;
           }
 
@@ -1885,10 +1808,10 @@ wss.on('connection', (ws) => {
             const unavailableStarter = manager.squad.some(
               s => s.isStarting && (s.condition.state === 'SUSPENDED' || s.condition.state === 'INJURED')
             );
-            if (!validation.isValid || manager.squad.length !== 18 || unavailableStarter) {
+            if (!validation.isValid || manager.squad.length !== 11 || unavailableStarter) {
               sendSocketError(ws, unavailableStarter
                 ? 'Your starting XI contains an unavailable player.'
-                : 'Complete a valid 18-player squad and formation before confirming.');
+                : 'Complete your 11-player starting XI and formation before confirming.');
               return;
             }
             manager.confirmedTeam = true;
