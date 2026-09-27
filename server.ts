@@ -674,6 +674,41 @@ function getAuctionCategoryForStage(room: GameRoom): PositionCategory | null {
 }
 
 // Centralized Auction Engine
+function emergencyFillRemainingXI(room: GameRoom, unowned: any[]) {
+  // Safety net: if the auction has no legally usable lots left, never leave the
+  // room stuck in the auction forever. Fill only missing XI slots from the
+  // remaining unowned pool, prioritising formation/position fit. This is an
+  // emergency fallback; normal auctions still enforce category quotas and bids.
+  const available = [...unowned];
+  for (const manager of room.managers) {
+    while (manager.squad.length < 11 && available.length > 0) {
+      const config = FORMATIONS_CONFIG[manager.formation] || FORMATIONS_CONFIG['4-3-3'];
+      const missingSlots = config.slots.filter((slot: any) =>
+        !manager.squad.some(entry => entry.startingSlotIndex === slot.index)
+      );
+      const slot = missingSlots[0] || config.slots[manager.squad.length % config.slots.length];
+      const chosen = [...available].sort((a, b) =>
+        playerSlotScore(b, slot) - playerSlotScore(a, slot) || b.overall - a.overall
+      )[0];
+      if (!chosen) break;
+      const idx = available.findIndex(p => p.id === chosen.id);
+      if (idx >= 0) available.splice(idx, 1);
+      manager.squad.push({
+        player: chosen,
+        isStarting: true,
+        startingSlotIndex: slot.index,
+        benchIndex: undefined,
+        assignedPosition: slot.position,
+        condition: createFitCondition(),
+      });
+      manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
+    }
+    if (manager.squad.length === 11) {
+      manager.roles = setupManagerRoles(manager.squad);
+    }
+  }
+}
+
 function advanceAuction(room: GameRoom) {
   if (room.phase !== 'auction') return;
 
@@ -698,7 +733,7 @@ function advanceAuction(room: GameRoom) {
 
   const unowned = pool.filter(p => !ownedIds.has(p.id));
   if (unowned.length === 0) {
-    
+    emergencyFillRemainingXI(room, unowned);
     room.managers.forEach(autoFillManagerLineup);
     room.phase = 'team_management';
     room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
@@ -718,10 +753,43 @@ function advanceAuction(room: GameRoom) {
       return count < required;
     })
   );
-  const starterStage = neededCategories.find(category => unowned.some(p => p.category === category)) || null;
-  const auctionCandidates = starterStage
-    ? unowned.filter(p => p.category === starterStage)
-    : unowned;
+  const starterStage = neededCategories.find(category => unowned.some(p =>
+    p.category === category &&
+    room.managers.some(manager => {
+      const required = getFormationSquadCategoryLimits(manager.formation)[category];
+      const count = manager.squad.filter(entry => entry.player.category === category).length;
+      return count < required && manager.budget >= p.startingPrice;
+    })
+  )) || null;
+
+  // Prefer lots that at least one incomplete manager can actually use and afford.
+  // This prevents the auction from cycling forever on a player that nobody can
+  // legally sign because the relevant category is full or their budget is below
+  // the starting price.
+  const eligibleCandidates = unowned.filter(p =>
+    room.managers.some(manager => {
+      if (manager.squad.length >= 11 || manager.budget < p.startingPrice) return false;
+      const limits = getFormationSquadCategoryLimits(manager.formation);
+      const count = manager.squad.filter(entry => entry.player.category === p.category).length;
+      return count < limits[p.category];
+    })
+  );
+
+  const auctionCandidates = (starterStage
+    ? eligibleCandidates.filter(p => p.category === starterStage)
+    : eligibleCandidates);
+
+  if (auctionCandidates.length === 0) {
+    // No remaining lot can be purchased legally. Finish the remaining XI from
+    // the unused pool instead of leaving every client on an endless auction.
+    emergencyFillRemainingXI(room, unowned);
+    room.managers.forEach(autoFillManagerLineup);
+    room.phase = 'team_management';
+    room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+    broadcastRoom(room.code);
+    return;
+  }
+
   const nextPlayer = auctionCandidates[Math.floor(Math.random() * auctionCandidates.length)];
   const isQuick = room.settings.auctionMode === 'Quick';
   const duration = isQuick ? 8 : (room.settings.auctionMode === 'Blind' ? 15 : 12);
