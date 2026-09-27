@@ -14,7 +14,7 @@ function headers(extra: Record<string,string> = {}) {
 
 export async function saveRoomSnapshot(room: GameRoom): Promise<void> {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/game_room_snapshots?on_conflict=room_code`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/game_room_snapshots?on_conflict=room_code`, {
       method: 'POST',
       headers: headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify({
@@ -23,6 +23,10 @@ export async function saveRoomSnapshot(room: GameRoom): Promise<void> {
         updated_at: new Date().toISOString(),
       }),
     });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Supabase save failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
+    }
   } catch (error) {
     console.error('[persistence] save room failed:', error);
   }
@@ -34,7 +38,10 @@ export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | nul
       `${SUPABASE_URL}/rest/v1/game_room_snapshots?select=snapshot&room_code=eq.${encodeURIComponent(roomCode)}&limit=1`,
       { headers: headers() }
     );
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error(`[persistence] load room failed with HTTP ${response.status}`);
+      return null;
+    }
     const rows = await response.json() as Array<{ snapshot?: GameRoom }>;
     return rows[0]?.snapshot || null;
   } catch (error) {
