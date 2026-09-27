@@ -1006,13 +1006,16 @@ function simulateBotBlindBids(room: GameRoom) {
       bot.tactics?.style || 'Balanced',
       bot.tactics?.mentality || 'Balanced'
     );
+    // OVR/stats/role/tactics determine auction value. Market value is never used.
+    const statAverage = Object.values(currentPl.attributes || {}).reduce((sum, value) => sum + Number(value || 0), 0) / 6;
+    const ovrPremium = Math.max(0, currentPl.overall - 80) * 3;
+    const statPremium = Math.max(0, statAverage - 70) * 0.45;
+    const rolePremium = roleFit * 0.08;
     const valuation = Math.max(
       currentPl.startingPrice,
       Math.min(
         bot.budget,
-        currentPl.marketValue * 0.28 +
-          meta.score * (0.72 + roleFit / 100 * 0.20) * 0.62 +
-          tacticalValue
+        currentPl.startingPrice + ovrPremium + statPremium + rolePremium + tacticalValue
       )
     );
 
@@ -1061,11 +1064,15 @@ function simulateBotBids(room: GameRoom) {
     const tacticalValue = Math.max(-12, Math.min(12,
       tacticalCompatibility(currentPl, bot.tactics?.style || 'Balanced', bot.tactics?.mentality || 'Balanced')
     ));
+    // Blind auction uses the same OVR/stats/role model; no market-value multiplier.
+    const statAverage = Object.values(currentPl.attributes || {}).reduce((sum, value) => sum + Number(value || 0), 0) / 6;
+    const ovrPremium = Math.max(0, currentPl.overall - 80) * 3;
+    const statPremium = Math.max(0, statAverage - 70) * 0.45;
     const maxValuation = Math.max(
       currentPl.startingPrice,
       Math.min(
         bot.budget,
-        currentPl.marketValue * 0.28 + (ovrSignal + metaSignal) * valuePerPoint * 0.62 + tacticalValue
+        currentPl.startingPrice + ovrPremium + statPremium + meta.score * 0.08 + roleFit * 0.08 + tacticalValue
       )
     );
 
