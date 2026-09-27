@@ -105,7 +105,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   };
 
   const auctionOrder = ['GK', 'DEF', 'MID', 'ATT'] as const;
-  const activeCategory = player?.category || null;
+  const activeCategory = isBlind ? null : (player?.category || null);
   const activeCategoryIndex = activeCategory ? auctionOrder.indexOf(activeCategory) : -1;
   const categoryLabel = activeCategory === 'GK'
     ? 'GOALKEEPERS'
@@ -115,7 +115,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
         ? 'MIDFIELDERS'
         : activeCategory === 'ATT'
           ? 'ATTACKERS'
-          : 'AUCTION';
+          : 'MYSTERY LOT';
   const activeReadyManagers = activeCategory
     ? room.managers.filter((m) => {
         const required = getFormationStarterCategoryCounts(m.formation)[activeCategory];
@@ -123,7 +123,9 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
       }).length
     : 0;
 
-  const isCategoryFull = player
+  // In Blind mode the real category is server-private, so the client never
+  // disables bidding based on a masked category. The server remains authoritative.
+  const isCategoryFull = !isBlind && player
     ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
     : false;
 
@@ -501,7 +503,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black">NOW AUCTIONING</div>
-                <div className="text-sm font-display font-black text-emerald-400">{stageLabel}</div>
+                <div className="text-sm font-display font-black text-emerald-400">{isBlind && !auction.isSold ? 'MYSTERY LOT' : stageLabel}</div>
               </div>
               {player && (
                 <div className="text-right min-w-0">
@@ -536,7 +538,9 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
               </div>
               <div className="mt-2 flex items-center justify-between text-[9px] uppercase tracking-wider font-black">
                 <span className="text-emerald-400">{categoryLabel}</span>
-                <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} ready</span>
+                {!isBlind && (
+                  <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} ready</span>
+                )}
               </div>
             </div>
           )}
