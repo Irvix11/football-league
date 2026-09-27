@@ -79,12 +79,16 @@ for (const row of parseCsv(await readInput(input))) {
 
   const attributes = position === 'GK'
     ? {
-        pac: num(row, 'goalkeeping_diving', 'DIV', 'diving'),
-        sho: num(row, 'goalkeeping_handling', 'HAN', 'handling'),
-        pas: num(row, 'goalkeeping_kicking', 'KIC', 'kicking'),
-        dri: num(row, 'goalkeeping_reflexes', 'REF', 'reflexes'),
-        def: num(row, 'goalkeeping_speed', 'SPD', 'speed'),
-        phy: num(row, 'goalkeeping_positioning', 'positioning'),
+        // The FC27 snapshot used by this project exposes the six standard
+        // face attributes for keepers rather than separate GK sub-attributes.
+        // Prefer dedicated GK fields when present, otherwise use the snapshot
+        // values so imported keepers never silently become all-zero players.
+        pac: num(row, 'goalkeeping_diving', 'DIV', 'diving', 'pace', 'PAC'),
+        sho: num(row, 'goalkeeping_handling', 'HAN', 'handling', 'shooting', 'SHO'),
+        pas: num(row, 'goalkeeping_kicking', 'KIC', 'kicking', 'passing', 'PAS'),
+        dri: num(row, 'goalkeeping_reflexes', 'REF', 'reflexes', 'dribbling', 'DRI'),
+        def: num(row, 'goalkeeping_speed', 'SPD', 'speed', 'defending', 'DEF'),
+        phy: num(row, 'goalkeeping_positioning', 'positioning', 'physicality', 'PHY'),
       }
     : {
         pac: num(row, 'pace', 'PAC'),
