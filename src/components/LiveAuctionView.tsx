@@ -398,9 +398,9 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     ) : (
                       <div className="space-y-3">
                         <div className="grid grid-cols-4 gap-2">
-                          {[1, 5, 10, 25].map((inc) => {
-                            const targetBid = auction.highestBidderId ? auction.currentBid + inc : auction.currentBid + inc - 1;
-                            const possible = currentManager.budget >= targetBid;
+                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [0, 5, 10, 25])).map((inc) => {
+                             const targetBid = auction.highestBidderId ? auction.currentBid + inc : auction.currentBid;
+                             const possible = currentManager.budget >= targetBid;
                             return (
                               <button
                                 key={inc}
