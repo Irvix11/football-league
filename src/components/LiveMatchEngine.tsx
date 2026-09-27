@@ -122,6 +122,13 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const [fullTimeOverlay, setFullTimeOverlay] = useState<boolean>(false);
   const [showStatsModal, setShowStatsModal] = useState<boolean>(false);
   const [scorePulse, setScorePulse] = useState<'home' | 'away' | null>(null);
+  const [penaltyIndex, setPenaltyIndex] = useState(0);
+  const [showPenaltyShootout, setShowPenaltyShootout] = useState(false);
+
+  const penaltySequence = fixture.penaltyShootout || [];
+  const currentPenalty = penaltySequence[penaltyIndex];
+  const completedPenalties = penaltySequence.slice(0, penaltyIndex);
+  const penaltyIsOver = penaltyIndex >= penaltySequence.length && penaltySequence.length > 0;
 
   // Interactive Player Inspection Tooltip (Tap on player)
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedPlayerState | null>(null);
@@ -168,6 +175,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     setHalfTimeOverlay(false);
     setFullTimeOverlay(false);
     setShowStatsModal(false);
+    setPenaltyIndex(0);
+    setShowPenaltyShootout(false);
     setIsPlaying(true);
     setScorePulse(null);
     setInspectedPlayer(null);
@@ -806,6 +815,77 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             </div>
           )}
 
+          {showPenaltyShootout && fixture.wentToPenalties && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="w-full max-w-2xl rounded-3xl bg-slate-900/95 border border-amber-400/30 shadow-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.25em] text-amber-400 font-black">Penalty Shootout</div>
+                    <h2 className="font-display font-black text-xl sm:text-2xl mt-1">PLAYERS FROM THE SPOT</h2>
+                  </div>
+                  <div className="font-mono text-xs text-slate-400">{Math.min(penaltyIndex + 1, penaltySequence.length)}/{penaltySequence.length}</div>
+                </div>
+
+                <div className="p-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                  <div className="rounded-2xl bg-slate-950 border border-emerald-500/20 p-4 text-center">
+                    <div className="text-[10px] uppercase tracking-widest text-emerald-400 font-black">{fixture.homeManagerName}</div>
+                    <div className="mt-3 text-3xl">⚽</div>
+                    <div className="mt-2 font-display font-black text-sm">{currentPenalty?.team === 'home' ? currentPenalty.takerName : 'Home taker'}</div>
+                    {currentPenalty?.team === 'home' && <div className="text-[10px] text-slate-500">#{currentPenalty.takerNumber}</div>}
+                  </div>
+
+                  <div className="text-center">
+                    <div className="text-3xl font-mono font-black text-white">
+                      {fixture.homePenaltyScore ?? 0} — {fixture.awayPenaltyScore ?? 0}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-widest text-slate-500 mt-1">Shootout</div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-950 border border-sky-500/20 p-4 text-center">
+                    <div className="text-[10px] uppercase tracking-widest text-sky-400 font-black">{fixture.awayManagerName}</div>
+                    <div className="mt-3 text-3xl">⚽</div>
+                    <div className="mt-2 font-display font-black text-sm">{currentPenalty?.team === 'away' ? currentPenalty.takerName : 'Away taker'}</div>
+                    {currentPenalty?.team === 'away' && <div className="text-[10px] text-slate-500">#{currentPenalty.takerNumber}</div>}
+                  </div>
+                </div>
+
+                {currentPenalty && !penaltyIsOver ? (
+                  <div className="px-5 pb-5">
+                    <div className="rounded-2xl bg-black/30 border border-slate-800 p-4 text-center">
+                      <div className="text-xs text-slate-400">{currentPenalty.takerName} steps up...</div>
+                      <div className="mt-2 h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-amber-400 animate-pulse" style={{width: '100%'}} />
+                      </div>
+                      <div className={`mt-3 text-sm font-display font-black uppercase ${currentPenalty.outcome === 'goal' ? 'text-emerald-400' : currentPenalty.outcome === 'saved' ? 'text-rose-400' : 'text-amber-300'}`}>
+                        {currentPenalty.outcome === 'goal' ? 'GOAL' : currentPenalty.outcome === 'saved' ? 'SAVED BY THE KEEPER' : 'MISSED'}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-400">{currentPenalty.commentary}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPenaltyIndex(i => Math.min(i + 1, penaltySequence.length))}
+                      className="w-full mt-4 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-display font-black text-xs uppercase tracking-wider active:scale-[.99]"
+                    >
+                      {penaltyIndex + 1 < penaltySequence.length ? 'NEXT KICK' : 'SHOW RESULT'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="px-5 pb-5 text-center">
+                    <div className="text-emerald-400 font-display font-black uppercase">Shootout complete</div>
+                    <div className="text-slate-300 text-sm mt-1">{fixture.winnerManagerId === fixture.homeManagerId ? fixture.homeManagerName : fixture.awayManagerName} wins on penalties.</div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPenaltyShootout(false)}
+                      className="mt-4 px-6 py-2.5 rounded-xl bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase"
+                    >
+                      CONTINUE
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ========================================================================= */}
           {/* 6. COMPACT GLASS HALF-TIME OVERLAY (Requirement 15)                       */}
           {/* ========================================================================= */}
@@ -857,6 +937,19 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           {/* ========================================================================= */}
           {/* 7. COMPACT GLASS FULL-TIME SUMMARY (Requirement 16)                       */}
           {/* ========================================================================= */}
+          {fullTimeOverlay && fixture.wentToPenalties && !showPenaltyShootout && !penaltyIsOver && (
+            <div className="absolute inset-0 z-35 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+              <div className="p-6 rounded-3xl bg-slate-900 border border-amber-500/30 text-center">
+                <div className="text-amber-400 text-xs uppercase tracking-widest font-black">120:00 — Level after extra time</div>
+                <div className="font-display font-black text-2xl mt-2">PENALTY SHOOTOUT</div>
+                <p className="text-xs text-slate-400 mt-2">The actual takers will step up one by one.</p>
+                <button type="button" onClick={() => { setFullTimeOverlay(false); setPenaltyIndex(0); setShowPenaltyShootout(true); }} className="mt-5 px-7 py-3 rounded-xl bg-amber-400 text-slate-950 font-display font-black text-xs uppercase tracking-wider">
+                  START SHOOTOUT
+                </button>
+              </div>
+            </div>
+          )}
+
           {fullTimeOverlay && (
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
               <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
