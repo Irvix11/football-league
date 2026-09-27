@@ -5,6 +5,7 @@ import { PitchGraphic } from './PitchGraphic';
 import { PlayerCard } from './PlayerCard';
 import { PlayerPitchMarker } from './PlayerPitchMarker';
 import { CheckCircle2, AlertTriangle, Shuffle, Info, X, Shield, Users, Zap, Check, Flame, Award, Sliders } from 'lucide-react';
+import { PhaseReadyTimer } from './PhaseReadyTimer';
 
 interface TeamManagementViewProps {
   room: GameRoom;
@@ -1096,6 +1097,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
         {managementOnly ? (
           <>
             <div className="flex flex-col gap-1">
+              <PhaseReadyTimer room={room} label="AUTO-CONTINUE" accent="amber" />
               <div className="text-xs font-black uppercase tracking-wider text-amber-300">MID-SEASON MANAGEMENT</div>
               <div className="text-[10px] text-slate-400">
                 {windowReadyCount}/{windowManagerCount} managers finished their review
@@ -1122,7 +1124,8 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
           </>
         ) : (
           <>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <PhaseReadyTimer room={room} label="AUTO-CONFIRM" accent="emerald" />
               {validation.isValid ? (
                 <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
