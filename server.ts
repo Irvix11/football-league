@@ -2758,7 +2758,8 @@ wss.on('connection', (ws) => {
 
         // --- 14. SIMULATE MATCHDAY ---
         case 'RUN_MATCHDAY': {
-          const { roomCode, matchday } = payload;
+          try {
+            const { roomCode, matchday } = payload;
           const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'league') return;
           const { room } = auth;
@@ -2821,6 +2822,10 @@ wss.on('connection', (ws) => {
 
           broadcastRoom(room.code);
           break;
+          } catch (error: any) {
+            console.error('[WS] RUN_MATCHDAY failed:', error);
+            sendSocketError(ws, error?.message || 'Failed to simulate the match.');
+          }
         }
 
         // --- 14b. NEXT MATCHDAY ---
@@ -3047,8 +3052,9 @@ wss.on('connection', (ws) => {
           break;
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('WebSocket Error:', err);
+      sendSocketError(ws, err?.message || 'The game server hit an unexpected error. Please retry.');
     }
   });
 
