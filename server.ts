@@ -1127,6 +1127,7 @@ function advanceAuction(room: GameRoom) {
     blindClues: room.settings.auctionMode === 'Blind' ? createBlindAuctionClues(nextPlayer) : undefined,
     forcedWinnerId: isForcedPurchase ? forcedManager!.id : null,
     forcedWinnerName: isForcedPurchase ? forcedManager!.name : null,
+    forcedPurchasePrice: isForcedPurchase ? forcedMarketPrice : undefined,
     isForcedPurchase,
   };
 
