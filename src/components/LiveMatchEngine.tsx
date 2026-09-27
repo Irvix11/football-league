@@ -153,8 +153,16 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const goalTimerRef = useRef<NodeJS.Timeout | null>(null);
   const clockUiUpdateRef = useRef<number>(0);
 
-  // Initialize and synchronize state when fixture or events change
+  // Initialize only when the fixture/timeline actually changes. Room polling and
+  // WebSocket resyncs replace the fixture object every few seconds; resetting the
+  // playback cursor on every object identity change made the score visibly jump
+  // back to 0-0 during a live simulation.
+  const timelineKey = `${fixture.id}:${events.length}:${events[0]?.id || ''}:${events[events.length - 1]?.id || ''}`;
+  const timelineKeyRef = useRef<string>('');
+
   useEffect(() => {
+    if (timelineKeyRef.current === timelineKey) return;
+    timelineKeyRef.current = timelineKey;
     setCurrentEventIndex(0);
     setGoalOverlay(null);
     setHalfTimeOverlay(false);
@@ -183,7 +191,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       targetClockSecsRef.current = firstSecs;
       setDisplaySeconds(firstSecs);
     }
-  }, [fixture.id, events]);
+  }, [timelineKey, fixture.id]);
 
   const currentEvent: MatchEvent | undefined = events[currentEventIndex] || events[0];
 
