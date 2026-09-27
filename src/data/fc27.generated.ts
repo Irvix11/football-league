@@ -160,7 +160,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-277643",
-    "name": "Lamine Yamal \"Lamine Yamal\" Nasraoui Ebana",
+    "name": "Lamine Yamal",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -212,7 +212,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-251854",
-    "name": "Pedro \"Pedri\" González López",
+    "name": "Pedri",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -238,7 +238,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-231866",
-    "name": "Rodrigo \"Rodri\" Hernández Cascante",
+    "name": "Rodri",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -264,7 +264,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-255253",
-    "name": "Vítor \"Vitinha\" Machado Ferreira",
+    "name": "Vitinha",
     "club": "Paris SG",
     "league": "Ligue 1 McDonald's",
     "nationality": "Portugal",
@@ -290,7 +290,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-212198",
-    "name": "Bruno Miguel \"Bruno Fernandes\" Borges Fernandes",
+    "name": "Bruno Fernandes",
     "club": "Man Utd",
     "league": "Premier League",
     "nationality": "Portugal",
@@ -342,7 +342,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-232580",
-    "name": "Gabriel \"Gabriel\" dos S. Magalhães",
+    "name": "Gabriel",
     "club": "Arsenal",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -420,7 +420,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-252145",
-    "name": "Nuno Alexandre \"Nuno Mendes\" Tavares Mendes",
+    "name": "Nuno Mendes",
     "club": "Paris SG",
     "league": "Ligue 1 McDonald's",
     "nationality": "Portugal",
@@ -472,7 +472,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-238794",
-    "name": "Vinícius José \"Vini Jr.\" de Oliveira Júnior",
+    "name": "Vini Jr.",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Brazil",
@@ -498,7 +498,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-220901",
-    "name": "David \"David Raya\" Raya Martín",
+    "name": "David Raya",
     "club": "Arsenal",
     "league": "Premier League",
     "nationality": "Spain",
@@ -576,7 +576,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-272834",
-    "name": "João Pedro \"João Neves\" Gonçalves Neves",
+    "name": "João Neves",
     "club": "Paris SG",
     "league": "Ligue 1 McDonald's",
     "nationality": "Portugal",
@@ -654,7 +654,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-233419",
-    "name": "Raphael \"Raphinha\" Dias Belloli",
+    "name": "Raphinha",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Brazil",
@@ -758,7 +758,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-212831",
-    "name": "Alisson \"Alisson\" Ramses Becker",
+    "name": "Alisson",
     "club": "Liverpool",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -862,7 +862,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-207865",
-    "name": "Marcos \"Marquinhos\" Aoás Corrêa",
+    "name": "Marquinhos",
     "club": "Paris SG",
     "league": "Ligue 1 McDonald's",
     "nationality": "Brazil",
@@ -940,7 +940,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-239818",
-    "name": "Rúben Santos \"Rúben Dias\" Gato Alves Dias",
+    "name": "Rúben Dias",
     "club": "Manchester City",
     "league": "Premier League",
     "nationality": "Portugal",
@@ -1174,7 +1174,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-239580",
-    "name": "Gleison Bremer \"Bremer\" Silva Nascimento",
+    "name": "Bremer",
     "club": "Juventus",
     "league": "Serie A Enilive",
     "nationality": "Brazil",
@@ -1200,7 +1200,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-247851",
-    "name": "Bruno \"Bruno Guimarães\" Guimarães Moura",
+    "name": "Bruno Guimarães",
     "club": "Arsenal",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -1304,7 +1304,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-239231",
-    "name": "Marc \"Cucurella\" Cucurella Saseta",
+    "name": "Cucurella",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -1356,7 +1356,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-234577",
-    "name": "Diogo \"Diogo Costa\" Meireles Costa",
+    "name": "Diogo Costa",
     "club": "FC Porto",
     "league": "Liga Portugal",
     "nationality": "Portugal",
@@ -1408,7 +1408,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-226271",
-    "name": "Fabián \"Fabián Ruiz\" Ruiz Peña",
+    "name": "Fabián Ruiz",
     "club": "Paris SG",
     "league": "Ligue 1 McDonald's",
     "nationality": "Spain",
@@ -1512,7 +1512,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-259532",
-    "name": "Joan \"Joan García\" García Pons",
+    "name": "Joan García",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -1564,7 +1564,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-278046",
-    "name": "Pau \"Pau Cubarsí\" Cubarsí Paredes",
+    "name": "Pau Cubarsí",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -1798,7 +1798,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-245037",
-    "name": "Eric \"Eric García\" García Martret",
+    "name": "Eric García",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -1824,7 +1824,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-277179",
-    "name": "Fermín \"Fermín\" López Marín",
+    "name": "Fermín",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -1876,7 +1876,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-210035",
-    "name": "Alejandro \"Grimaldo\" Grimaldo García",
+    "name": "Grimaldo",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -2032,7 +2032,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-226161",
-    "name": "Marcos \"Marcos Llorente\" Llorente Moreno",
+    "name": "Marcos Llorente",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -2240,7 +2240,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-224293",
-    "name": "Rúben Diogo \"Rúben Neves\" da Silva Neves",
+    "name": "Rúben Neves",
     "club": "Al Hilal",
     "league": "ROSHN Saudi League",
     "nationality": "Portugal",
@@ -2396,7 +2396,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-230869",
-    "name": "Unai \"Unai Simón\" Simón Mendibil",
+    "name": "Unai Simón",
     "club": "Athletic Club",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -2500,7 +2500,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-228813",
-    "name": "Aleix \"Aleix García\" García Serrano",
+    "name": "Aleix García",
     "club": "Leverkusen",
     "league": "Bundesliga",
     "nationality": "Spain",
@@ -2630,7 +2630,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-218667",
-    "name": "Bernardo Mota \"Bernardo Silva\" Carvalho e Silva",
+    "name": "Bernardo Silva",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Portugal",
@@ -2656,7 +2656,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-20801",
-    "name": "C. Ronaldo \"Cristiano Ronaldo\" dos Santos Aveiro",
+    "name": "Cristiano Ronaldo",
     "club": "Al Nassr",
     "league": "ROSHN Saudi League",
     "nationality": "Portugal",
@@ -2682,7 +2682,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-244260",
-    "name": "Daniel \"Dani Olmo\" Olmo Carvajal",
+    "name": "Dani Olmo",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -2812,7 +2812,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-241461",
-    "name": "Ferran \"Ferran Torres\" Torres García",
+    "name": "Ferran Torres",
     "club": "Paris SG",
     "league": "Ligue 1 McDonald's",
     "nationality": "Spain",
@@ -3150,7 +3150,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-240243",
-    "name": "Matheus Santos \"Matheus Cunha\" Carneiro da Cunha",
+    "name": "Matheus Cunha",
     "club": "Man Utd",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -3228,7 +3228,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-277846",
-    "name": "Nicolás \"Nico Paz\" Paz Martínez",
+    "name": "Nico Paz",
     "club": "Como",
     "league": "Serie A Enilive",
     "nationality": "Argentina",
@@ -3254,7 +3254,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-256516",
-    "name": "Nicholas \"Nico Williams\" Williams Arthuer",
+    "name": "Nico Williams",
     "club": "Athletic Club",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -3280,7 +3280,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-230142",
-    "name": "Mikel \"Oyarzabal\" Oyarzabal Ugarte",
+    "name": "Oyarzabal",
     "club": "Real Sociedad",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -3358,7 +3358,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-243812",
-    "name": "Rodrygo \"Rodrygo\" Silva de Goes",
+    "name": "Rodrygo",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Brazil",
@@ -3514,7 +3514,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-248148",
-    "name": "Martín \"Zubimendi\" Zubimendi Ibáñez",
+    "name": "Zubimendi",
     "club": "Arsenal",
     "league": "Premier League",
     "nationality": "Spain",
@@ -3540,7 +3540,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-240130",
-    "name": "Éder \"Éder Militão\" Gabriel Militão",
+    "name": "Éder Militão",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Brazil",
@@ -3618,7 +3618,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-200145",
-    "name": "Carlos Henrique \"Casemiro\" Venancio Casimiro",
+    "name": "Casemiro",
     "club": "Inter Miami CF",
     "league": "MLS",
     "nationality": "Brazil",
@@ -3670,7 +3670,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-193080",
-    "name": "David \"De Gea\" De Gea Quintana",
+    "name": "De Gea",
     "club": "Fiorentina",
     "league": "Serie A Enilive",
     "nationality": "Spain",
@@ -3774,7 +3774,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-264240",
-    "name": "Pablo Martín \"Gavi\" Páez Gavira",
+    "name": "Gavi",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -4008,7 +4008,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-247257",
-    "name": "Roger \"Ibañez\" Ibañez da Silva",
+    "name": "Ibañez",
     "club": "Al Ahli",
     "league": "ROSHN Saudi League",
     "nationality": "Brazil",
@@ -4034,7 +4034,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-197781",
-    "name": "Francisco Román \"Isco\" Alarcón Suárez",
+    "name": "Isco",
     "club": "Real Betis",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -4060,7 +4060,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-204525",
-    "name": "Iñigo \"Iñigo Martínez\" Martínez Berridi",
+    "name": "Iñigo Martínez",
     "club": "Al Nassr",
     "league": "ROSHN Saudi League",
     "nationality": "Spain",
@@ -4086,7 +4086,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-210514",
-    "name": "João Pedro \"João Cancelo\" Cavaco Cancelo",
+    "name": "João Cancelo",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Portugal",
@@ -4112,7 +4112,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-242444",
-    "name": "João \"João Félix\" Félix Sequeira",
+    "name": "João Félix",
     "club": "Al Nassr",
     "league": "ROSHN Saudi League",
     "nationality": "Portugal",
@@ -4138,7 +4138,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-252042",
-    "name": "João Pedro \"João Pedro\" Junqueira de Jesus",
+    "name": "João Pedro",
     "club": "Chelsea",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -4190,7 +4190,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-237086",
-    "name": "Min Jae \"Kim Min Jae\" Kim",
+    "name": "Kim Min Jae",
     "club": "FC Bayern München",
     "league": "Bundesliga",
     "nationality": "Korea Republic",
@@ -4320,7 +4320,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-253124",
-    "name": "Matheus \"Matheus Nunes\" Luiz Nunes",
+    "name": "Matheus Nunes",
     "club": "Manchester City",
     "league": "Premier League",
     "nationality": "Portugal",
@@ -4372,7 +4372,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-225193",
-    "name": "Mikel \"Mikel Merino\" Merino Zazón",
+    "name": "Mikel Merino",
     "club": "Arsenal",
     "league": "Premier League",
     "nationality": "Spain",
@@ -4502,7 +4502,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-272449",
-    "name": "Pablo \"Pablo Barrios\" Barrios Rivas",
+    "name": "Pablo Barrios",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -4580,7 +4580,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-243576",
-    "name": "Pedro Antonio \"Pedro Porro\" Porro Sauceda",
+    "name": "Pedro Porro",
     "club": "Spurs",
     "league": "Premier League",
     "nationality": "Spain",
@@ -4658,7 +4658,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-241721",
-    "name": "Rafael \"Rafael Leão\" da Conceição Leão",
+    "name": "Rafael Leão",
     "club": "Milano FC",
     "league": "Serie A Enilive",
     "nationality": "Portugal",
@@ -4918,7 +4918,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-244778",
-    "name": "Francisco \"Trincão\" Trincão",
+    "name": "Trincão",
     "club": "Al Ahli",
     "league": "ROSHN Saudi League",
     "nationality": "Portugal",
@@ -4996,7 +4996,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-257279",
-    "name": "Alejandro \"Álex Baena\" Baena Rodríguez",
+    "name": "Álex Baena",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -5048,7 +5048,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-263578",
-    "name": "Alejandro \"Balde\" Balde Martínez",
+    "name": "Balde",
     "club": "FC Barcelona",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -5360,7 +5360,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-200888",
-    "name": "Danilo Luís \"Danilo Pereira\" Hélio Pereira",
+    "name": "Danilo Pereira",
     "club": "Al Ittihad",
     "league": "ROSHN Saudi League",
     "nationality": "Portugal",
@@ -5490,7 +5490,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-210257",
-    "name": "Ederson \"Ederson\" Santana de Moraes",
+    "name": "Ederson",
     "club": "Fenerbahçe",
     "league": "Trendyol Süper Lig",
     "nationality": "Brazil",
@@ -5516,7 +5516,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-209499",
-    "name": "Fábio \"Fabinho\" Henrique Tavares",
+    "name": "Fabinho",
     "club": "Trabzonspor",
     "league": "Trendyol Süper Lig",
     "nationality": "Brazil",
@@ -5646,7 +5646,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-253396",
-    "name": "Giuliano \"Giuliano\" Simeone",
+    "name": "Giuliano",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Argentina",
@@ -5802,7 +5802,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-275771",
-    "name": "Igor Thiago \"Igor Thiago\" Rodrigues",
+    "name": "Igor Thiago",
     "club": "Brentford",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -6114,7 +6114,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-220834",
-    "name": "Marco \"Marco Asensio\" Asensio Willemsen",
+    "name": "Marco Asensio",
     "club": "Fenerbahçe",
     "league": "Trendyol Süper Lig",
     "nationality": "Spain",
@@ -6192,7 +6192,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-264388",
-    "name": "Alberto \"Moleiro\" Moleiro González",
+    "name": "Moleiro",
     "club": "Villarreal CF",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -6218,7 +6218,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-278016",
-    "name": "Murillo \"Murillo\" Costa dos Santos",
+    "name": "Murillo",
     "club": "Nott'm Forest",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -6348,7 +6348,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-229391",
-    "name": "João Maria \"Palhinha\" Palhinha Gonçalves",
+    "name": "Palhinha",
     "club": "FC Bayern München",
     "league": "Bundesliga",
     "nationality": "Portugal",
@@ -6400,7 +6400,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-240950",
-    "name": "Pedro António \"Pedro Gonçalves\" Pereira Gonçalves",
+    "name": "Pedro Gonçalves",
     "club": "Sporting CP",
     "league": "Liga Portugal",
     "nationality": "Portugal",
@@ -6452,7 +6452,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-213516",
-    "name": "Ricardo Jorge \"Ricardo Horta\" da Luz Horta",
+    "name": "Ricardo Horta",
     "club": "SC Braga",
     "league": "Liga Portugal",
     "nationality": "Portugal",
@@ -6530,7 +6530,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-244675",
-    "name": "Oihan \"Sancet\" Sancet Tirapu",
+    "name": "Sancet",
     "club": "Athletic Club",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -6816,7 +6816,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-248550",
-    "name": "Daniel \"Vivian\" Vivian Moreno",
+    "name": "Vivian",
     "club": "Athletic Club",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -7050,7 +7050,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-266866",
-    "name": "Éderson José \"Éderson\" dos Santos",
+    "name": "Éderson",
     "club": "Bergamo Calcio",
     "league": "Serie A Enilive",
     "nationality": "Brazil",
@@ -7102,7 +7102,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-264432",
-    "name": "Abdessamad \"Abde\" Ezzalzouli",
+    "name": "Abde",
     "club": "Real Betis",
     "league": "LALIGA EA SPORTS",
     "nationality": "Morocco",
@@ -7180,7 +7180,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-212523",
-    "name": "Anderson \"Anderson Talisca\" Souza Conceição",
+    "name": "Anderson Talisca",
     "club": "Fenerbahçe",
     "league": "Trendyol Süper Lig",
     "nationality": "Brazil",
@@ -7206,7 +7206,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-255475",
-    "name": "Antony \"Antony\" Matheus dos Santos",
+    "name": "Antony",
     "club": "Real Betis",
     "league": "LALIGA EA SPORTS",
     "nationality": "Brazil",
@@ -7362,7 +7362,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-231410",
-    "name": "Brahim \"Brahim\" Díaz",
+    "name": "Brahim",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Morocco",
@@ -7570,7 +7570,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-236632",
-    "name": "David \"David Neres\" Neres Campos",
+    "name": "David Neres",
     "club": "SSC Napoli",
     "league": "Serie A Enilive",
     "nationality": "Brazil",
@@ -7596,7 +7596,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-243559",
-    "name": "Jorge \"De Frutos\" de Frutos Sebastián",
+    "name": "De Frutos",
     "club": "Rayo Vallecano",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -7700,7 +7700,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-226456",
-    "name": "Pablo \"Fornals\" Fornals Malla",
+    "name": "Fornals",
     "club": "Real Betis",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -7778,7 +7778,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-239482",
-    "name": "Wenderson \"Galeno\" Nascimento Galeno",
+    "name": "Galeno",
     "club": "Al Ahli",
     "league": "ROSHN Saudi League",
     "nationality": "Brazil",
@@ -7804,7 +7804,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-208093",
-    "name": "Gerard \"Gerard Moreno\" Moreno Balagueró",
+    "name": "Gerard Moreno",
     "club": "Villarreal CF",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -7986,7 +7986,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-192629",
-    "name": "Iago \"Iago Aspas\" Aspas Juncal",
+    "name": "Iago Aspas",
     "club": "Celta",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -8090,7 +8090,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-193747",
-    "name": "Jorge \"Koke\" Resurrección",
+    "name": "Koke",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -8324,7 +8324,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-242201",
-    "name": "Luis \"Luis Milla\" Milla Manzanares",
+    "name": "Luis Milla",
     "club": "Como",
     "league": "Serie A Enilive",
     "nationality": "Spain",
@@ -8402,7 +8402,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-268804",
-    "name": "Mario \"Mario Gila\" Gila Fuentes",
+    "name": "Mario Gila",
     "club": "Milano FC",
     "league": "Serie A Enilive",
     "nationality": "Spain",
@@ -8428,7 +8428,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-229668",
-    "name": "Mario \"Mario Hermoso\" Hermoso Canseco",
+    "name": "Mario Hermoso",
     "club": "AS Roma",
     "league": "Serie A Enilive",
     "nationality": "Spain",
@@ -8480,7 +8480,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-241509",
-    "name": "Mauro Jaqueson \"Mauro Júnior\" J. Ferreira Santos",
+    "name": "Mauro Júnior",
     "club": "PSV",
     "league": "Eredivisie",
     "nationality": "Brazil",
@@ -8662,7 +8662,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-200724",
-    "name": "José Ignacio \"Nacho Fernández\" Fernández Iglesias",
+    "name": "Nacho Fernández",
     "club": "Al Qadsiah",
     "league": "ROSHN Saudi League",
     "nationality": "Spain",
@@ -8740,7 +8740,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-255069",
-    "name": "Nicolás \"Nico González\" González Iglesias",
+    "name": "Nico González",
     "club": "Manchester City",
     "league": "Premier League",
     "nationality": "Spain",
@@ -8818,7 +8818,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-241464",
-    "name": "Pau \"Pau Torres\" Francisco Torres",
+    "name": "Pau Torres",
     "club": "Aston Villa",
     "league": "Premier League",
     "nationality": "Spain",
@@ -8844,7 +8844,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-238616",
-    "name": "Pedro \"Pedro Neto\" Lomba Neto",
+    "name": "Pedro Neto",
     "club": "Chelsea",
     "league": "Premier League",
     "nationality": "Portugal",
@@ -8896,7 +8896,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-266039",
-    "name": "Marc \"Pubill\" Pubill Pagès",
+    "name": "Pubill",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -9052,7 +9052,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-210385",
-    "name": "Rui Tiago \"Rui Silva\" Dantas da Silva",
+    "name": "Rui Silva",
     "club": "Sporting CP",
     "league": "Liga Portugal",
     "nationality": "Portugal",
@@ -9338,7 +9338,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-200104",
-    "name": "Heung Min \"Son Heung Min\" Son",
+    "name": "Son Heung Min",
     "club": "LAFC",
     "league": "MLS",
     "nationality": "Korea Republic",
@@ -9780,7 +9780,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-227127",
-    "name": "Alejandro \"Álex Remiro\" Remiro Gargallo",
+    "name": "Álex Remiro",
     "club": "Real Sociedad",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -9806,7 +9806,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-268889",
-    "name": "Álvaro \"Álvaro Carreras\" Fernández Carreras",
+    "name": "Álvaro Carreras",
     "club": "Real Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -9832,7 +9832,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-216447",
-    "name": "Álvaro \"Álvaro García\" García Rivera",
+    "name": "Álvaro García",
     "club": "Rayo Vallecano",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -10014,7 +10014,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-273018",
-    "name": "Andrey \"Andrey Santos\" N. dos Santos",
+    "name": "Andrey Santos",
     "club": "Man Utd",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -10118,7 +10118,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-215590",
-    "name": "Ayoze \"Ayoze\" Pérez Gutiérrez",
+    "name": "Ayoze",
     "club": "Villarreal CF",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -10222,7 +10222,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-73562",
-    "name": "Bento Matheus \"Bento\" Krepski",
+    "name": "Bento",
     "club": "Al Nassr",
     "league": "ROSHN Saudi League",
     "nationality": "Brazil",
@@ -10248,7 +10248,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-224179",
-    "name": "Borja \"Borja Iglesias\" Iglesias Quintás",
+    "name": "Borja Iglesias",
     "club": "Celta",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -10404,7 +10404,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-258648",
-    "name": "Carlos Augusto \"Carlos Augusto\" Zopolato Neves",
+    "name": "Carlos Augusto",
     "club": "Lombardia FC",
     "league": "Serie A Enilive",
     "nationality": "Brazil",
@@ -10430,7 +10430,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-270728",
-    "name": "Carlos \"Carlos Romero\" Romero Serrano",
+    "name": "Carlos Romero",
     "club": "Villarreal CF",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -10638,7 +10638,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-223952",
-    "name": "David \"David Soria\" Soria Solís",
+    "name": "David Soria",
     "club": "Getafe CF",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -10846,7 +10846,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-76687",
-    "name": "Estêvão Willian \"Estêvão\" Almeida",
+    "name": "Estêvão",
     "club": "Chelsea",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -10898,7 +10898,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-261050",
-    "name": "Francisco \"Francisco Conceição\" Conceição",
+    "name": "Francisco Conceição",
     "club": "Juventus",
     "league": "Serie A Enilive",
     "nationality": "Portugal",
@@ -10976,7 +10976,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-258729",
-    "name": "Gabriel \"Gabri Veiga\" Veiga Novas",
+    "name": "Gabri Veiga",
     "club": "FC Porto",
     "league": "Liga Portugal",
     "nationality": "Spain",
@@ -11002,7 +11002,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-251566",
-    "name": "Gabriel Teodoro \"Gabriel Martinelli\" Martinelli Silva",
+    "name": "Gabriel Martinelli",
     "club": "Arsenal",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -11028,7 +11028,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-270571",
-    "name": "Gabriel Davi \"Gabriel Sara\" Gomes Sara",
+    "name": "Gabriel Sara",
     "club": "Galatasaray",
     "league": "Trendyol Süper Lig",
     "nationality": "Brazil",
@@ -11054,7 +11054,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-257179",
-    "name": "Gonçalo \"Gonçalo Inácio\" Bernardo Inácio",
+    "name": "Gonçalo Inácio",
     "club": "Sporting CP",
     "league": "Liga Portugal",
     "nationality": "Portugal",
@@ -11080,7 +11080,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-256903",
-    "name": "Gonçalo Matias \"Gonçalo Ramos\" Ramos",
+    "name": "Gonçalo Ramos",
     "club": "Milano FC",
     "league": "Serie A Enilive",
     "nationality": "Portugal",
@@ -11132,7 +11132,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-224411",
-    "name": "Gonçalo Manuel \"Guedes\" Ganchinho Guedes",
+    "name": "Guedes",
     "club": "Real Sociedad",
     "league": "LALIGA EA SPORTS",
     "nationality": "Portugal",
@@ -11210,7 +11210,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-232498",
-    "name": "Isaac \"Isi\" Palazón Camacho",
+    "name": "Isi",
     "club": "Rayo Vallecano",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
@@ -11262,7 +11262,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-216201",
-    "name": "Iñaki \"Iñaki Williams\" Williams Arthuer",
+    "name": "Iñaki Williams",
     "club": "Athletic Club",
     "league": "LALIGA EA SPORTS",
     "nationality": "Ghana",
@@ -11314,7 +11314,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-223334",
-    "name": "Joelinton \"Joelinton\" Apolinário de Lira",
+    "name": "Joelinton",
     "club": "Newcastle Utd",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -11340,7 +11340,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-259516",
-    "name": "João Lucas \"Johnny Cardoso\" de Souza Cardoso",
+    "name": "Johnny Cardoso",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "United States",
@@ -11418,7 +11418,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-226376",
-    "name": "Alejandro \"Kaku\" Romero Gamarra",
+    "name": "Kaku",
     "club": "Al Ain FC",
     "league": "United Emirates League",
     "nationality": "Paraguay",
@@ -11600,7 +11600,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-243780",
-    "name": "Kang In \"Lee Kang In\" Lee",
+    "name": "Lee Kang In",
     "club": "Atlético de Madrid",
     "league": "LALIGA EA SPORTS",
     "nationality": "Korea Republic",
@@ -11626,7 +11626,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-222492",
-    "name": "Leroy Aziz \"Leroy Sané\" Sané",
+    "name": "Leroy Sané",
     "club": "Galatasaray",
     "league": "Trendyol Süper Lig",
     "nationality": "Germany",
@@ -11782,7 +11782,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-270857",
-    "name": "Mateus Gonçalo \"Mateus Fernandes\" Espanha Fernandes",
+    "name": "Mateus Fernandes",
     "club": "Spurs",
     "league": "Premier League",
     "nationality": "Portugal",
@@ -11912,7 +11912,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-261865",
-    "name": "Miguel \"Miguel Gutiérrez\" Gutiérrez Ortega",
+    "name": "Miguel Gutiérrez",
     "club": "Leverkusen",
     "league": "Bundesliga",
     "nationality": "Spain",
@@ -11990,7 +11990,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-259694",
-    "name": "Óscar \"Mingueza\" Mingueza García",
+    "name": "Mingueza",
     "club": "Crystal Palace",
     "league": "Premier League",
     "nationality": "Spain",
@@ -12172,7 +12172,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-210411",
-    "name": "Otávio Edmilson \"Otávio\" da Silva Monteiro",
+    "name": "Otávio",
     "club": "Al Qadsiah",
     "league": "ROSHN Saudi League",
     "nationality": "Portugal",
@@ -12250,7 +12250,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-216547",
-    "name": "Rafael A. \"Rafa\" Ferreira Silva",
+    "name": "Rafa",
     "club": "SL Benfica",
     "league": "Liga Portugal",
     "nationality": "Portugal",
@@ -12302,7 +12302,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-236045",
-    "name": "Reinildo Isnard \"Reinildo\" Mandava",
+    "name": "Reinildo",
     "club": "Sunderland",
     "league": "Premier League",
     "nationality": "Mozambique",
@@ -12354,7 +12354,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-228789",
-    "name": "Robert \"Robert Sánchez\" Lynch Sánchez",
+    "name": "Robert Sánchez",
     "club": "Chelsea",
     "league": "Premier League",
     "nationality": "Spain",
@@ -12536,7 +12536,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-277581",
-    "name": "Samuel \"Samu\" Omorodion Aghehowa",
+    "name": "Samu",
     "club": "FC Porto",
     "league": "Liga Portugal",
     "nationality": "Spain",
@@ -12562,7 +12562,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-270409",
-    "name": "Sávio \"Savinho\" Moreira de Oliveira",
+    "name": "Savinho",
     "club": "Manchester City",
     "league": "Premier League",
     "nationality": "Brazil",
@@ -13004,7 +13004,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-80170",
-    "name": "Wesley Vinícius \"Wesley\" França Lima",
+    "name": "Wesley",
     "club": "AS Roma",
     "league": "Serie A Enilive",
     "nationality": "Brazil",
@@ -13108,7 +13108,7 @@ export const FC27_IMPORTED_PLAYERS: Player[] = [
   },
   {
     "id": "fc27-227950",
-    "name": "Yeray \"Yeray\" Álvarez López",
+    "name": "Yeray",
     "club": "Athletic Club",
     "league": "LALIGA EA SPORTS",
     "nationality": "Spain",
