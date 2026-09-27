@@ -470,7 +470,7 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
   for (const candidate of shuffled.sort((a, b) => b.overall - a.overall)) {
     if (squad.length >= 18 || usedIds.has(candidate.id)) continue;
     const count = squad.filter(s => s.player.category === candidate.category).length;
-    if (count >= limits[candidate.category]) continue;
+    if (count >= limits[candidate.category as PositionCategory]) continue;
     usedIds.add(candidate.id);
     squad.push({
       player: candidate,
