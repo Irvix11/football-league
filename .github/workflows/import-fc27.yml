@@ -16,8 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npm install
-      - run: npm run import:fc27:remote
+      - run: npx --yes tsx scripts/import-fc27.ts https://raw.githubusercontent.com/Akif-b-Atif/Football-wordle/5e3007e561acd76d12475dc0619d0d605f1f9a8c/data/players.csv 80
       - name: Commit generated FC27 database
         run: |
           if git diff --quiet -- src/data/fc27.generated.ts; then
