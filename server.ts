@@ -400,27 +400,11 @@ function autoFillManagerLineup(manager: Manager) {
     });
   }
 
-  // Preserve the full 18-player squad: the best 11 become starters and the
-  // remaining 7 become substitutes. Every player can still be assigned to any
-  // outfield tactical role later.
-  const starterIds = new Set(starters.map(s => s.player.id));
-  const bench = remaining
-    .filter(entry => !starterIds.has(entry.player.id))
-    .sort((a, b) => b.player.overall - a.player.overall)
-    .slice(0, 7)
-    .map((entry, index) => ({
-      ...entry,
-      isStarting: false,
-      startingSlotIndex: undefined,
-      benchIndex: index,
-      assignedPosition: entry.player.category === 'GK' ? 'GK' : entry.assignedPosition || entry.player.position,
-      condition: entry.condition || createFitCondition(),
-    }));
-
-  manager.squad = [
-    ...starters.sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99)),
-    ...bench,
-  ].slice(0, 18);
+  // XI-only game: the best 11 players fill the formation. There are no
+  // substitutes, so every auctioned player is part of the active squad.
+  manager.squad = starters
+    .sort((a, b) => (a.startingSlotIndex ?? 99) - (b.startingSlotIndex ?? 99))
+    .slice(0, 11);
   manager.teamOverall = calculateTeamOverall(manager.formation, manager.squad);
   manager.roles = setupManagerRoles(manager.squad.filter(s => s.isStarting));
 }
@@ -431,8 +415,8 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
   const usedIds = new Set<string>();
   const squad: SquadPlayerEntry[] = [];
 
-  // Build the XI first from the formation's categories, then add seven
-  // substitutes within the formation-aware squad category limits.
+  // Build exactly the XI from the formation's category quotas. There are no
+  // substitutes in the game.
   for (const slot of config.slots) {
     const candidates = shuffled
       .filter(p => !usedIds.has(p.id) && (slot.category === 'GK' ? p.category === 'GK' : p.category !== 'GK'))
@@ -453,27 +437,9 @@ function generateValidSquad(formation: Formation, availablePool: any[]): SquadPl
   const categoryCounts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
   for (const entry of squad) categoryCounts[entry.player.category] += 1;
 
-  const benchCandidates = shuffled
-    .filter(p => !usedIds.has(p.id))
-    .filter(p => categoryCounts[p.category as PositionCategory] < limits[p.category as PositionCategory])
-    .sort((a, b) => b.overall - a.overall);
-
-  for (const player of benchCandidates) {
-    if (squad.length >= 18) break;
-    const cat = player.category as PositionCategory;
-    if (categoryCounts[cat] >= limits[cat]) continue;
-    usedIds.add(player.id);
-    categoryCounts[cat] += 1;
-    squad.push({
-      player,
-      isStarting: false,
-      benchIndex: squad.length - 11,
-      assignedPosition: player.category === 'GK' ? 'GK' : player.position,
-      condition: createFitCondition(),
-    });
-  }
-
-  return squad;
+  // The formation limits are exact XI quotas, so the auctioned squad is
+  // already complete once all eleven formation categories are filled.
+  return squad.slice(0, 11);
 }
 
 // Auction runs in four synchronized blocks: GK -> DEF -> MID -> ATT.
