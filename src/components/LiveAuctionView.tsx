@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getBidStep, getMinNextBid } from '../constants/auction';
 import { GameRoom, Player } from '../types/football';
 import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from '../constants/formations';
 import { PlayerCard } from './PlayerCard';
@@ -142,8 +143,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
     : false;
 
-  const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
-  const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
+  const bidStep = getBidStep(auction.currentBid);
+  const minNextBid = getMinNextBid(auction.currentBid, Boolean(auction.highestBidderId));
   const canAfford = currentManager.budget >= minNextBid;
   const isSquadFull = currentManager.squad.length >= 11;
   const isWinning = auction.highestBidderId === managerId;
