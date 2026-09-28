@@ -341,6 +341,7 @@ export function useGameSocket() {
             roomCode,
             managerName: session.managerName,
             reconnectId: session.managerId,
+            reconnectToken: session.reconnectToken,
           });
         } else {
           setErrorMessage('Connecting to game server...');
