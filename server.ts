@@ -260,6 +260,28 @@ function newId(prefix: string) {
   return prefix + '-' + crypto.randomUUID();
 }
 
+function createReconnectToken(): string {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function hashReconnectToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function setReconnectCredential(manager: Manager): string {
+  const token = createReconnectToken();
+  manager.reconnectTokenHash = hashReconnectToken(token);
+  return token;
+}
+
+function matchesReconnectCredential(manager: Manager, token: unknown): boolean {
+  const supplied = String(token || '');
+  if (!supplied || !manager.reconnectTokenHash) return false;
+  const expected = Buffer.from(manager.reconnectTokenHash, 'hex');
+  const actual = Buffer.from(hashReconnectToken(supplied), 'hex');
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
 const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation[]);
 const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
 const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
@@ -2409,11 +2431,14 @@ wss.on('connection', (ws) => {
             }
             roomSockets.get(result.roomCode)!.add(ws);
             socketToRoom.set(ws, { roomCode: result.roomCode, managerId: result.managerId });
+            const soloManager = result.room.managers.find(m => m.id === result.managerId);
+            const reconnectToken = soloManager ? setReconnectCredential(soloManager) : '';
 
             ws.send(JSON.stringify({
               type: 'LOBBY_CREATED',
               roomCode: result.roomCode,
               managerId: result.managerId,
+              reconnectToken,
               room: sanitizeRoomForViewer(result.room, result.managerId),
             }));
             break;
@@ -2492,6 +2517,7 @@ wss.on('connection', (ws) => {
             updatedAt: Date.now(),
           };
 
+          const hostReconnectToken = setReconnectCredential(hostManager);
           rooms.set(roomCode, room);
           await saveRoomSnapshot(room);
 
@@ -2505,6 +2531,7 @@ wss.on('connection', (ws) => {
             type: 'LOBBY_CREATED',
             roomCode,
             managerId: hostId,
+            reconnectToken: hostReconnectToken,
             room: sanitizeRoomForViewer(room, hostId),
           }));
           break;
@@ -2512,7 +2539,7 @@ wss.on('connection', (ws) => {
 
         // --- 2. JOIN LOBBY ---
         case 'JOIN_LOBBY': {
-          const { roomCode, managerName, reconnectId } = payload;
+          const { roomCode, managerName, reconnectId, reconnectToken } = payload;
           const normalizedRoomCode = roomCode?.toUpperCase();
           let room = rooms.get(normalizedRoomCode);
           if (!room && normalizedRoomCode) {
@@ -2535,9 +2562,24 @@ wss.on('connection', (ws) => {
 
           // Reconnection is identity-based. Never allow a name alone to impersonate
           // an existing manager.
-          const existing = reconnectId ? room.managers.find(m => m.id === reconnectId) : null;
+          let existing = reconnectToken
+            ? room.managers.find(m => matchesReconnectCredential(m, reconnectToken))
+            : null;
+
+          // Backward compatibility: older browser sessions stored the manager ID.
+          // Accept that legacy credential only once, then issue the stronger token.
+          if (!existing && reconnectId) {
+            const legacy = room.managers.find(m => m.id === reconnectId);
+            if (legacy && !legacy.reconnectTokenHash) {
+              existing = legacy;
+              setReconnectCredential(existing);
+            }
+          }
 
           if (existing) {
+            const tokenForClient = reconnectToken && matchesReconnectCredential(existing, reconnectToken)
+              ? reconnectToken
+              : setReconnectCredential(existing);
             // A reconnect may land on a fresh Vercel Function instance. Resume
             // the in-memory ticker from the persisted absolute deadline.
             ensureAuctionTicker(room);
@@ -2549,6 +2591,7 @@ wss.on('connection', (ws) => {
               type: 'LOBBY_JOINED',
               roomCode: room.code,
               managerId: existing.id,
+              reconnectToken: tokenForClient,
               room: sanitizeRoomForViewer(room, existing.id),
             }));
             broadcastRoom(room.code);
@@ -3856,6 +3899,7 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
 app.get('/api/room/:code', async (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
   const viewerId = String(req.query?.managerId || '');
+  const reconnectToken = String(req.query?.reconnectToken || '');
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
   if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   let room = rooms.get(code);
@@ -3864,14 +3908,18 @@ app.get('/api/room/:code', async (req, res) => {
     if (room) rooms.set(code, room);
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
-  if (!viewerId || !room.managers.some(m => m.id === viewerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+  const viewer = room.managers.find(m =>
+    (reconnectToken && matchesReconnectCredential(m, reconnectToken)) ||
+    (!reconnectToken && viewerId && m.id === viewerId)
+  );
+  if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
   // HTTP polling can be the first request after a serverless instance changes.
   // Resume absolute auction and phase-readiness clocks after a cold start.
   ensureAuctionTicker(room);
   ensurePhaseReadyTicker(room);
   // HTTP snapshots are public to anyone holding the six-character room code.
   // Never expose internal manager IDs through this endpoint.
-  const snapshot = sanitizeRoomForViewer(room, viewerId);
+  const snapshot = sanitizeRoomForViewer(room, viewer.id);
   if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction' && !snapshot.auction.isSold) {
     // Keep the REST snapshot behind the same privacy boundary as WebSocket
     // broadcasts: humans see exactly two clues, never the real identity/OVR.
