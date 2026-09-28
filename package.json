@@ -19,7 +19,8 @@
     "build:fc27": "npm run import:fc27:remote && vite build",
     "audit:security": "npm audit --audit-level=high",
     "test": "vitest run",
-    "test:simulation": "vitest run src/engine/simulation.test.ts"
+    "test:simulation": "vitest run src/engine/simulation.test.ts",
+    "calibrate": "tsx scripts/calibrate.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
