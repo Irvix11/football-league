@@ -542,49 +542,78 @@ function normalizeManagerForMatch(manager: Manager): Manager {
   const squad = Array.isArray(manager.squad) ? manager.squad.filter(Boolean) : [];
   const normalizedSquad = squad
     .filter((entry) => entry?.player?.id && entry.player.overall !== undefined)
-    .map((entry) => ({
-      ...entry,
-      isStarting: Boolean(entry.isStarting),
-      condition: entry.condition || {
-        state: 'FIT' as const,
-        fatigue: 0,
-        injuryMatchesLeft: 0,
-        yellowCards: 0,
-        redCards: 0,
-        suspensionMatchesLeft: 0,
-      },
-      assignedPosition: entry.assignedPosition || entry.player?.position,
-      player: {
-        ...entry.player,
-        alternatePositions: Array.isArray(entry.player?.alternatePositions) ? entry.player.alternatePositions : [],
-        attributes: {
-          pac: Number(entry.player?.attributes?.pac ?? 50),
-          sho: Number(entry.player?.attributes?.sho ?? 50),
-          pas: Number(entry.player?.attributes?.pas ?? 50),
-          dri: Number(entry.player?.attributes?.dri ?? 50),
-          def: Number(entry.player?.attributes?.def ?? 50),
-          phy: Number(entry.player?.attributes?.phy ?? 50),
+    .map((entry) => {
+      const attributes = { ...entry.player.attributes };
+      for (const key of ['pac', 'sho', 'pas', 'dri', 'def', 'phy'] as const) {
+        if (!Number.isFinite(Number(attributes?.[key]))) {
+          console.warn(`[simulation] missing ${key} for player ${entry.player.id}; using 50`);
+          attributes[key] = 50;
+        }
+      }
+      return {
+        ...entry,
+        isStarting: Boolean(entry.isStarting),
+        condition: entry.condition || {
+          state: 'FIT' as const,
+          fatigue: 0,
+          injuryMatchesLeft: 0,
+          yellowCards: 0,
+          redCards: 0,
+          suspensionMatchesLeft: 0,
         },
-      },
-    }));
+        assignedPosition: entry.assignedPosition || entry.player?.position,
+        player: {
+          ...entry.player,
+          alternatePositions: Array.isArray(entry.player?.alternatePositions) ? entry.player.alternatePositions : [],
+          attributes,
+        },
+      };
+    });
 
-  const eligible = normalizedSquad.filter(
-    s => s.condition.state !== 'SUSPENDED' && s.condition.state !== 'INJURED'
-  );
-  const explicitStarters = eligible.filter(s => s.isStarting);
-  const starters = explicitStarters.length >= 11 ? explicitStarters.slice(0, 11) : eligible.slice(0, 11);
-  const starterIds = new Set(starters.map(s => s.player.id));
+  if (normalizedSquad.length < 11) {
+    throw new Error(`Cannot simulate ${manager.name || 'team'}: squad has ${normalizedSquad.length}/11 players. Finish the squad before playing.`);
+  }
+
+  const formation = manager.formation || '4-3-3';
+  const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
+  const explicitStarters = normalizedSquad.filter(s => s.isStarting);
+  const source = explicitStarters.length === 11 ? explicitStarters : normalizedSquad.slice(0, 11);
+  if (explicitStarters.length !== 11) {
+    console.warn(`[simulation] ${manager.name || 'team'} has ${explicitStarters.length} explicit starters; assigning the 11-player squad to formation slots.`);
+  }
+
+  const used = new Set<string>();
+  const ordered: SquadPlayerEntry[] = [];
+  for (const slot of config.slots) {
+    const exact = source.find(entry => entry.startingSlotIndex === slot.index && !used.has(entry.player.id));
+    const candidate = exact || source
+      .filter(entry => !used.has(entry.player.id))
+      .sort((a, b) => {
+        const aCat = getPositionCategory(a.assignedPosition || a.player.position) === slot.category ? 1 : 0;
+        const bCat = getPositionCategory(b.assignedPosition || b.player.position) === slot.category ? 1 : 0;
+        return bCat - aCat ||
+          calculatePositionFit(b.player.position, b.player.alternatePositions || [], slot.position) -
+          calculatePositionFit(a.player.position, a.player.alternatePositions || [], slot.position);
+      })[0];
+    if (!candidate) continue;
+    used.add(candidate.player.id);
+    ordered.push({
+      ...candidate,
+      isStarting: true,
+      startingSlotIndex: slot.index,
+      assignedPosition: candidate.assignedPosition || slot.position,
+    });
+  }
+
+  if (ordered.length < 11) {
+    throw new Error(`Cannot simulate ${manager.name || 'team'}: unable to map 11 players onto formation slots.`);
+  }
+
+  const starterIds = new Set(ordered.map(s => s.player.id));
   const repairedSquad = normalizedSquad.map(s => ({
     ...s,
     isStarting: starterIds.has(s.player.id),
   }));
-
-  if (repairedSquad.length < 11) {
-    throw new Error(`Cannot simulate ${manager.name || 'team'}: squad has ${repairedSquad.length}/11 valid players. Finish the squad before playing.`);
-  }
-  if (starters.length < 11) {
-    throw new Error(`Cannot simulate ${manager.name || 'team'}: only ${starters.length}/11 players are available.`);
-  }
 
   const safeTactics = {
     ...DEFAULT_MATCH_TACTICS,
@@ -593,15 +622,16 @@ function normalizeManagerForMatch(manager: Manager): Manager {
 
   return {
     ...manager,
-    formation: manager.formation || '4-3-3',
+    formation,
     tactics: safeTactics,
-    squad: repairedSquad,
+    squad: ordered.map(entry => ({ ...entry, isStarting: true })).concat(
+      repairedSquad.filter(s => !starterIds.has(s.player.id))
+    ),
     teamOverall: Number.isFinite(Number(manager.teamOverall))
       ? Number(manager.teamOverall)
-      : calculateTeamOverall(manager.formation || '4-3-3', repairedSquad),
+      : calculateTeamOverall(formation, repairedSquad),
   };
 }
-
 export function simulateMatch(
   homeManager: Manager,
   awayManager: Manager,
@@ -614,11 +644,11 @@ export function simulateMatch(
 ): Fixture {
   homeManager = normalizeManagerForMatch(homeManager);
   awayManager = normalizeManagerForMatch(awayManager);
-  const seed = customSeed || (Date.now() ^ (matchday * 1337));
+  const seed = customSeed ?? (Date.now() ^ (matchday * 1337));
   const rand = createPrng(seed);
 
-  const homeStarters = homeManager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
-  const awayStarters = awayManager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
+  const homeStarters = homeManager.squad.filter(s => s.isStarting);
+  const awayStarters = awayManager.squad.filter(s => s.isStarting);
 
   const homeOvr = calculateTeamOverall(homeManager.formation, homeManager.squad);
   const awayOvr = calculateTeamOverall(awayManager.formation, awayManager.squad);
