@@ -21,7 +21,7 @@ import {
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football.js';
-import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits, getPositionCategory } from './src/constants/formations.js';
+import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
 import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot } from './server/persistence.js';
@@ -1956,7 +1956,7 @@ function validateAndSanitizeLineupUpdate(manager: Manager, incomingSquad: SquadP
   const starterIds = new Set(manager.squad.filter(s => s.isStarting).map(s => s.player.id));
   const outfieldStarterIds = new Set(
     manager.squad
-      .filter(s => s.isStarting && getPositionCategory(s.assignedPosition || s.player.position) !== 'GK')
+      .filter(s => s.isStarting && s.player.category !== 'GK')
       .map(s => s.player.id)
   );
   const currentRoles = manager.roles || {
