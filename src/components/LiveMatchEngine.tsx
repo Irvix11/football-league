@@ -169,6 +169,43 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     away: fixture.played ? (fixture.awayScore || 0) : 0,
   };
 
+  const liveStats = useMemo(() => {
+    const home = { possession: 50, shots: 0, shotsOnTarget: 0, goals: 0 };
+    const away = { possession: 50, shots: 0, shotsOnTarget: 0, goals: 0 };
+    const upto = Math.min(currentEventIndex, Math.max(0, events.length - 1));
+    const included = events.slice(0, upto + 1);
+    for (const event of included) {
+      const stats = event.team === 'home' ? home : away;
+      if (['shot', 'shot_saved', 'shot_missed', 'shot_blocked', 'goal'].includes(event.type)) {
+        stats.shots += 1;
+      }
+      if (['shot_saved', 'goal'].includes(event.type)) {
+        stats.shotsOnTarget += 1;
+      }
+      if (event.type === 'goal') stats.goals += 1;
+    }
+
+    const possessionSeconds = { home: 0, away: 0 };
+    for (let i = 0; i < upto; i++) {
+      const current = events[i];
+      const next = events[i + 1];
+      const duration = Math.max(
+        0,
+        (next.minute * 60 + (next.second || 0)) -
+        (current.minute * 60 + (current.second || 0))
+      );
+      if (current.team === 'home' || current.team === 'away') {
+        possessionSeconds[current.team] += duration;
+      }
+    }
+    const total = possessionSeconds.home + possessionSeconds.away;
+    if (total > 0) {
+      home.possession = Math.round((possessionSeconds.home / total) * 100);
+      away.possession = 100 - home.possession;
+    }
+    return { home, away };
+  }, [events, currentEventIndex]);
+
   // Duration in milliseconds for current event animation
   const getEventDuration = useCallback((ev?: MatchEvent) => {
     if (!ev) return 1200;
@@ -534,18 +571,18 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
         {/* Possession & Momentum Bar */}
         <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-          <span className="text-emerald-400 font-semibold">{fixture.homeStats?.possession || 50}% Possession</span>
+          <span className="text-emerald-400 font-semibold">{liveStats.home.possession}% Possession</span>
           <div className="w-24 sm:w-44 h-1 bg-slate-950 rounded-full overflow-hidden flex mx-2 border border-slate-800/60">
             <div 
               className="bg-emerald-500 h-full transition-all duration-300" 
-              style={{ width: `${fixture.homeStats?.possession || 50}%` }}
+              style={{ width: `${liveStats.home.possession}%` }}
             />
             <div 
               className="bg-sky-500 h-full transition-all duration-300" 
-              style={{ width: `${100 - (fixture.homeStats?.possession || 50)}%` }}
+              style={{ width: `${100 - (liveStats.home.possession)}%` }}
             />
           </div>
-          <span className="text-sky-400 font-semibold">{100 - (fixture.homeStats?.possession || 50)}% Possession</span>
+          <span className="text-sky-400 font-semibold">{100 - (liveStats.home.possession)}% Possession</span>
         </div>
       </div>
 
@@ -776,12 +813,12 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Possession</div>
-                    <div className="font-bold text-slate-100">{fixture.homeStats?.possession || 50}% - {fixture.awayStats?.possession || 50}%</div>
+                    <div className="font-bold text-slate-100">{liveStats.home.possession}% - {fixture.awayStats?.possession || 50}%</div>
                   </div>
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Shots (On Target)</div>
                     <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
+                      {liveStats.home.shots}({liveStats.home.shotsOnTarget}) - {liveStats.away.shots}({liveStats.away.shotsOnTarget})
                     </div>
                   </div>
                 </div>
@@ -845,7 +882,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Shots (Target)</div>
                     <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
+                      {liveStats.home.shots}({liveStats.home.shotsOnTarget}) - {liveStats.away.shots}({liveStats.away.shotsOnTarget})
                     </div>
                   </div>
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
@@ -1192,9 +1229,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="space-y-3 text-xs font-mono">
               {[
                 { label: 'Score', home: currentScore.home, away: currentScore.away },
-                { label: 'Possession', home: `${fixture.homeStats?.possession || 50}%`, away: `${fixture.awayStats?.possession || 50}%` },
-                { label: 'Total Shots', home: fixture.homeStats?.shots || 0, away: fixture.awayStats?.shots || 0 },
-                { label: 'Shots on Target', home: fixture.homeStats?.shotsOnTarget || 0, away: fixture.awayStats?.shotsOnTarget || 0 },
+                { label: 'Possession', home: `${liveStats.home.possession}%`, away: `${fixture.awayStats?.possession || 50}%` },
+                { label: 'Total Shots', home: liveStats.home.shots, away: liveStats.away.shots },
+                { label: 'Shots on Target', home: liveStats.home.shotsOnTarget, away: liveStats.away.shotsOnTarget },
                 { label: 'Passes Completed', home: fixture.homeStats?.passes || 0, away: fixture.awayStats?.passes || 0 },
                 { label: 'Corners', home: fixture.homeStats?.corners || 0, away: fixture.awayStats?.corners || 0 },
                 { label: 'Fouls', home: fixture.homeStats?.fouls || 0, away: fixture.awayStats?.fouls || 0 },
