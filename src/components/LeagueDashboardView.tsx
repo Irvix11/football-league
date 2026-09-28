@@ -60,6 +60,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
 
   // Active fixture currently shown in the match engine
   const activeFixture = 
+    (room.liveFixtureId ? room.fixtures.find((f) => f.id === room.liveFixtureId) : null) ||
     room.fixtures.find((f) => f.id === selectedFixtureId) ||
     userFixture ||
     matchdayFixtures[0];
@@ -87,9 +88,10 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
         || matchdayFixtures.find((f) => !f.played)
         || uFix
         || matchdayFixtures[0];
-      if (next) setSelectedFixtureId(next.id);
+      if (room.liveFixtureId) setSelectedFixtureId(room.liveFixtureId);
+      else if (next) setSelectedFixtureId(next.id);
     }
-  }, [currentMatchday, matchdayFixtures.map((f) => `${f.id}:${f.played}`).join(','), managerId]);
+  }, [currentMatchday, matchdayFixtures.map((f) => `${f.id}:${f.played}`).join(','), managerId, room.liveFixtureId]);
 
   // Check if current matchday is completely played
   const isCurrentMatchdayPlayed = matchdayFixtures.length > 0 && matchdayFixtures.every((f) => f.played);
