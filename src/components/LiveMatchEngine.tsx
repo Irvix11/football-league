@@ -1188,8 +1188,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         {/* Playback Primary Buttons */}
         <div className="flex items-center gap-1.5">
           <button
+            disabled={halfTimeOverlay || fullTimeOverlay || showPenaltyShootout}
             onClick={handleTogglePlay}
-            className={`p-2.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 ${
+            className={`p-2.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 ${
               isPlaying
                 ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
                 : 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
