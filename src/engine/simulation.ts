@@ -921,6 +921,7 @@ export function simulateMatch(
 
     const atkMids = (isHome ? homeMids : awayMids).filter(s => !sentOffIds.has(s.player.id));
     const atkAtts = (isHome ? homeAtts : awayAtts).filter(s => !sentOffIds.has(s.player.id));
+    const atkDefs = (isHome ? homeDefs : awayDefs).filter(s => !sentOffIds.has(s.player.id));
     const defDefs = (isHome ? awayDefs : homeDefs).filter(s => !sentOffIds.has(s.player.id));
     const defGK = isHome ? awayGK : homeGK;
 
@@ -928,8 +929,8 @@ export function simulateMatch(
     const isPossessionStyle = atkTactics.style === 'Possession' || atkTactics.tempo < 45;
     const isLongBallStyle = atkTactics.style === 'Long Ball';
 
-    const passer = isLongBallStyle && defDefs.length > 0 
-      ? pick(defDefs) 
+    const passer = isLongBallStyle && atkDefs.length > 0 
+      ? pick(atkDefs) 
       : pick(atkMids.length > 0 ? atkMids : attackingStarters);
     
     const receiverPool = (atkAtts.length > 0 ? atkAtts : attackingStarters)
