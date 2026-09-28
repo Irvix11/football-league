@@ -141,16 +141,16 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     setPenaltyRevealStage('walkup');
     const strikeTimer = window.setTimeout(() => {
       setPenaltyRevealStage('strike');
-    }, 2200);
+    }, playbackSpeed >= 2 ? 900 : 2200);
     const resultTimer = window.setTimeout(() => {
       setPenaltyRevealStage('result');
-    }, 4800);
+    }, playbackSpeed >= 2 ? 2100 : 4800);
 
     return () => {
       window.clearTimeout(strikeTimer);
       window.clearTimeout(resultTimer);
     };
-  }, [showPenaltyShootout, penaltyIndex, penaltyIsOver]);
+  }, [showPenaltyShootout, penaltyIndex, penaltyIsOver, playbackSpeed]);
 
   // Interactive Player Inspection Tooltip (Tap on player)
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedPlayerState | null>(null);
@@ -250,7 +250,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     if (!currentEvent) return;
 
     // The target players are separated to guarantee ZERO overlap
-    const targetSeparated = separatePlayerPositions(currentEvent.playerCoordinates || []);
+    const targetSeparated = currentEvent.playerCoordinates?.length
+      ? separatePlayerPositions(currentEvent.playerCoordinates)
+      : (targetPlayersRef.current.length ? targetPlayersRef.current : animatedPlayers);
 
     // Start from the exact last rendered positions so the next event never teleports.
     startPlayersRef.current = targetSeparated.map(target => {
