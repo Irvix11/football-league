@@ -1,5 +1,6 @@
 import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult, Position, PositionCategory } from '../types/football.js';
 import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory, calculatePositionFit } from '../constants/formations.js';
+import { separatePlayerPositions } from '../utils/pitch.js';
 
 /**
  * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
@@ -314,79 +315,6 @@ function orderStartersForFormation(starters: SquadPlayerEntry[], slots: Array<{ 
   return ordered;
 }
 
-/**
- * Resolves overlapping players so they maintain visual distance while preserving tactical shape.
- * Enforces minimum visual distance so midfield and clustered zones remain completely readable.
- */
-function resolveCollisionSeparation(coords: LivePlayerPosition[], activePlayerId?: string): LivePlayerPosition[] {
-  const resolved = coords.map(p => ({ ...p }));
-  const MIN_DIST = 6.0; // Minimum distance in % coordinates on horizontal pitch
-  const PASSES = 8;     // 8 iterative relaxation passes for clean, organic spreading
-
-  for (let pass = 0; pass < PASSES; pass++) {
-    for (let i = 0; i < resolved.length; i++) {
-      for (let j = i + 1; j < resolved.length; j++) {
-        const p1 = resolved[i];
-        const p2 = resolved[j];
-
-        let dx = p2.x - p1.x;
-        let dy = p2.y - p1.y;
-        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-          dx = (j % 2 === 0 ? 1 : -1) * 0.5;
-          dy = (i % 2 === 0 ? 1 : -1) * 0.5;
-        }
-        // Pitch aspect ratio compensation (105 / 68 = ~1.54)
-        const dist = Math.hypot(dx, dy * 1.54);
-
-        if (dist < MIN_DIST) {
-          const overlap = (MIN_DIST - dist) / 2;
-          const nx = dx / (dist || 0.001);
-          const ny = dy / (dist || 0.001);
-
-          const p1IsActive = p1.id === activePlayerId || p1.hasBall;
-          const p2IsActive = p2.id === activePlayerId || p2.hasBall;
-
-          if (p1IsActive && !p2IsActive) {
-            // Keep active ball carrier pinned; push the other player away
-            p2.x += nx * overlap * 2.2;
-            p2.y += ny * overlap * 2.2;
-          } else if (p2IsActive && !p1IsActive) {
-            // Keep active ball carrier pinned; push p1 away
-            p1.x -= nx * overlap * 2.2;
-            p1.y -= ny * overlap * 2.2;
-          } else {
-            // Symmetrically push both players apart naturally
-            p1.x -= nx * overlap * 1.05;
-            p1.y -= ny * overlap * 1.05;
-            p2.x += nx * overlap * 1.05;
-            p2.y += ny * overlap * 1.05;
-          }
-
-          // Bound clamp
-          p1.x = Math.max(4.0, Math.min(96.0, p1.x));
-          p1.y = Math.max(7.0, Math.min(93.0, p1.y));
-          p2.x = Math.max(4.0, Math.min(96.0, p2.x));
-          p2.y = Math.max(7.0, Math.min(93.0, p2.y));
-        }
-      }
-    }
-  }
-
-  // Ensure starting goalkeepers stay firmly anchored inside their penalty areas
-  for (const p of resolved) {
-    if (p.number === 1) {
-      if (p.team === 'home') {
-        p.x = Math.max(4.5, Math.min(13.0, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      } else {
-        p.x = Math.max(87.0, Math.min(95.5, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      }
-    }
-  }
-
-  return resolved;
-}
 
 /**
  * Calculate dynamic 2D coordinates for all 22 players on the pitch based on:
@@ -655,7 +583,7 @@ function generate22PlayerCoordinates(
     });
   }
 
-  return resolveCollisionSeparation(coords, activeAction === 'passing' ? targetPlayerId : activePlayerId);
+  return separatePlayerPositions(coords, activeAction === 'passing' ? targetPlayerId : activePlayerId);
 }
 
 const DEFAULT_MATCH_TACTICS = {
