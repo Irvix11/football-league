@@ -582,12 +582,15 @@ function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRo
     ...row,
     managerId: ref(row.managerId) as string,
   }));
-  sanitized.fixtures = sanitized.fixtures.map(f => ({
-    ...f,
-    homeManagerId: ref(f.homeManagerId) as string,
-    awayManagerId: ref(f.awayManagerId) as string,
-    winnerManagerId: ref(f.winnerManagerId) as string | undefined,
-  }));
+  sanitized.fixtures = sanitized.fixtures.map(f => {
+    const { events: _events, ...fixtureWithoutEvents } = f;
+    return {
+      ...fixtureWithoutEvents,
+      homeManagerId: ref(f.homeManagerId) as string,
+      awayManagerId: ref(f.awayManagerId) as string,
+      winnerManagerId: ref(f.winnerManagerId) as string | undefined,
+    };
+  });
   sanitized.phaseReadyIds = sanitized.phaseReadyIds?.map(id => ref(id) as string);
   sanitized.transferWindowReadyIds = sanitized.transferWindowReadyIds?.map(id => ref(id) as string);
 
@@ -3450,6 +3453,12 @@ wss.on('connection', (ws, request) => {
             const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday, undefined, false, undefined, false);
             Object.assign(fix, result);
             fix.played = false;
+            if (targetMatchday === 5) {
+              const completedThroughFive = room.fixtures.filter(item => item.matchday <= 5).every(item => item.played === false || item.played === true);
+              if (completedThroughFive) {
+                console.info('[payload] room JSON bytes after matchday 5:', JSON.stringify(room).length);
+              }
+            }
             room.liveFixtureId = fix.id;
             room.currentMatchday = targetMatchday;
 
