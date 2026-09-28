@@ -431,6 +431,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
         // Current event animation finished; one advance path handles every event boundary.
         advanceToNextEvent();
+      }
 
       if (isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
         animationFrameRef.current = requestAnimationFrame(animateFrame);
