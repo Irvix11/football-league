@@ -70,12 +70,17 @@ export function useGameSocket() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptRef = useRef(0);
   const managerIdRef = useRef<string | null>(null);
+  const roomRef = useRef<GameRoom | null>(null);
   const intentionalCloseRef = useRef(false);
   const isSimulatingRef = useRef(false);
 
   useEffect(() => {
     managerIdRef.current = managerId;
   }, [managerId]);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   // Load saved session
   const getSavedSession = useCallback((): SavedSession | null => {
@@ -113,7 +118,7 @@ export function useGameSocket() {
       reconnectAttemptRef.current = 0;
 
       const saved = getSavedSession();
-      const liveRoom = room;
+      const liveRoom = roomRef.current;
       const liveManagerId = managerIdRef.current;
       if (saved && liveRoom?.code && liveManagerId) {
         ws.send(JSON.stringify({
@@ -263,7 +268,7 @@ export function useGameSocket() {
     };
 
     socketRef.current = ws;
-  }, [getSavedSession, saveSession, room]);
+  }, [getSavedSession, saveSession]);
 
   useEffect(() => {
     connect();
