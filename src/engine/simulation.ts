@@ -480,7 +480,7 @@ function generate22PlayerCoordinates(
     } else {
       const shape = tacticalShapeAdjustments(awayTactics, possession, false);
       let baseDepth = 100 - (15 + (slot.y / 100) * 65) - shape.depth;
-      const baseWidth = 12 + (slot.x / 100) * 76;
+      const baseWidth = 100 - (12 + (slot.x / 100) * 76);
 
       if (slot.position === 'CDM') baseDepth += 5;
       else if (slot.position === 'CAM') baseDepth -= 5;
