@@ -61,18 +61,19 @@ describe('simulation invariants', () => {
       const away = makeManager('away', 'Away', 11, i % 9 === 0);
       const result = simulateMatch(home, away, `test-${i}`, i + 1, 100000 + i, knockout, knockout ? 'Final' : undefined, knockout && i % 8 === 0);
 
-      expect(result.events[0]?.type).toBe('kickoff');
-      expect(result.events.at(-1)?.type).toBe('fulltime');
-      expect(result.events.filter(e => e.type === 'halftime')).toHaveLength(1);
+      const events = result.events || [];
+      expect(events[0]?.type).toBe('kickoff');
+      expect(events.at(-1)?.type).toBe('fulltime');
+      expect(events.filter(e => e.type === 'halftime')).toHaveLength(1);
 
-      for (let j = 1; j < result.events.length; j++) {
-        expect(seconds(result.events[j])).toBeGreaterThanOrEqual(seconds(result.events[j - 1]));
+      for (let j = 1; j < events.length; j++) {
+        expect(seconds(events[j])).toBeGreaterThanOrEqual(seconds(events[j - 1]));
       }
 
       const openPlayGoals = result.events.filter(e => e.type === 'goal').length;
       expect(openPlayGoals).toBe((result.homeScore || 0) + (result.awayScore || 0));
 
-      for (const team of [result.homeStats, result.awayStats]) {
+      for (const team of [result.homeStats!, result.awayStats!]) {
         expect(team.shots).toBeGreaterThanOrEqual(team.shotsOnTarget);
         expect(team.shotsOnTarget).toBeGreaterThanOrEqual(0);
       }
@@ -80,7 +81,7 @@ describe('simulation invariants', () => {
       const playerGoals = (result.playerStats || []).reduce((sum, stat) => sum + stat.goals, 0);
       expect(playerGoals).toBe((result.homeScore || 0) + (result.awayScore || 0));
 
-      for (const event of result.events) {
+      for (const event of events) {
         expect(event.ballCoordinates.x).toBeGreaterThanOrEqual(0);
         expect(event.ballCoordinates.x).toBeLessThanOrEqual(100);
         expect(event.ballCoordinates.y).toBeGreaterThanOrEqual(0);
