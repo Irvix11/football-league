@@ -60,7 +60,7 @@ interface TeamPower {
 }
 
 function calculateTeamPower(manager: Manager): TeamPower {
-  const starters = manager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
+  const starters = manager.squad.filter(s => s.isStarting);
   // Use the manager's assigned position when determining the tactical unit.
   // This makes manual positional switches (e.g. CM -> CAM, LB -> LWB,
   // ST -> CF) affect the simulation rather than leaving players in their
@@ -707,9 +707,11 @@ function normalizeManagerForMatch(manager: Manager): Manager {
   const formation = manager.formation || '4-3-3';
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
   const explicitStarters = normalizedSquad.filter(s => s.isStarting);
-  const source = explicitStarters.length === 11 ? explicitStarters : normalizedSquad.slice(0, 11);
+  // XI-only squads have no bench: if the saved starting flags are incomplete,
+  // use the complete 11-player squad rather than silently slicing arbitrary entries.
+  const source = explicitStarters.length === 11 ? explicitStarters : normalizedSquad;
   if (explicitStarters.length !== 11) {
-    console.warn(`[simulation] ${manager.name || 'team'} has ${explicitStarters.length} explicit starters; assigning the 11-player squad to formation slots.`);
+    console.warn(`[simulation] ${manager.name || 'team'} has ${explicitStarters.length} explicit starters; using the complete 11-player squad and preserving saved slot indices where present.`);
   }
 
   const used = new Set<string>();
