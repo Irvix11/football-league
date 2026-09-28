@@ -4008,8 +4008,13 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
 app.get('/api/room/:code', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const code = String(req.params.code || '').toUpperCase();
-  const viewerId = String(req.query?.managerId || '');
-  const reconnectToken = String(req.query?.reconnectToken || '');
+  const authHeader = String(req.headers.authorization || '');
+  const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const viewerId = String(req.headers['x-manager-id'] || '');
+  const legacyReconnectToken = process.env.NODE_ENV !== 'production' ? String(req.query?.reconnectToken || '') : '';
+  const legacyViewerId = process.env.NODE_ENV !== 'production' ? String(req.query?.managerId || '') : '';
+  const effectiveReconnectToken = reconnectToken || legacyReconnectToken;
+  const effectiveViewerId = viewerId || legacyViewerId;
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
   if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   let room = rooms.get(code);
@@ -4019,10 +4024,16 @@ app.get('/api/room/:code', async (req, res) => {
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
   const viewer = room.managers.find(m =>
-    (reconnectToken && matchesReconnectCredential(m, reconnectToken)) ||
-    (!reconnectToken && viewerId && m.id === viewerId)
+    (effectiveReconnectToken && matchesReconnectCredential(m, effectiveReconnectToken)) ||
+    (!effectiveReconnectToken && effectiveViewerId && m.id === effectiveViewerId)
   );
   if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+  const since = Number(req.query?.since);
+  if (Number.isFinite(since) && room.updatedAt <= since) {
+    res.status(304).end();
+    return;
+  }
+
   // HTTP polling can be the first request after a serverless instance changes.
   // Resume absolute auction and phase-readiness clocks after a cold start.
   ensureAuctionTicker(room);
