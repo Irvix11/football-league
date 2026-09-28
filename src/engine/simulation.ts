@@ -189,6 +189,86 @@ function calculateTeamPower(manager: Manager): TeamPower {
   };
 }
 
+function normalizeEventTimeline(events: MatchEvent[], firstHalfEnd: number, secondHalfEnd: number): void {
+  const toSeconds = (event: MatchEvent) => (event.minute || 0) * 60 + (event.second || 0);
+  const setSeconds = (event: MatchEvent, total: number) => {
+    event.minute = Math.floor(total / 60);
+    event.second = total % 60;
+  };
+
+  const halftimeIndex = events.findIndex(event => event.type === 'halftime');
+  if (halftimeIndex >= 0) {
+    let cursor = 1;
+    for (let i = 0; i < halftimeIndex; i++) {
+      const maxBeforeWhistle = Math.max(cursor, firstHalfEnd - 1);
+      const next = Math.min(Math.max(toSeconds(events[i]), cursor), maxBeforeWhistle);
+      setSeconds(events[i], next);
+      cursor = next;
+    }
+    setSeconds(events[halftimeIndex], firstHalfEnd);
+    cursor = firstHalfEnd;
+    const secondKickoff = events.findIndex((event, index) => index > halftimeIndex && event.type === 'kickoff');
+    if (secondKickoff >= 0) {
+      setSeconds(events[secondKickoff], firstHalfEnd + 1);
+      cursor = firstHalfEnd + 1;
+    }
+    for (let i = halftimeIndex + 1; i < events.length; i++) {
+      if (i === secondKickoff) continue;
+      const event = events[i];
+      const current = toSeconds(event);
+      if (event.type === 'extra_time_start' || event.type === 'penalty_shootout_start') break;
+      const next = Math.max(cursor, Math.min(current, secondHalfEnd - 1));
+      setSeconds(event, next);
+      cursor = next;
+    }
+  }
+
+  const extraStart = events.findIndex(event => event.type === 'extra_time_start');
+  const extraHalf = events.findIndex(event => event.type === 'extra_time_half');
+  const extraEnd = events.findIndex(event => event.type === 'extra_time_end');
+  if (extraStart >= 0) {
+    setSeconds(events[extraStart], secondHalfEnd);
+    let cursor = secondHalfEnd;
+    const end = extraHalf >= 0 ? extraHalf : extraEnd >= 0 ? extraEnd : events.length;
+    for (let i = extraStart + 1; i < end; i++) {
+      const next = Math.max(cursor, Math.min(toSeconds(events[i]), 105 * 60 - 1));
+      setSeconds(events[i], next);
+      cursor = next;
+    }
+    if (extraHalf >= 0) {
+      setSeconds(events[extraHalf], 105 * 60);
+      cursor = 105 * 60;
+    }
+    if (extraEnd >= 0) {
+      for (let i = extraHalf >= 0 ? extraHalf + 1 : extraStart + 1; i < extraEnd; i++) {
+        const next = Math.max(cursor, Math.min(toSeconds(events[i]), 120 * 60 - 1));
+        setSeconds(events[i], next);
+        cursor = next;
+      }
+      setSeconds(events[extraEnd], 120 * 60);
+    }
+  }
+
+  const shootoutStart = events.findIndex(event => event.type === 'penalty_shootout_start');
+  if (shootoutStart >= 0) {
+    let cursor = extraEnd >= 0 ? toSeconds(events[extraEnd]) : secondHalfEnd;
+    for (let i = shootoutStart; i < events.length; i++) {
+      if (events[i].type === 'fulltime') continue;
+      const next = Math.max(cursor, toSeconds(events[i]));
+      setSeconds(events[i], next);
+      cursor = next;
+    }
+  }
+
+  let previous = 0;
+  for (const event of events) {
+    const current = toSeconds(event);
+    const next = Math.max(previous, current);
+    setSeconds(event, next);
+    previous = next;
+  }
+}
+
 function createPrng(seed: number) {
   let s = seed >>> 0;
   return function () {
@@ -822,6 +902,8 @@ export function simulateMatch(
 
   // Monotonically increasing match clock generator (Requirement 8)
   let currentTotalSeconds = 1; // 00:01 Kickoff
+  const firstHalfEnd = 2700 + 60 + Math.floor(rand() * 180);
+  const secondHalfEnd = 5400 + 60 + Math.floor(rand() * 300);
 
   // 1. First Half Kickoff (00:01)
   const homeKicker = pick(homeAtts.length > 0 ? homeAtts : homeStarters);
@@ -856,15 +938,15 @@ export function simulateMatch(
   let isCounterAttacking = false;
 
   // Simulate 90 minutes (up to 5350 seconds)
-  while (currentTotalSeconds < 5350) {
+  while (currentTotalSeconds < secondHalfEnd) {
     // Half Time check at 45:00 (2700s)
-    if (currentTotalSeconds >= 2700 && !halfTimeWhistled) {
+    if (currentTotalSeconds >= firstHalfEnd && !halfTimeWhistled) {
       halfTimeWhistled = true;
-      currentTotalSeconds = 2700; // Exact 45:00
+      currentTotalSeconds = firstHalfEnd;
 
       pushEvent({
-        minute: 45,
-        second: 0,
+        minute: Math.floor(firstHalfEnd / 60),
+        second: firstHalfEnd % 60,
         type: 'halftime',
         team: 'home',
         playerId: homeKicker.player.id,
@@ -879,13 +961,13 @@ export function simulateMatch(
         momentum,
       });
 
-      // Second half kickoff at 45:01 (2701s)
-      currentTotalSeconds = 2701;
+      // Second-half kickoff follows the actual first-half whistle.
+      currentTotalSeconds = firstHalfEnd + 1;
       const shAwayKicker = pick(awayAtts.length > 0 ? awayAtts : awayStarters);
       const shAwayMidRec = pick(awayMids.length > 0 ? awayMids : awayStarters);
       pushEvent({
-        minute: 45,
-        second: 1,
+        minute: Math.floor(currentTotalSeconds / 60),
+        second: currentTotalSeconds % 60,
         type: 'kickoff',
         team: 'away',
         playerId: shAwayKicker.player.id,
@@ -1456,6 +1538,9 @@ export function simulateMatch(
     currentTotalSeconds += Math.floor(rand() * 45) + 45;
   }
 
+  // Repair the authoritative event timeline before adding extra time/shootout events.
+  normalizeEventTimeline(events, firstHalfEnd, secondHalfEnd);
+
   // Knockout Extra Time and Penalty Shootout Check (Requirement 17)
   let wentToExtraTime = false;
   let wentToPenalties = false;
@@ -1467,11 +1552,11 @@ export function simulateMatch(
   if ((isKnockout && homeScore === awayScore) || forcePenalties) {
     if (!forcePenalties) {
       wentToExtraTime = true;
-      currentTotalSeconds = 5400; // 90:00
+      currentTotalSeconds = secondHalfEnd;
 
     pushEvent({
-      minute: 90,
-      second: 0,
+      minute: Math.floor(secondHalfEnd / 60),
+      second: secondHalfEnd % 60,
       type: 'extra_time_start',
       team: 'home',
       playerId: homeKicker.player.id,
@@ -1884,10 +1969,10 @@ export function simulateMatch(
     winnerManagerId = homeScore > awayScore ? homeManager.id : awayManager.id;
   }
 
-  // Final Whistle at 90:00 (or after shootout)
+  // Final Whistle at the actual second-half/extra-time/shootout end.
   pushEvent({
-    minute: wentToExtraTime ? 122 : 90,
-    second: 0,
+    minute: wentToExtraTime ? (wentToPenalties ? 122 : 120) : Math.floor(secondHalfEnd / 60),
+    second: wentToExtraTime ? 0 : secondHalfEnd % 60,
     type: 'fulltime',
     team: 'home',
     playerId: homeKicker.player.id,
@@ -1903,6 +1988,17 @@ export function simulateMatch(
     ),
     momentum,
   });
+
+  // Final timeline safety check: never allow a decreasing timestamp in production.
+  for (let i = 1; i < events.length; i++) {
+    const prev = events[i - 1].minute * 60 + (events[i - 1].second || 0);
+    const current = events[i].minute * 60 + (events[i].second || 0);
+    if (current < prev) {
+      console.warn('[simulation] non-monotonic event timeline repaired', { index: i, prev, current });
+      events[i].minute = events[i - 1].minute;
+      events[i].second = events[i - 1].second;
+    }
+  }
 
   // Calculate team possession
   const totalPasses = Math.max(1, homeStats.passes + awayStats.passes);
