@@ -1381,7 +1381,8 @@ function simulateBotBids(room: GameRoom) {
     if (room.auction.highestBidderId === bot.id) continue;
 
     // Check if bot can afford
-    const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + 2 : room.auction.currentBid;
+    const bidStep = room.auction.currentBid >= 250 ? 10 : room.auction.currentBid >= 100 ? 5 : 2;
+    const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + bidStep : room.auction.currentBid;
     if (bot.budget < minNextBid) continue;
 
     // Formation slots are flexible, but category limits still protect the squad shape.
@@ -3044,10 +3045,10 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, `Your ${currentPl.category} quota is full for ${manager.formation}.`);
             return;
           }
-          let secretMap = blindSecretBids.get(roomCode);
+          let secretMap = blindSecretBids.get(room.code);
           if (!secretMap) {
             secretMap = {};
-            blindSecretBids.set(roomCode, secretMap);
+            blindSecretBids.set(room.code, secretMap);
           }
           secretMap[actorId] = bidAmount;
 
