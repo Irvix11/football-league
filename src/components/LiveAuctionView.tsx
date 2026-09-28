@@ -634,31 +634,6 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
             </div>
           </div>
 
-          {/* Current auction lot — kept beside the pitch so mobile users can always see who is being auctioned */}
-          {player && (
-            <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30 shadow-lg">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black">NOW AUCTIONING</div>
-                  <div className="text-base font-display font-black text-white truncate">{player.name}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    {isBlind && !auction.isSold ? 'Identity hidden · 2 attributes revealed' : (player.position + ' · ' + player.overall + ' OVR · ' + player.club)}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">CURRENT</div>
-                  <div className="font-mono font-black text-emerald-400">£{auction.currentBid}M</div>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[9px] uppercase tracking-wider font-black">
-                <span className="text-emerald-400">{categoryLabel}</span>
-                {!isBlind && (
-                  <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} squads complete</span>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Mini Pitch with authentic player markers */}
           <PitchGraphic aspectRatio="vertical" className="p-3 shadow-xl">
             {formationConfig.slots.map((slot, index) => {
