@@ -3179,10 +3179,21 @@ wss.on('connection', (ws) => {
               return;
             }
 
-            const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
-            Object.assign(fix, result);
-            room.fixtures = round.fixtures;
-            broadcastRoom(room.code);
+            const lockKey = `${room.code}:knockout:${fix.id}`;
+            if (matchSimulationLocks.has(lockKey)) {
+              sendSocketError(ws, 'This match is already being simulated. Please wait.');
+              return;
+            }
+            matchSimulationLocks.add(lockKey);
+            try {
+              const result = simulateMatch(homeMgr, awayMgr, fix.id, fix.matchday, undefined, true, round.roundName);
+              Object.assign(fix, result);
+              room.fixtures = round.fixtures;
+              await saveRoomSnapshot(room);
+              broadcastRoom(room.code);
+            } finally {
+              matchSimulationLocks.delete(lockKey);
+            }
           } catch (error: any) {
             console.error('[WS] RUN_KNOCKOUT_MATCH failed:', error);
             sendSocketError(ws, 'Failed to simulate knockout match. Please retry.');
