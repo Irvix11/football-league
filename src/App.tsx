@@ -103,12 +103,12 @@ function AppContent() {
     savedSession,
   } = useGameSocket();
 
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [, forceSoundUpdate] = useState(0);
   const [showKickPanel, setShowKickPanel] = useState(false);
 
   const toggleSound = () => {
-    sound.enabled = !soundEnabled;
-    setSoundEnabled(!soundEnabled);
+    sound.enabled = !sound.enabled;
+    forceSoundUpdate(value => value + 1);
   };
 
   const currentManager = room?.managers.find((m) => m.id === managerId);
@@ -206,10 +206,10 @@ function AppContent() {
       {/* Global Audio Toggle (Floating in bottom-right corner) */}
       <button
         onClick={toggleSound}
-        title={soundEnabled ? 'Mute Audio' : 'Enable Audio'}
-        className="fixed bottom-4 right-4 z-40 p-2.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-xl transition-all"
+        title={sound.enabled ? 'Mute Audio' : 'Enable Audio'}
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+80px)] right-4 z-40 p-2.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-xl transition-all"
       >
-        {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
+        {sound.enabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
       </button>
 
       {/* Primary Phase Router */}
