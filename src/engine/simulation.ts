@@ -1456,48 +1456,6 @@ export function simulateMatch(
     currentTotalSeconds += Math.floor(rand() * 45) + 45;
   }
 
-  // League matches can finish level. Give close, low-margin matches a modest late
-  // equaliser chance instead of systematically forcing a winner.
-  if (!isKnockout && homeScore !== awayScore && Math.abs(homeScore - awayScore) === 1) {
-    const balance = Math.exp(-Math.abs(diff) / 10);
-    const equaliserChance = Math.max(0.12, Math.min(0.30, 0.15 + balance * 0.12));
-    if (rand() < equaliserChance) {
-      const trailingIsHome = homeScore < awayScore;
-      if (trailingIsHome) homeScore++; else awayScore++;
-      const equaliserTeam = trailingIsHome ? homeManager : awayManager;
-      const equaliserStarters = trailingIsHome ? homeStarters : awayStarters;
-      const equaliserAttackers = trailingIsHome ? homeAtts : awayAtts;
-      const equaliserMids = trailingIsHome ? homeMids : awayMids;
-      const scorerPool = [...equaliserAttackers, ...equaliserMids, ...equaliserStarters]
-        .filter((p, index, arr) => arr.findIndex(x => x.player.id === p.player.id) === index);
-      const equaliserScorer = pick(scorerPool, 'late equaliser');
-      const stat = playerStatsMap.get(equaliserScorer.player.id);
-      if (stat) {
-        stat.goals++;
-        stat.shots++;
-        stat.rating += 1.0;
-      }
-      pushEvent({
-        minute: 88 + Math.floor(rand() * 3),
-        second: Math.floor(rand() * 60),
-        type: 'goal',
-        team: trailingIsHome ? 'home' : 'away',
-        playerId: equaliserScorer.player.id,
-        playerName: equaliserScorer.player.name,
-        playerNumber: getPlayerNumber(equaliserStarters, equaliserScorer.player.id),
-        commentary: `⚽ LATE EQUALISER! ${equaliserTeam.name} refuse to lose their grip on the match. (${homeScore} - ${awayScore})`,
-        ballCoordinates: { x: trailingIsHome ? 98 : 2, y: 50 },
-        ballStartCoordinates: { x: trailingIsHome ? 84 : 16, y: 50 },
-        playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
-          homeTactics, awayTactics, trailingIsHome ? 98 : 2, 50, trailingIsHome ? 'home' : 'away',
-          equaliserScorer.player.id, undefined, 'celebrating'
-        ),
-        momentum: 0,
-      });
-    }
-  }
-
   // Knockout Extra Time and Penalty Shootout Check (Requirement 17)
   let wentToExtraTime = false;
   let wentToPenalties = false;
