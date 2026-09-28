@@ -6,6 +6,7 @@ export interface SavedSession {
   roomCode: string;
   managerId: string;
   managerName: string;
+  reconnectToken?: string;
 }
 
 function getGameServerBaseUrl(): string {
@@ -95,7 +96,7 @@ export function useGameSocket() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const { type, room: newRoom, managerId: assignedId, message, amount } = data;
+        const { type, room: newRoom, managerId: assignedId, reconnectToken, message, amount } = data;
 
         switch (type) {
           case 'KICKED':
@@ -131,6 +132,7 @@ export function useGameSocket() {
                 roomCode: newRoom.code,
                 managerId: assignedId,
                 managerName: myManager.name,
+                reconnectToken,
               });
             }
             break;
@@ -160,7 +162,7 @@ export function useGameSocket() {
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
               const saved = getSavedSession();
               if (saved) {
-                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}?managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
+                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
@@ -177,6 +179,7 @@ export function useGameSocket() {
                             roomCode: saved.roomCode,
                             managerName: saved.managerName,
                             reconnectId: saved.managerId,
+                            reconnectToken: saved.reconnectToken,
                           }
                         }));
                       }
@@ -240,7 +243,7 @@ export function useGameSocket() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}?managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' });
+        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' });
         if (!response.ok) return;
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
@@ -308,7 +311,7 @@ export function useGameSocket() {
     const roomCode = session.roomCode.trim().toUpperCase();
     saveSession(session);
 
-      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}?managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
+      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
@@ -324,6 +327,7 @@ export function useGameSocket() {
             roomCode,
             managerName: session.managerName,
             reconnectId: session.managerId,
+            reconnectToken: session.reconnectToken,
           });
         } else {
           setErrorMessage('Connecting to game server...');
