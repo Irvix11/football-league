@@ -761,8 +761,8 @@ export function simulateMatch(
 
   const homeOvr = calculateTeamOverall(homeManager.formation, homeManager.squad);
   const awayOvr = calculateTeamOverall(awayManager.formation, awayManager.squad);
-  const homePower = calculateTeamPower(homeManager);
-  const awayPower = calculateTeamPower(awayManager);
+  let homePower = calculateTeamPower(homeManager);
+  let awayPower = calculateTeamPower(awayManager);
 
   // Home advantage affects possession, chance creation and defensive confidence,
   // rather than simply adding a large amount to player ratings.
@@ -936,7 +936,7 @@ export function simulateMatch(
     ballCoordinates: { x: 50, y: 50 },
     ballStartCoordinates: { x: 50, y: 50 },
     playerCoordinates: generate22PlayerCoordinates(
-      homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+      homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
       homeTactics, awayTactics, 50, 50, 'home', homeKicker.player.id, homeMidReceiver.player.id, 'passing'
     ),
     momentum,
@@ -966,7 +966,7 @@ export function simulateMatch(
         ballCoordinates: { x: 50, y: 50 },
         ballStartCoordinates: { x: 50, y: 50 },
         playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
           homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
         ),
         momentum,
@@ -989,7 +989,7 @@ export function simulateMatch(
         ballCoordinates: { x: 50, y: 50 },
         ballStartCoordinates: { x: 50, y: 50 },
         playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
           homeTactics, awayTactics, 50, 50, 'away', shAwayKicker.player.id, shAwayMidRec.player.id, 'passing'
         ),
         momentum,
@@ -1073,7 +1073,7 @@ export function simulateMatch(
       ballCoordinates: { x: Number(newBallX.toFixed(1)), y: Number(newBallY.toFixed(1)) },
       ballStartCoordinates: { x: Number(startX.toFixed(1)), y: Number(startY.toFixed(1)) },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, newBallX, newBallY, currentPossession, passer.player.id, receiver.player.id, 'passing'
       ),
       momentum,
@@ -1166,6 +1166,15 @@ export function simulateMatch(
             defStat.redCard = true;
             defStats.redCards++;
             sentOffIds.add(defender.player.id);
+            homePower = calculateTeamPower(homeManager);
+            awayPower = calculateTeamPower(awayManager);
+            const affectedTeamIsHome = !isHome;
+            const missingMultiplier = 0.90;
+            if (affectedTeamIsHome) {
+              homePower = { ...homePower, attack: homePower.attack * missingMultiplier, midfield: homePower.midfield * missingMultiplier, defense: homePower.defense * missingMultiplier, overall: homePower.overall * missingMultiplier };
+            } else {
+              awayPower = { ...awayPower, attack: awayPower.attack * missingMultiplier, midfield: awayPower.midfield * missingMultiplier, defense: awayPower.defense * missingMultiplier, overall: awayPower.overall * missingMultiplier };
+            }
             pushEvent({
               minute: actionMin,
               second: actionSec,
@@ -1177,7 +1186,7 @@ export function simulateMatch(
               ballCoordinates: { x: ballX, y: ballY },
               ballStartCoordinates: { x: ballX, y: ballY },
               playerCoordinates: generate22PlayerCoordinates(
-                homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+                homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
                 homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
               ),
               momentum: isHome ? momentum - 5 : momentum + 5,
@@ -1195,7 +1204,7 @@ export function simulateMatch(
             ballCoordinates: { x: ballX, y: ballY },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
             ),
             momentum: isHome ? momentum + 3 : momentum - 3,
@@ -1213,7 +1222,7 @@ export function simulateMatch(
             ballCoordinates: { x: ballX, y: ballY },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
             ),
             momentum,
@@ -1243,7 +1252,7 @@ export function simulateMatch(
           ballCoordinates: { x: ballX, y: ballY },
           ballStartCoordinates: { x: ballX, y: ballY },
           playerCoordinates: generate22PlayerCoordinates(
-            homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+            homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
             homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
           ),
           momentum: isHome ? momentum - 5 : momentum + 5,
@@ -1281,7 +1290,7 @@ export function simulateMatch(
         ballCoordinates: { x: crossTargetX, y: crossTargetY },
         ballStartCoordinates: { x: ballX, y: ballY },
         playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
           homeTactics, awayTactics, crossTargetX, crossTargetY, currentPossession, winger.player.id, striker.player.id, 'passing'
         ),
         momentum: isHome ? momentum + 6 : momentum - 6,
@@ -1331,7 +1340,7 @@ export function simulateMatch(
           ballCoordinates: { x: goalNetX, y: goalNetY },
           ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
           playerCoordinates: generate22PlayerCoordinates(
-            homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+            homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
             homeTactics, awayTactics, goalNetX, goalNetY, currentPossession, striker.player.id, defGK.player.id, 'celebrating'
           ),
           momentum: isHome ? Math.min(100, momentum + 25) : Math.max(-100, momentum - 25),
@@ -1359,7 +1368,7 @@ export function simulateMatch(
             ballCoordinates: { x: isHome ? 98 : 2, y: rand() < 0.5 ? 4 : 96 },
             ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, isHome ? 98 : 2, 50, currentPossession, defGK.player.id, undefined, 'diving'
             ),
             momentum,
@@ -1377,7 +1386,7 @@ export function simulateMatch(
             ballCoordinates: { x: isHome ? 99 : 1, y: rand() < 0.5 ? 26 : 74 },
             ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, isHome ? 95 : 5, 50, currentPossession, striker.player.id, defGK.player.id, 'shooting'
             ),
             momentum,
@@ -1434,7 +1443,7 @@ export function simulateMatch(
           ballCoordinates: { x: targetGoalX, y: rand() < 0.5 ? 24 : 76 },
           ballStartCoordinates: { x: ballX, y: ballY },
           playerCoordinates: generate22PlayerCoordinates(
-            homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+            homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
             homeTactics, awayTactics, targetGoalX, 50, currentPossession, shooter.player.id, defGK.player.id, 'shooting'
           ),
           momentum: isHome ? momentum + 4 : momentum - 4,
@@ -1504,7 +1513,7 @@ export function simulateMatch(
             ballCoordinates: { x: goalNetX, y: goalNetY },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, goalNetX, goalNetY, currentPossession, shooter.player.id, defGK.player.id, 'celebrating'
             ),
             chanceQuality: Number((shotXg * 100).toFixed(1)),
@@ -1533,7 +1542,7 @@ export function simulateMatch(
             ballCoordinates: { x: isHome ? 95 : 5, y: 50 },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, isHome ? 95 : 5, 50, currentPossession, shooter.player.id, defGK.player.id, 'diving'
             ),
             momentum: isHome ? momentum + 4 : momentum - 4,
@@ -1576,7 +1585,7 @@ export function simulateMatch(
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
       ),
       momentum,
@@ -1623,7 +1632,7 @@ export function simulateMatch(
             ballCoordinates: { x: etX, y: etY },
             ballStartCoordinates: { x: 50, y: 50 },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, etX, etY, isEtHome ? 'home' : 'away', shooter.player.id, etDefenderGK.player.id, 'celebrating'
             ),
             momentum: isEtHome ? Math.min(100, momentum + 22) : Math.max(-100, momentum - 22),
@@ -1642,7 +1651,7 @@ export function simulateMatch(
             ballCoordinates: { x: etX, y: etY },
             ballStartCoordinates: { x: 50, y: 50 },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, etX, etY, isEtHome ? 'home' : 'away', shooter.player.id, etDefenderGK.player.id, 'shooting'
             ),
             momentum,
@@ -1666,7 +1675,7 @@ export function simulateMatch(
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, 50, 50, 'away', undefined, undefined, 'idle'
       ),
       momentum,
@@ -1689,7 +1698,7 @@ export function simulateMatch(
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
       ),
       momentum,
@@ -2003,7 +2012,7 @@ export function simulateMatch(
     ballCoordinates: { x: 50, y: 50 },
     ballStartCoordinates: { x: 50, y: 50 },
     playerCoordinates: generate22PlayerCoordinates(
-      homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+      homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
       homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
     ),
     momentum,
