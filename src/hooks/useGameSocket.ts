@@ -209,7 +209,7 @@ export function useGameSocket() {
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
               const saved = getSavedSession();
               if (saved) {
-                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}`, { cache: 'no-store' })
+                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}?managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
@@ -289,7 +289,7 @@ export function useGameSocket() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}`, { cache: 'no-store' });
+        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}?managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' });
         if (!response.ok) return;
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
@@ -357,7 +357,7 @@ export function useGameSocket() {
     const roomCode = session.roomCode.trim().toUpperCase();
     saveSession(session);
 
-      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}`, { cache: 'no-store' })
+      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}?managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
