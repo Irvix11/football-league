@@ -93,7 +93,8 @@ function calculateTeamPower(manager: Manager): TeamPower {
         a.def * 0.15 + a.phy * 0.20;
     }
 
-    return raw * (0.70 + fit * 0.003);
+    const conditionMultiplier = s.condition.state === 'INJURED' || s.condition.state === 'SUSPENDED' ? 0.85 : 1;
+    return raw * (0.70 + fit * 0.003) * conditionMultiplier;
   };
 
   const attack = average(attackPlayers.map(rolePerformance), manager.teamOverall || 70);
