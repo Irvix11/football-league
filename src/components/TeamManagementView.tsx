@@ -140,6 +140,14 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const formationConfig = FORMATIONS_CONFIG[currentManager.formation] || FORMATIONS_CONFIG['4-3-3'];
+
+  // Keep clear visual tactical bands so player labels never collide across lines.
+  const getPitchSlotY = (slot: any) => {
+    if (slot.category === 'GK') return Math.max(8, Math.min(14, slot.y));
+    if (slot.category === 'DEF') return Math.max(25, Math.min(32, slot.y));
+    if (slot.category === 'MID') return Math.max(48, Math.min(62, slot.y));
+    return Math.max(78, Math.min(90, slot.y));
+  };
   const validation = validateSquadFormation(currentManager.formation, currentManager.squad);
 
   const starters = currentManager.squad.filter((s) => s.isStarting);
@@ -459,7 +467,14 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                   <div className="font-mono text-sm font-black text-emerald-300">{currentManager.teamOverall}</div>
                 </div>
               </div>
-              <PitchGraphic aspectRatio="vertical" className="p-4 shadow-2xl ring-1 ring-white/5">
+              <div className="relative w-full">
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+                  <div className="rounded-2xl border border-emerald-300/30 bg-slate-950/90 px-3 py-1.5 text-center shadow-xl backdrop-blur-md">
+                    <div className="text-[8px] uppercase tracking-[0.18em] font-black text-slate-500">TEAM OVR</div>
+                    <div className="font-mono text-lg font-black leading-none text-emerald-300">{currentManager.teamOverall}</div>
+                  </div>
+                </div>
+                <PitchGraphic aspectRatio="vertical" className="p-4 shadow-2xl ring-1 ring-white/5">
                 {formationConfig.slots.map((slot) => {
                   const starter = currentManager.squad.find(
                     (s) => s.isStarting && s.startingSlotIndex === slot.index
@@ -475,7 +490,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                       className="absolute -translate-x-1/2 -translate-y-1/2 transition-all duration-300"
                       style={{
                         left: `${slot.x}%`,
-                        top: `${slot.y}%`,
+                        top: `${getPitchSlotY(slot)}%`,
                       }}
                     >
                       <PlayerPitchMarker
@@ -510,7 +525,8 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
                     </div>
                   );
                 })}
-              </PitchGraphic>
+                </PitchGraphic>
+              </div>
             </div>
 
             <div className="mt-3 w-full rounded-3xl bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-[#050a12] border border-white/10 p-4 shadow-2xl shadow-black/30 backdrop-blur-xl">
