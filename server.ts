@@ -36,6 +36,8 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
   // Only advertise HSTS when the public request actually arrived over HTTPS.
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
   if (process.env.NODE_ENV === 'production' && forwardedProto === 'https') {
@@ -182,6 +184,8 @@ const aiRequestWindows = new Map<string, { startedAt: number; count: number }>()
 const soloRequestWindows = new Map<string, { startedAt: number; count: number }>();
 const aiAdviceWindows = new Map<string, { startedAt: number; count: number }>();
 const apiRequestWindows = new Map<string, { startedAt: number; count: number }>();
+const wsConnectionCounts = new Map<string, number>();
+const MAX_WS_CONNECTIONS_PER_IP = 25;
 
 function allowRateLimit(map: Map<string, { startedAt: number; count: number }>, key: string, max: number, windowMs = 60_000) {
   const now = Date.now();
@@ -198,13 +202,6 @@ setInterval(() => {
   const cutoff = Date.now() - 60_000;
   for (const map of [aiRequestWindows, soloRequestWindows, aiAdviceWindows, apiRequestWindows]) {
     for (const [key, w] of map) if (w.startedAt < cutoff) map.delete(key);
-  }
-}, 60_000).unref();
-
-setInterval(() => {
-  const cutoff = Date.now() - 60_000;
-  for (const [key, w] of aiRequestWindows) {
-    if (w.startedAt < cutoff) aiRequestWindows.delete(key);
   }
 }, 60_000).unref();
 
@@ -2396,7 +2393,16 @@ function repairManagersForMatch(room: GameRoom) {
 }
 
 // WebSocket Connection Handler
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, request) => {
+  const forwardedFor = String(request.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const clientIp = forwardedFor || request.socket.remoteAddress || 'unknown';
+  const currentConnections = wsConnectionCounts.get(clientIp) || 0;
+  if (currentConnections >= MAX_WS_CONNECTIONS_PER_IP) {
+    ws.close(1013, 'Too many connections from this address');
+    return;
+  }
+  wsConnectionCounts.set(clientIp, currentConnections + 1);
+
   socketAlive.set(ws, true);
   ws.on('pong', () => socketAlive.set(ws, true));
 
@@ -3727,6 +3733,10 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    const remainingConnections = (wsConnectionCounts.get(clientIp) || 1) - 1;
+    if (remainingConnections <= 0) wsConnectionCounts.delete(clientIp);
+    else wsConnectionCounts.set(clientIp, remainingConnections);
+
     const info = socketToRoom.get(ws);
     if (info) {
       const sockets = roomSockets.get(info.roomCode);
@@ -3908,6 +3918,7 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
 
 // API Endpoints
 app.get('/api/room/:code', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const code = String(req.params.code || '').toUpperCase();
   const viewerId = String(req.query?.managerId || '');
   const reconnectToken = String(req.query?.reconnectToken || '');
@@ -3963,10 +3974,17 @@ app.get('/api/room/:code', async (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    rooms: rooms.size,
+    websocketClients: wss.clients.size,
+  });
 });
 
 app.get('/api/players', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
   if (!allowRateLimit(apiRequestWindows, clientKey, 60)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   const requestedEra = String(req.query?.era || 'Current');
@@ -4053,6 +4071,36 @@ async function startServer() {
 export { app };
 export default server;
 
+let shuttingDown = false;
+
+async function gracefulShutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] received ${signal}; saving active rooms...`);
+
+  for (const room of rooms.values()) {
+    if (room.phase !== 'season_end') {
+      await saveRoomSnapshot(room).catch(() => undefined);
+    }
+  }
+
+  for (const timer of auctionIntervals.values()) clearInterval(timer);
+  auctionIntervals.clear();
+  for (const timer of phaseReadyTimers.values()) clearTimeout(timer);
+  phaseReadyTimers.clear();
+
+  for (const ws of wss.clients) {
+    try { ws.close(1001, 'Server shutting down'); } catch {}
+  }
+
+  await new Promise<void>(resolve => {
+    server.close(() => resolve());
+    setTimeout(resolve, 8000).unref();
+  });
+}
+
 if (!process.env.VERCEL) {
+  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
   startServer();
 }
