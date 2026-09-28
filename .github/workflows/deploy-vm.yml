@@ -53,6 +53,7 @@ jobs:
           npm install --include=dev
           npm run lint
           npm audit --audit-level=high
+          npm run smoke
           VITE_GAME_SERVER_URL=http://140.245.195.89 npm run build
 
           sudo tee /etc/systemd/system/football-league.service >/dev/null <<'UNIT'
