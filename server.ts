@@ -21,6 +21,7 @@ import {
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football.js';
+import { getBidStep, getMinNextBid } from './src/constants/auction.js';
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
@@ -1457,8 +1458,8 @@ function simulateBotBids(room: GameRoom) {
     if (room.auction.highestBidderId === bot.id) continue;
 
     // Check if bot can afford
-    const bidStep = room.auction.currentBid >= 250 ? 10 : room.auction.currentBid >= 100 ? 5 : 2;
-    const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + bidStep : room.auction.currentBid;
+    const bidStep = getBidStep(room.auction.currentBid);
+    const minNextBid = getMinNextBid(room.auction.currentBid, Boolean(room.auction.highestBidderId));
     if (bot.budget < minNextBid) continue;
 
     // Formation slots are flexible, but category limits still protect the squad shape.
@@ -3097,9 +3098,10 @@ wss.on('connection', (ws, request) => {
           // The increment is based on the current auction price, not the
           // submitted amount. This keeps client and server validation identical
           // around £100M/£250M thresholds.
-          const bidStep = room.auction.currentBid >= 250 ? 10 : room.auction.currentBid >= 100 ? 5 : 2;
-          if (room.auction.highestBidderId && bidAmount < room.auction.currentBid + bidStep) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${room.auction.currentBid + bidStep}M.` }));
+          const bidStep = getBidStep(room.auction.currentBid);
+          const minNextBid = getMinNextBid(room.auction.currentBid, Boolean(room.auction.highestBidderId));
+          if (room.auction.highestBidderId && bidAmount < minNextBid) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${minNextBid}M.` }));
             return;
           }
 
