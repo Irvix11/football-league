@@ -226,7 +226,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   })();
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#10251f_0%,#040812_42%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto select-none">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#10251f_0%,#040812_42%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto">
 
 
       {/* Top Bar: Live Auction status, User budget, Team metrics */}
