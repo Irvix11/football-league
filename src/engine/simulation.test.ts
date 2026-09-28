@@ -112,7 +112,7 @@ describe('simulation invariants', () => {
     const result = simulateMatch(home, away, 'shuffle', 1, 424242);
     const kickoff = (result.events || [])[0]!;
     const gk = home.squad.find(s => s.player.position === 'GK');
-    const gkMarker = kickoff.playerCoordinates.find(player => player.id === gk?.player.id);
+    const gkMarker = kickoff.playerCoordinates?.find(player => player.id === gk?.player.id);
     expect(kickoff.type).toBe('kickoff');
     expect(gkMarker?.number).toBe(gk ? 1 : gkMarker?.number);
   });
@@ -136,7 +136,7 @@ describe('simulation invariants', () => {
     const away = makeManager('away', 'Away', 11);
     const result = simulateMatch(home, away, 'red-card-invariant', 1, 987654321);
     const sentOff = new Set<string>();
-    for (const event of result.events) {
+    for (const event of (result.events || [])) {
       if (event.type === 'red_card' && event.playerId) sentOff.add(event.playerId);
       else if (event.playerId) expect(sentOff.has(event.playerId)).toBe(false);
     }
@@ -147,7 +147,7 @@ describe('simulation invariants', () => {
     const away = makeManager('away', 'Away', 11);
     const result = simulateMatch(home, away, 'forced-shootout', 1, 13579, true, 'Final', true);
     if (result.wentToPenalties) {
-      const kicks = result.events.filter(event => event.type === 'penalty_shootout_kick');
+      const kicks = (result.events || []).filter(event => event.type === 'penalty_shootout_kick');
       expect(kicks.length).toBeGreaterThan(0);
       for (const kick of kicks) {
         expect(kick.playerCoordinates).toHaveLength(22);
