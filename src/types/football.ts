@@ -24,6 +24,8 @@ export interface BlindStatClue {
 
 export interface Player {
   id: string;
+  /** Server-only reconnect credential hash; never sent to browsers. */
+  reconnectTokenHash?: string;
   name: string;
   club: string;
   league: string;
