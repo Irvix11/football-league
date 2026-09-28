@@ -281,6 +281,15 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     const nextIndex = currentEventIndex + 1;
     const nextEvent = events[nextIndex];
     if (nextEvent.type === 'goal' && sound.enabled) sound.playGoal();
+    if (nextEvent.type === 'penalty_shootout_start') {
+      if (sound.enabled) sound.playWhistle();
+      setCurrentEventIndex(nextIndex);
+      setPenaltyIndex(0);
+      setPenaltyRevealStage('walkup');
+      setShowPenaltyShootout(true);
+      setIsPlaying(false);
+      return;
+    }
     if (nextEvent.type === 'halftime') {
       if (sound.enabled) sound.playWhistle();
       setCurrentEventIndex(nextIndex);
@@ -369,7 +378,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       }
 
       // 4. Event completion check (Requirements 4, 5: Goal Pause Mechanic)
-      if (progress >= 1 && isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
+      if (progress >= 1 && isPlaying && !halfTimeOverlay && !fullTimeOverlay && !showPenaltyShootout) {
         // Did the active event just finish a GOAL?
         if (currentEvent?.type === 'goal') {
           // Goal overlay is visual-only. Do not pause the match timeline.
@@ -406,7 +415,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         advanceToNextEvent();
       }
 
-      if (isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
+      if (isPlaying && !halfTimeOverlay && !fullTimeOverlay && !showPenaltyShootout) {
         animationFrameRef.current = requestAnimationFrame(animateFrame);
       }
     };
@@ -423,7 +432,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     };
   }, [
     isPlaying, currentEventIndex, events, playbackSpeed, 
-    goalOverlay, halfTimeOverlay, fullTimeOverlay, getEventDuration,
+    goalOverlay, halfTimeOverlay, fullTimeOverlay, showPenaltyShootout, getEventDuration,
     fixture, advanceToNextEvent, onMatchComplete, currentScore, currentEvent
   ]);
 
@@ -1046,6 +1055,17 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
                       <button
                         type="button"
+                        onClick={() => {
+                          setPenaltyIndex(penaltySequence.length);
+                          setPenaltyRevealStage('result');
+                        }}
+                        className="w-full mt-2 py-2 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 font-display font-black text-[10px] uppercase tracking-wider"
+                      >
+                        SKIP SHOOTOUT
+                      </button>
+
+                      <button
+                        type="button"
                         disabled={penaltyRevealStage !== 'result'}
                         onClick={() => {
                           setPenaltyRevealStage('walkup');
@@ -1064,10 +1084,17 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                       </div>
                       <button
                         type="button"
-                        onClick={() => { setShowPenaltyShootout(false); setPenaltyRevealStage("walkup"); if (onMatchComplete) onMatchComplete(fixture.id); }}
+                        onClick={() => {
+                          setShowPenaltyShootout(false);
+                          setPenaltyRevealStage('walkup');
+                          const fulltimeIndex = events.findIndex(event => event.type === 'fulltime');
+                          setCurrentEventIndex(fulltimeIndex >= 0 ? fulltimeIndex : events.length - 1);
+                          setFullTimeOverlay(true);
+                          setIsPlaying(false);
+                        }}
                         className="mt-4 px-6 py-2.5 rounded-xl bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase"
                       >
-                        CONTINUE
+                        CONTINUE TO FULL TIME
                       </button>
                     </div>
                   )}
