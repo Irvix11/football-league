@@ -30,6 +30,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
 // Needed so req.ip is the real client IP behind Vercel/Render proxies.
 app.set('trust proxy', 1);
 
@@ -167,6 +176,27 @@ const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
 const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
+const soloRequestWindows = new Map<string, { startedAt: number; count: number }>();
+const aiAdviceWindows = new Map<string, { startedAt: number; count: number }>();
+const apiRequestWindows = new Map<string, { startedAt: number; count: number }>();
+
+function allowRateLimit(map: Map<string, { startedAt: number; count: number }>, key: string, max: number, windowMs = 60_000) {
+  const now = Date.now();
+  const current = map.get(key);
+  if (!current || now - current.startedAt >= windowMs) {
+    map.set(key, { startedAt: now, count: 1 });
+    return true;
+  }
+  current.count++;
+  return current.count <= max;
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - 60_000;
+  for (const map of [aiRequestWindows, soloRequestWindows, aiAdviceWindows, apiRequestWindows]) {
+    for (const [key, w] of map) if (w.startedAt < cutoff) map.delete(key);
+  }
+}, 60_000).unref();
 
 setInterval(() => {
   const cutoff = Date.now() - 60_000;
@@ -3105,13 +3135,17 @@ wss.on('connection', (ws) => {
               sendSocketError(ws, 'Knockout phase is not active for this manager session.');
               return;
             }
-            const { room } = auth;
+            const { room, session } = auth;
             const stage = room.knockoutStage;
             if (!stage) { sendSocketError(ws, 'Knockout stage is unavailable.'); return; }
             const round = stage.rounds[stage.rounds.length - 1];
             if (!round) { sendSocketError(ws, 'Knockout round is unavailable.'); return; }
             const fix = round.fixtures.find(f => f.id === fixtureId);
             if (!fix) { sendSocketError(ws, 'Fixture not found.'); return; }
+            if (session.managerId !== fix.homeManagerId && session.managerId !== fix.awayManagerId && !isRoomHost(room, session.managerId)) {
+              sendSocketError(ws, 'Only a fixture participant or the host can start this match.');
+              return;
+            }
             if (fix.played) { sendSocketError(ws, 'This knockout match has already been played.'); return; }
 
             const homeMgr = room.managers.find(m => m.id === fix.homeManagerId);
@@ -3159,6 +3193,10 @@ wss.on('connection', (ws) => {
               sendSocketError(ws, 'Fixture not found.');
               return;
             }
+            if (session.managerId !== fix.homeManagerId && session.managerId !== fix.awayManagerId && !isRoomHost(room, session.managerId)) {
+              sendSocketError(ws, 'Only a fixture participant or the host can complete this match.');
+              return;
+            }
             if (!fix.played) {
               sendSocketError(ws, 'The live match has not reached full-time yet.');
               return;
@@ -3181,7 +3219,11 @@ wss.on('connection', (ws) => {
             const { roomCode, matchday } = payload;
           const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'league') return;
-          const { room } = auth;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can run the matchday.');
+            return;
+          }
 
           if (room.transferWindowOpen) {
             sendSocketError(ws, 'Mid-season management window is open. Finish your squad review before playing the next match.');
@@ -3263,7 +3305,11 @@ wss.on('connection', (ws) => {
           const { roomCode, nextMatchday } = payload;
           const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'league') return;
-          const { room } = auth;
+          const { room, session } = auth;
+          if (!isRoomHost(room, session.managerId)) {
+            sendSocketError(ws, 'Only the host can advance the matchday.');
+            return;
+          }
 
           if (room.transferWindowOpen) {
             sendSocketError(ws, 'Finish the mid-season management window before continuing.');
@@ -3603,7 +3649,7 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     }
   } catch (error: any) {
     console.error('[REST] run-matchday failed:', error);
-    return res.status(500).json({ error: error?.message || 'Failed to simulate match.' });
+    return res.status(500).json({ error: 'Failed to simulate match.' });
   }
 });
 
@@ -3693,12 +3739,16 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
 // API Endpoints
 app.get('/api/room/:code', async (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
+  const viewerId = String(req.query?.managerId || '');
+  const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   let room = rooms.get(code);
   if (!room) {
     room = await loadRoomSnapshot(code) || undefined;
     if (room) rooms.set(code, room);
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
+  if (viewerId && !room.managers.some(m => m.id === viewerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
   // HTTP polling can be the first request after a serverless instance changes.
   // Resume absolute auction and phase-readiness clocks after a cold start.
   ensureAuctionTicker(room);
@@ -3756,6 +3806,8 @@ app.get('/api/players', (req, res) => {
 // Dedicated Solo Game endpoint (instantly generates 11-player squads and navigates to Team Management)
 app.post('/api/solo-game', (req, res) => {
   try {
+    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!allowRateLimit(soloRequestWindows, clientKey, 10)) return res.status(429).json({ error: 'Too many solo games created. Try again later.' });
     const { managerName, formation } = req.body || {};
     if (!managerName || !managerName.trim()) {
       return res.status(400).json({ error: 'Manager name is required' });
@@ -3769,7 +3821,7 @@ app.post('/api/solo-game', (req, res) => {
     });
   } catch (err: any) {
     console.error('Error creating solo game:', err);
-    res.status(500).json({ error: err.message || 'Failed to create solo game' });
+    res.status(500).json({ error: 'Failed to create solo game' });
   }
 });
 
@@ -3777,22 +3829,19 @@ app.post('/api/solo-game', (req, res) => {
 // Server-side AI endpoint. The API key never reaches the browser.
 app.post('/api/ai/advice', async (req, res) => {
   try {
-    const prompt = String(req.body?.prompt || '').trim();
+    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!allowRateLimit(aiAdviceWindows, clientKey, 20)) return res.status(429).json({ error: 'AI advice rate limit reached. Try again in a minute.' });
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 4000);
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
-
     const content = await callOpenRouter([
-      {
-        role: 'system',
-        content: 'You are the tactical assistant for Football Auction League. Give concise, practical football-management advice. Do not invent player data that is not supplied by the user.',
-      },
+      { role: 'system', content: 'You are the tactical assistant for Football Auction League. Give concise, practical football-management advice. Do not invent player data that is not supplied by the user.' },
       { role: 'user', content: prompt },
     ]);
-
-    if (!content) return res.status(502).json({ error: 'OpenRouter returned no assistant response' });
+    if (!content) return res.status(502).json({ error: 'AI request failed' });
     return res.json({ content });
   } catch (error: any) {
     console.error('[AI] OpenRouter error:', error?.message || error);
-    return res.status(500).json({ error: error?.message || 'AI request failed' });
+    return res.status(502).json({ error: 'AI request failed' });
   }
 });
 
