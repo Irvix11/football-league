@@ -31,6 +31,7 @@ jobs:
 
           APP=/var/www/football-league-app
           REPO=https://github.com/Irvix11/football-league.git
+          DOMAIN=footballleague.runs-on.dev
 
           if ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed "s/^v//" | cut -d. -f1)" -lt 24 ]; then
             curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
@@ -54,7 +55,7 @@ jobs:
           npm run lint
           npm audit --audit-level=high
           npm run smoke
-          VITE_GAME_SERVER_URL=https://footballauction.runs-on.dev npm run build
+          VITE_GAME_SERVER_URL=https://footballleague.runs-on.dev npm run build
 
           sudo tee /etc/systemd/system/football-league.service >/dev/null <<'UNIT'
           [Unit]
@@ -108,11 +109,27 @@ jobs:
           curl -fsS http://127.0.0.1:3000/api/health
           echo
 
+          # Install Certbot once. The certificate is issued on the VM so the
+          # Oracle-hosted origin terminates TLS itself; runs-on.dev only supplies DNS.
+          if ! command -v certbot >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y certbot python3-certbot-nginx
+          fi
+
+          # DNS must point at this VM before Let's Encrypt can validate the hostname.
+          resolved_ip="$(getent ahostsv4 "$DOMAIN" | awk 'NR==1 {print $1}')"
+          if [ "$resolved_ip" != "140.245.195.89" ]; then
+            echo "DNS for $DOMAIN is not pointing at this Oracle VM yet."
+            echo "Resolved: ${resolved_ip:-<none>}"
+            exit 1
+          fi
+
+          # Temporary HTTP-only Nginx config used for the ACME HTTP-01 challenge.
           sudo tee /etc/nginx/sites-available/football-league >/dev/null <<'NGINX'
           server {
               listen 80 default_server;
               listen [::]:80 default_server;
-              server_name footballauction.runs-on.dev _;
+              server_name footballleague.runs-on.dev _;
 
               location / {
                   proxy_pass http://127.0.0.1:3000;
@@ -133,9 +150,62 @@ jobs:
           sudo nginx -t
           sudo systemctl reload nginx
 
-          curl -fsS http://127.0.0.1/api/health
+          if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+            sudo certbot certonly --nginx               -d "$DOMAIN"               --non-interactive               --agree-tos               --register-unsafely-without-email
+          else
+            sudo certbot renew --quiet
+          fi
+
+          # Permanent HTTPS + WebSocket proxy configuration.
+          sudo tee /etc/nginx/sites-available/football-league >/dev/null <<'NGINX'
+          server {
+              listen 80 default_server;
+              listen [::]:80 default_server;
+              server_name footballleague.runs-on.dev _;
+
+              location /.well-known/acme-challenge/ {
+                  root /var/www/football-league-app;
+              }
+
+              location / {
+                  return 301 https://footballleague.runs-on.dev$request_uri;
+              }
+          }
+
+          server {
+              listen 443 ssl;
+              listen [::]:443 ssl;
+              server_name footballleague.runs-on.dev;
+
+              ssl_certificate /etc/letsencrypt/live/footballleague.runs-on.dev/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/footballleague.runs-on.dev/privkey.pem;
+              ssl_protocols TLSv1.2 TLSv1.3;
+              ssl_session_timeout 1d;
+              ssl_session_cache shared:SSL:10m;
+              ssl_session_tickets off;
+
+              location / {
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto https;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_read_timeout 86400;
+              }
+          }
+          NGINX
+
+          sudo nginx -t
+          sudo systemctl reload nginx
+
+          # Verify the public HTTPS origin from the VM itself.
+          curl -fsS https://$DOMAIN/api/health
           echo
-          echo "Deployment successful."
+
+          echo "Deployment successful: https://$DOMAIN"
           REMOTE
 
           rm -f ~/.ssh/deploy_key
