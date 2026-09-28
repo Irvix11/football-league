@@ -2814,6 +2814,7 @@ wss.on('connection', (ws) => {
           if (!auth || auth.room.phase !== 'formation_select') return;
           const { room, session } = auth;
           const managerId = session.managerId;
+           const actorId = managerId;
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
           const ready = new Set(room.phaseReadyIds || []);
