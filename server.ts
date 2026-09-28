@@ -3163,7 +3163,7 @@ wss.on('connection', (ws) => {
             broadcastRoom(room.code);
           } catch (error: any) {
             console.error('[WS] RUN_KNOCKOUT_MATCH failed:', error);
-            sendSocketError(ws, error?.message || 'Failed to simulate knockout match.');
+            sendSocketError(ws, 'Failed to simulate knockout match. Please retry.');
           }
           break;
         }
@@ -3210,7 +3210,7 @@ wss.on('connection', (ws) => {
             broadcastRoom(room.code);
           } catch (error: any) {
             console.error('[WS] COMPLETE_KNOCKOUT_MATCH failed:', error);
-            sendSocketError(ws, error?.message || 'Failed to continue the knockout round.');
+            sendSocketError(ws, 'Failed to continue the knockout round. Please retry.');
           }
           break;
         }
@@ -3298,7 +3298,7 @@ wss.on('connection', (ws) => {
           break;
           } catch (error: any) {
             console.error('[WS] RUN_MATCHDAY failed:', error);
-            sendSocketError(ws, error?.message || 'Failed to simulate the match.');
+            sendSocketError(ws, 'Failed to simulate the match. Please retry.');
           }
         }
 
@@ -3557,7 +3557,7 @@ wss.on('connection', (ws) => {
       }
     } catch (err: any) {
       console.error('WebSocket Error:', err);
-      sendSocketError(ws, err?.message || 'The game server hit an unexpected error. Please retry.');
+      sendSocketError(ws, 'The game server hit an unexpected error. Please retry.');
     }
   });
 
