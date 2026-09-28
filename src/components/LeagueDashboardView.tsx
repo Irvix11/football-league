@@ -365,7 +365,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
               <LiveMatchEngine
                 fixture={activeFixture}
                 userTeamId={managerId}
-                onMatchComplete={handleMatchComplete}
+                onMatchComplete={room.hostId === managerId ? handleMatchComplete : undefined}
               />
             ) : (
               /* PRE-MATCH ARENA PREVIEW */
