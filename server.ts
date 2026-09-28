@@ -61,6 +61,7 @@ const allowedWsOrigins = Array.from(new Set([
   'https://football-league-nine.vercel.app',
   'https://football-league-irvix1.vercel.app',
   'https://football-league-git-main-irvix1.vercel.app',
+  'https://footballauction.runs-on.dev',
 ]));
 
 app.use((req, res, next) => {
