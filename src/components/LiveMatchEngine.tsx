@@ -1258,7 +1258,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           ))}
 
           <button
-            onClick={() => forceSoundUpdate(v => v + 1); sound.enabled = !sound.enabled}
+            onClick={() => { sound.enabled = !sound.enabled; forceSoundUpdate(v => v + 1); }}
             className={`p-2 rounded-lg transition-colors cursor-pointer active:scale-95 ${
               sound.enabled ? 'text-emerald-400 bg-slate-900 border border-slate-800' : 'text-slate-500 bg-slate-950'
             }`}
