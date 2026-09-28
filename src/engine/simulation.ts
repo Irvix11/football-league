@@ -1693,8 +1693,6 @@ export function simulateMatch(
     });
 
     }
-    // PENALTY SHOOTOUT SIMULATION
-    const shootoutHomeGK = getAvailableGoalkeeper(shootoutHomeGK, homeStarters, sentOffIds);
     // PENALTY SHOOTOUT SIMULATION: five kicks each, then sudden death.
     if (forcePenalties || homeScore === awayScore) {
       const shootoutHomeGK = getAvailableGoalkeeper(homeGK, homeStarters, sentOffIds);
