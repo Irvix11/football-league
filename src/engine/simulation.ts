@@ -1693,7 +1693,9 @@ export function simulateMatch(
     });
 
     }
-    // PENALTY SHOOTOUT SIMULATION: five kicks each, then sudden death.
+    // PENALTY SHOOTOUT SIMULATION
+    const shootoutHomeGK = getAvailableGoalkeeper(shootoutHomeGK, homeStarters, sentOffIds);
+    const shootoutAwayGK = getAvailableGoalkeeper(shootoutAwayGK, awayStarters, sentOffIds);: five kicks each, then sudden death.
     if (forcePenalties || homeScore === awayScore) {
       wentToPenalties = true;
       penaltyShootout = [];
@@ -1777,7 +1779,7 @@ export function simulateMatch(
       ballCoordinates: { x: 88.5, y: 50 },
       ballStartCoordinates: { x: 88.5, y: 50 },
       momentum,
-      playerCoordinates: penaltyCoordinates('home', homeTakers[0].player.id, awayGK.player.id),
+      playerCoordinates: penaltyCoordinates('home', homeTakers[0].player.id, shootoutAwayGK.player.id),
     });
 
     // 5 standard rounds
@@ -1785,7 +1787,7 @@ export function simulateMatch(
       // Home kick
       const hTaker = homeTakers[(round - 1) % homeTakers.length];
       const hSho = penaltyAbility(hTaker);
-      const aGkReflex = goalkeeperQuality(awayGK);
+      const aGkReflex = goalkeeperQuality(shootoutAwayGK);
       const hSuccessRate = clamp(0.76 + (hSho - 80) * 0.0032 - (aGkReflex - 80) * 0.0028, 0.62, 0.91);
       const hRoll = rand();
       let hOutcome: 'goal' | 'saved' | 'missed' = 'goal';
@@ -1805,7 +1807,7 @@ export function simulateMatch(
         commentary: hOutcome === 'goal' 
           ? `[PENALTIES] Round ${round}: ${hTaker.player.name} steps up... SCORES! Buries it into the bottom corner!`
           : hOutcome === 'saved'
-          ? `[PENALTIES] Round ${round}: ${hTaker.player.name} shoots... SAVED! ${awayGK.player.name} guesses right and blocks!`
+          ? `[PENALTIES] Round ${round}: ${hTaker.player.name} shoots... SAVED! ${shootoutAwayGK.player.name} guesses right and blocks!`
           : `[PENALTIES] Round ${round}: ${hTaker.player.name} fires wide of the post!`,
       });
 
@@ -1818,7 +1820,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
         ballStartCoordinates: { x: 88.5, y: 50 },
-        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, awayGK.player.id),
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, shootoutAwayGK.player.id),
         momentum,
       });
 
@@ -1827,7 +1829,7 @@ export function simulateMatch(
       // Away kick
       const aTaker = awayTakers[(round - 1) % awayTakers.length];
       const aSho = penaltyAbility(aTaker);
-      const hGkReflex = goalkeeperQuality(homeGK);
+      const hGkReflex = goalkeeperQuality(shootoutHomeGK);
       const aSuccessRate = clamp(0.76 + (aSho - 80) * 0.0032 - (hGkReflex - 80) * 0.0028, 0.62, 0.91);
       const aRoll = rand();
       let aOutcome: 'goal' | 'saved' | 'missed' = 'goal';
@@ -1847,7 +1849,7 @@ export function simulateMatch(
         commentary: aOutcome === 'goal' 
           ? `[PENALTIES] Round ${round}: ${aTaker.player.name} steps up... SCORES! Coolly dispatched into the side-netting!`
           : aOutcome === 'saved'
-          ? `[PENALTIES] Round ${round}: ${aTaker.player.name} shoots... DENIED! Heroic save by ${homeGK.player.name}!`
+          ? `[PENALTIES] Round ${round}: ${aTaker.player.name} shoots... DENIED! Heroic save by ${shootoutHomeGK.player.name}!`
           : `[PENALTIES] Round ${round}: ${aTaker.player.name} strikes the crossbar! Missed!`,
       });
 
@@ -1860,7 +1862,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
-        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, homeGK.player.id),
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, shootoutHomeGK.player.id),
         momentum,
       });
       if (Math.abs(hPens - aPens) > (5 - round)) break;
@@ -1879,8 +1881,8 @@ export function simulateMatch(
 
       const hSho = penaltyAbility(hTaker);
       const aSho = penaltyAbility(aTaker);
-      const aGkReflex = goalkeeperQuality(awayGK);
-      const hGkReflex = goalkeeperQuality(homeGK);
+      const aGkReflex = goalkeeperQuality(shootoutAwayGK);
+      const hGkReflex = goalkeeperQuality(shootoutHomeGK);
 
       const hSuccessRate = clamp(0.74 + (hSho - 80) * 0.0028 - (aGkReflex - 80) * 0.0025, 0.62, 0.90);
       const aSuccessRate = clamp(0.74 + (aSho - 80) * 0.0028 - (hGkReflex - 80) * 0.0025, 0.62, 0.90);
@@ -1900,7 +1902,7 @@ export function simulateMatch(
         commentary: hOutcome === 'goal'
           ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} SCORES! Ice-cold from the spot.`
           : hOutcome === 'saved'
-            ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} is DENIED by ${awayGK.player.name}!`
+            ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} is DENIED by ${shootoutAwayGK.player.name}!`
             : `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} misses the target!`,
       });
 
@@ -1913,7 +1915,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
         ballStartCoordinates: { x: 88.5, y: 50 },
-        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, awayGK.player.id),
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, shootoutAwayGK.player.id),
         momentum,
       });
 
@@ -1934,7 +1936,7 @@ export function simulateMatch(
         commentary: aOutcome === 'goal'
           ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} SCORES! Pressure handled.`
           : aOutcome === 'saved'
-            ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} is SAVED by ${homeGK.player.name}!`
+            ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} is SAVED by ${shootoutHomeGK.player.name}!`
             : `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} misses!`,
       });
 
@@ -1947,7 +1949,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
-        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, homeGK.player.id),
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, shootoutHomeGK.player.id),
         momentum,
       });
 
@@ -1992,7 +1994,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 2].commentary,
         ballCoordinates: { x: 97, y: 49 },
         ballStartCoordinates: { x: 88.5, y: 50 },
-        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, awayGK.player.id),
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, shootoutAwayGK.player.id),
         momentum,
       });
 
@@ -2005,7 +2007,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
-        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, homeGK.player.id),
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, shootoutHomeGK.player.id),
         momentum,
       });
     }
