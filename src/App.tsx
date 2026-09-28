@@ -248,6 +248,7 @@ function AppContent() {
           managerId={managerId}
           onPlaceBid={placeBid}
           onSubmitBlindBid={submitBlindBid}
+          secretBidSubmitted={secretBidSubmitted}
           onMarkDone={markAuctionDone}
           onLeaveMatch={leaveLobby}
         />
