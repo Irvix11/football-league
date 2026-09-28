@@ -1,5 +1,6 @@
 import React from 'react';
-import { Player, Position } from '../types/football';
+import {
+  if (player.position === 'OFF') return null; Player, Position } from '../types/football';
 
 interface PlayerPitchMarkerProps {
   player?: Player | null;
