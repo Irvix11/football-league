@@ -84,6 +84,7 @@ function AppContent() {
     skipAuctionSolo,
     placeBid,
     submitBlindBid,
+    secretBidSubmitted,
     updateLineup,
     confirmTeam,
     runMatchday,
