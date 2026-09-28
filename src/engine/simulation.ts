@@ -1095,7 +1095,9 @@ export function simulateMatch(
 
     // ACTION A: Turnover / Tackle / Foul by Defender
     if (actionRoll < turnoverThreshold) {
-      const defender = pick(defDefs.length > 0 ? defDefs : defendingStarters);
+      const weightedDefenders = [...defDefs, ...defDefs, ...defendingStarters]
+        .filter((player, index, all) => all.findIndex(candidate => candidate.player.id === player.player.id) === index);
+      const defender = pick(weightedDefenders.length > 0 ? weightedDefenders : defendingStarters);
       const foulIntensity = clamp(
         0.13 +
         (defTactics.style === 'Aggressive' ? 0.12 : 0) +
@@ -1189,14 +1191,24 @@ export function simulateMatch(
           defStat.rating += 0.15;
         }
 
-        const tackleCommentary = defTactics.style === 'High Press'
-          ? `Gegenpressing success! ${defender.player.name} swarms ${receiver.player.name} and forces an immediate turnover!`
-          : `Superb timing! ${defender.player.name} steps in with a perfectly timed challenge to dispossess ${receiver.player.name}.`;
+        const isInterception = rand() < 0.32;
+        const tackleCommentary = isInterception
+          ? `Interception! ${defender.player.name} reads the pass and cuts out ${receiver.player.name}'s delivery.`
+          : defTactics.style === 'High Press'
+            ? `Gegenpressing success! ${defender.player.name} swarms ${receiver.player.name} and forces an immediate turnover!`
+            : `Superb timing! ${defender.player.name} steps in with a perfectly timed challenge to dispossess ${receiver.player.name}.`;
+
+        if (isInterception) {
+          if (defStat) {
+            defStat.interceptions += 1;
+            defStat.rating += 0.12;
+          }
+        }
 
         pushEvent({
           minute: actionMin,
           second: actionSec,
-          type: 'tackle',
+          type: isInterception ? 'interception' : 'tackle',
           team: isHome ? 'away' : 'home',
           playerId: defender.player.id,
           playerName: defender.player.name,
@@ -1326,7 +1338,6 @@ export function simulateMatch(
             momentum,
           });
         } else {
-          recordShot(atkStats, strikerStat, false, false);
           pushEvent({
             minute: finishMin,
             second: finishSec,
