@@ -3236,6 +3236,16 @@ wss.on('connection', (ws) => {
               sendSocketError(ws, 'The live match has not reached full-time yet.');
               return;
             }
+            if (!fix.winnerManagerId) {
+              sendSocketError(ws, 'This match has no recorded winner yet.');
+              return;
+            }
+
+            const currentRoundComplete = round.fixtures.length > 0 && round.fixtures.every(f => f.played);
+            if (!currentRoundComplete) {
+              sendSocketError(ws, 'The current knockout round is not complete yet.');
+              return;
+            }
 
             // Advance on the same authoritative WebSocket instance that owns the
             // completed fixture. This avoids stale cross-instance REST snapshots.
