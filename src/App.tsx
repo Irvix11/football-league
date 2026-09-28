@@ -138,10 +138,10 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen min-h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 pb-[env(safe-area-inset-bottom)]">
       {/* Global Error Banner */}
       {errorMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-rose-500 text-slate-950 font-bold text-xs shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
+        <div className="fixed top-[calc(env(safe-area-inset-top)+8px)] left-1/2 -translate-x-1/2 z-50 max-w-[92vw] px-4 py-2.5 rounded-xl bg-rose-500 text-slate-950 font-bold text-xs shadow-2xl flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-4">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
         </div>
@@ -153,7 +153,7 @@ function AppContent() {
           <button
             onClick={() => setShowKickPanel(true)}
             title="Host: remove a manager"
-            className="fixed top-4 right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-rose-500/30 text-rose-300 hover:bg-rose-950/50 hover:border-rose-400/60 shadow-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
+            className="fixed top-[calc(env(safe-area-inset-top)+72px)] right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-rose-500/30 text-rose-300 hover:bg-rose-950/50 hover:border-rose-400/60 shadow-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
           >
             <UserX className="w-4 h-4" />
             KICK
