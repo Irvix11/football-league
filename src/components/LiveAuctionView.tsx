@@ -61,12 +61,13 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     const sameLot = prevLotRef.current === lotId;
     const wasWinning = sameLot && prevBidderRef.current === managerId;
     const nowOutbid = wasWinning && auction.highestBidderId !== null && auction.highestBidderId !== managerId && !auction.isSold;
+    const bidChanged = auction.currentBid !== prevBidRef.current;
 
     prevLotRef.current = lotId;
     prevBidRef.current = auction.currentBid;
     prevBidderRef.current = auction.highestBidderId;
 
-    if (auction.currentBid !== prevBidRef.current) setBidUpdated(true);
+    if (bidChanged) setBidUpdated(true);
     if (nowOutbid) {
       setWasOutbid(true);
       sound.playWhistle();
