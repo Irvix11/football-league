@@ -360,7 +360,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
           </div>
 
           {activeFixture ? (
-            activeFixture.played ? (
+            (activeFixture.played || room.liveFixtureId === activeFixture.id) ? (
               /* LIVE 2D MATCH ENGINE: Renders broadcast pitch with compact scoreboard, possession, 22 players */
               <LiveMatchEngine
                 fixture={activeFixture}
