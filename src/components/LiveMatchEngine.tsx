@@ -38,7 +38,7 @@ interface InspectedPlayerState {
 function separatePlayerPositions(positions: LivePlayerPosition[]): LivePlayerPosition[] {
   const resolved = positions.map(p => ({ ...p }));
   const MIN_DIST = 6.0; // Minimum distance in % units (with pitch aspect ratio compensation)
-  const PASSES = 8;     // 8 iterative relaxation passes
+  const PASSES = 4;     // 8 iterative relaxation passes
 
   for (let pass = 0; pass < PASSES; pass++) {
     for (let i = 0; i < resolved.length; i++) {
@@ -83,7 +83,7 @@ function separatePlayerPositions(positions: LivePlayerPosition[]): LivePlayerPos
 
   // Anchor GKs to their boxes
   for (const p of resolved) {
-    if (p.number === 1) {
+    if (p.position === 'GK' || p.category === 'GK') {
       if (p.team === 'home') {
         p.x = Math.max(4.5, Math.min(13.0, p.x));
         p.y = Math.max(36.0, Math.min(64.0, p.y));
@@ -114,7 +114,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const [currentEventIndex, setCurrentEventIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1); // 1x, 2x, 4x
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [, forceSoundUpdate] = useState(0);
 
   // Overlays
   const [goalOverlay, setGoalOverlay] = useState<GoalOverlayState | null>(null);
@@ -405,13 +405,13 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           const nextEvent = events[nextIndex];
 
           if (nextEvent.type === 'goal') {
-            if (soundEnabled) sound.playGoal();
+            if (sound.enabled) sound.playGoal();
             setCurrentEventIndex(nextIndex);
             return;
           }
 
           if (nextEvent.type === 'halftime') {
-            if (soundEnabled) sound.playWhistle();
+            if (sound.enabled) sound.playWhistle();
             setCurrentEventIndex(nextIndex);
             setHalfTimeOverlay(true);
             setIsPlaying(false);
@@ -419,7 +419,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           }
 
           if (nextEvent.type === 'fulltime') {
-            if (soundEnabled) sound.playWhistle();
+            if (sound.enabled) sound.playWhistle();
             setCurrentEventIndex(nextIndex);
             if (fixture.wentToPenalties && penaltySequence.length > 0) {
               // Knockout shootouts should flow straight into the visual spot-kick
@@ -435,7 +435,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             return;
           }
 
-          if (soundEnabled) {
+          if (sound.enabled) {
             switch (nextEvent.type) {
               case 'pass':
               case 'carry':
@@ -492,7 +492,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   }, [
     isPlaying, currentEventIndex, events, playbackSpeed, 
     goalOverlay, halfTimeOverlay, fullTimeOverlay, getEventDuration,
-    fixture, soundEnabled, onMatchComplete, currentScore, currentEvent
+    fixture, sound.enabled, onMatchComplete, currentScore, currentEvent
   ]);
 
   const handleTogglePlay = () => {
@@ -536,7 +536,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const lastEv = events[lastIndex];
       const endSecs = (lastEv.minute || 90) * 60 + (lastEv.second || 0);
       setDisplaySeconds(endSecs);
-      if (soundEnabled) sound.playWhistle();
+      if (sound.enabled) sound.playWhistle();
       // Keep the match engine mounted at full-time. The CONTINUE button
       // below is the single action that advances the server-side competition.
     }
@@ -1258,13 +1258,13 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           ))}
 
           <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
+            onClick={() => forceSoundUpdate(v => v + 1); sound.enabled = !sound.enabled}
             className={`p-2 rounded-lg transition-colors cursor-pointer active:scale-95 ${
-              soundEnabled ? 'text-emerald-400 bg-slate-900 border border-slate-800' : 'text-slate-500 bg-slate-950'
+              sound.enabled ? 'text-emerald-400 bg-slate-900 border border-slate-800' : 'text-slate-500 bg-slate-950'
             }`}
-            title={soundEnabled ? 'Mute Audio' : 'Enable Audio'}
+            title={sound.enabled ? 'Mute Audio' : 'Enable Audio'}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {sound.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
         </div>
       </div>
