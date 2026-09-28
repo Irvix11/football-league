@@ -50,7 +50,7 @@ jobs:
           cd "$APP"
           git fetch origin main
           git reset --hard origin/main
-          npm ci
+          npm install --include=dev
           npm run build
 
           sudo tee /etc/systemd/system/football-league.service >/dev/null <<'UNIT'
