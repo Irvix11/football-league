@@ -12,14 +12,14 @@ function getGameServerBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
 
-  // Production runs frontend and realtime backend on the same Vercel origin.
-  // Keep VITE_GAME_SERVER_URL as an optional override for local/staging servers.
-  return window.location.origin;
+  // The realtime backend runs on Render in production. Keep the env override
+  // so local development or a future backend host can be selected explicitly.
+  return 'https://football-auction-league-server.onrender.com';
 }
 
 function getWebSocketBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
-  const base = configured || window.location.origin;
+  const base = configured || 'https://football-auction-league-server.onrender.com';
 
   const url = new URL(base);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
