@@ -64,7 +64,7 @@ jobs:
           WorkingDirectory=/var/www/football-league-app
           Environment=NODE_ENV=production
           Environment=PORT=3000
-          ExecStart=/usr/bin/npm run start
+          ExecStart=/usr/bin/node /var/www/football-league-app/node_modules/tsx/dist/cli.mjs server.ts
           Restart=always
           RestartSec=3
 
@@ -76,6 +76,16 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl enable football-league
           sudo systemctl restart football-league
+
+          sleep 3
+          if ! curl -fsS http://127.0.0.1:3000/api/health; then
+            echo "=== football-league service status ==="
+            sudo systemctl status football-league --no-pager || true
+            echo "=== football-league journal ==="
+            sudo journalctl -u football-league -n 120 --no-pager || true
+            exit 1
+          fi
+          echo
 
           sudo tee /etc/nginx/sites-available/football-league >/dev/null <<'NGINX'
           server {
@@ -102,7 +112,7 @@ jobs:
           sudo nginx -t
           sudo systemctl reload nginx
 
-          curl -fsS http://127.0.0.1:3000/api/health
+          curl -fsS http://127.0.0.1/api/health
           echo
           echo "Deployment successful."
           REMOTE
