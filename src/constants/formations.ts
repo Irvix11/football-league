@@ -378,7 +378,7 @@ export function calculatePositionalRatings(formation: Formation, squad: SquadPla
     // Condition penalty (Injured / Suspended / Tired)
     let conditionMultiplier = 1.0;
     if (starter.condition.state === 'INJURED' || starter.condition.state === 'SUSPENDED') {
-      conditionMultiplier = 0.5;
+      conditionMultiplier = 0.85;
     } else if (starter.condition.state === 'TIRED' || starter.condition.fatigue > 50) {
       conditionMultiplier = 0.9;
     }
