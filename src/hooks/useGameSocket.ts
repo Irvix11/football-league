@@ -73,6 +73,8 @@ export function useGameSocket() {
   const roomRef = useRef<GameRoom | null>(null);
   const intentionalCloseRef = useRef(false);
   const isSimulatingRef = useRef(false);
+  const simulatedFixtureIdRef = useRef<string | null>(null);
+  const simulationSafetyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     managerIdRef.current = managerId;
@@ -180,9 +182,17 @@ export function useGameSocket() {
 
           case 'ROOM_UPDATE': {
             const saved = getSavedSession();
-            setRoom(restoreViewerIdentity(newRoom, managerIdRef.current, saved?.managerName || null));
-            isSimulatingRef.current = false;
-            setIsSimulating(false);
+            setRoom(current => {
+              const next = restoreViewerIdentity(newRoom, managerIdRef.current, saved?.managerName || null);
+              if (isSimulatingRef.current && simulatedFixtureIdRef.current) {
+                const fixture = next.fixtures?.find(f => f.id === simulatedFixtureIdRef.current);
+                const completed = Boolean(fixture?.played);
+                const liveFixtureChanged = current?.liveFixtureId !== next.liveFixtureId &&
+                  next.liveFixtureId !== simulatedFixtureIdRef.current;
+                if (completed || liveFixtureChanged) clearSimulationState();
+              }
+              return next;
+            });
             break;
           }
 
@@ -193,8 +203,7 @@ export function useGameSocket() {
 
           case 'ERROR':
             if (isSimulatingRef.current) {
-              isSimulatingRef.current = false;
-              setIsSimulating(false);
+              clearSimulationState();
               setSimulationError(typeof message === 'string' ? message : 'Knockout match failed to start.');
             }
             // Reconnects can land on a different Vercel Function instance. Give the
@@ -268,7 +277,7 @@ export function useGameSocket() {
     };
 
     socketRef.current = ws;
-  }, [getSavedSession, saveSession]);
+  }, [clearSimulationState, getSavedSession, saveSession]);
 
   useEffect(() => {
     connect();
@@ -320,6 +329,16 @@ export function useGameSocket() {
     }, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [room?.code]);
+
+  const clearSimulationState = useCallback(() => {
+    if (simulationSafetyTimerRef.current !== null) {
+      window.clearTimeout(simulationSafetyTimerRef.current);
+      simulationSafetyTimerRef.current = null;
+    }
+    simulatedFixtureIdRef.current = null;
+    isSimulatingRef.current = false;
+    setIsSimulating(false);
+  }, []);
 
   // Actions
   const send = useCallback((type: string, payload: any) => {
@@ -526,7 +545,10 @@ export function useGameSocket() {
     }
     setSimulationError(null);
     isSimulatingRef.current = true;
+    simulatedFixtureIdRef.current = fixtureId;
     setIsSimulating(true);
+    if (simulationSafetyTimerRef.current !== null) window.clearTimeout(simulationSafetyTimerRef.current);
+    simulationSafetyTimerRef.current = window.setTimeout(clearSimulationState, 30000);
     send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId: currentManagerId, fixtureId });
   }, [room, managerId, send]);
   const completeKnockoutMatch = useCallback((fixtureId: string) => {
@@ -557,7 +579,11 @@ export function useGameSocket() {
     // different serverless instance with a stale room snapshot.
     setSimulationError(null);
     isSimulatingRef.current = true;
+    const fixture = room.fixtures.find(f => f.matchday === matchday && !f.played);
+    simulatedFixtureIdRef.current = fixture?.id || null;
     setIsSimulating(true);
+    if (simulationSafetyTimerRef.current !== null) window.clearTimeout(simulationSafetyTimerRef.current);
+    simulationSafetyTimerRef.current = window.setTimeout(clearSimulationState, 30000);
     sound.playWhistle();
     send('RUN_MATCHDAY', { roomCode: room.code, managerId: currentManagerId, matchday });
   }, [room, managerId, send]);
