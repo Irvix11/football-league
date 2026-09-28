@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020617"/><stop offset=".5" stop-color="#0b1220"/><stop offset="1" stop-color="#020617"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1a6"/><stop offset=".25" stop-color="#fbbf24"/><stop offset=".55" stop-color="#f59e0b"/><stop offset="1" stop-color="#fde68a"/></linearGradient>
+  <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".45" stop-color="#cbd5e1"/><stop offset="1" stop-color="#64748b"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#fbbf24" stop-opacity=".35"/><stop offset="1" stop-color="#fbbf24" stop-opacity="0"/></radialGradient>
+  <clipPath id="round"><rect x="12" y="12" width="488" height="488" rx="82"/></clipPath>
+  <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-opacity=".6"/></filter>
+</defs>
+<rect width="512" height="512" rx="96" fill="#020617"/>
+<g clip-path="url(#round)">
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="230" r="190" fill="url(#glow)"/>
+  <g opacity=".28" stroke="#94a3b8" stroke-width="3" fill="none">
+    <path d="M0 150h95v48h55v45h-55v48H0M512 150h-95v48h-55v45h55v48h95"/>
+    <path d="M72 512L205 318M440 512L307 318"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M164 181L180 98l55 45 21-79 21 79 55-45 16 83-50 30H214z" fill="url(#gold)" stroke="#fbbf24" stroke-width="5"/>
+    <path d="M164 181h184l-18 30H182z" fill="#b7790b" stroke="#fef3c7" stroke-width="3"/>
+    <circle cx="180" cy="98" r="8" fill="#fff1a6"/><circle cx="256" cy="64" r="8" fill="#fff1a6"/><circle cx="332" cy="98" r="8" fill="#fff1a6"/>
+  </g>
+  <g filter="url(#shadow)">
+    <circle cx="256" cy="236" r="104" fill="#0f172a" stroke="url(#silver)" stroke-width="8"/>
+    <path d="M256 153l27 38-10 45h-34l-10-45z" fill="#e2e8f0"/>
+    <path d="M229 236l-43 19 17 43 48 7 21-35-9-34z" fill="#cbd5e1"/>
+    <path d="M283 236l43 19-17 43-48 7-21-35 9-34z" fill="#94a3b8"/>
+    <path d="M203 298l25 45 28-8 21-35-48-7zM309 298l-25 45-28-8-21-35 48-7z" fill="#475569"/>
+    <path d="M186 255l-39 20 26 38 30-15-17-43zM326 255l39 20-26 38-30-15 17-43z" fill="#64748b"/>
+  </g>
+  <text x="256" y="389" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="58" font-weight="900" letter-spacing="-2" fill="url(#silver)" stroke="#020617" stroke-width="7" paint-order="stroke">FAL</text>
+  <text x="256" y="438" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-size="22" font-weight="900" letter-spacing="7" fill="url(#gold)">FOOTBALL AUCTION</text>
+  <text x="256" y="464" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="6" fill="#e2e8f0">LEAGUE</text>
+</g>
+<rect x="13" y="13" width="486" height="486" rx="81" fill="none" stroke="url(#gold)" stroke-width="7"/>
+</svg>
