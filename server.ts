@@ -3387,11 +3387,11 @@ wss.on('connection', (ws) => {
         // --- 15. TRANSFERS ---
         case 'PROPOSE_TRANSFER': {
           const { roomCode, offer } = payload;
-          const suppliedFromManagerId = resolveManagerId(rooms.get(String(roomCode || '').toUpperCase()) as GameRoom, offer?.fromManagerId);
-          const suppliedToManagerId = resolveManagerId(rooms.get(String(roomCode || '').toUpperCase()) as GameRoom, offer?.toManagerId);
-          const auth = authorizeSocket(ws, roomCode, suppliedFromManagerId || undefined);
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
+          const suppliedToManagerId = resolveManagerId(room, offer?.toManagerId);
+          const suppliedFromManagerId = session.managerId;
 
           if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
             sendSocketError(ws, 'Transfers are only available during the mid-season management window.');
