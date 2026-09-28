@@ -420,4 +420,6 @@ export interface GameRoom {
   awards: SeasonAwards | null;
   createdAt: number;
   updatedAt: number;
+  /** Server clock sample used to correct client timer skew. */
+  serverNow?: number;
 }
