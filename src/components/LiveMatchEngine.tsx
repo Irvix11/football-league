@@ -518,10 +518,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const clockMin = Math.floor(displaySeconds / 60);
   const clockSec = displaySeconds % 60;
   const formattedTime = `${String(clockMin).padStart(2, '0')}:${String(clockSec).padStart(2, '0')}`;
-  const clockLabel = fixture.wentToExtraTime && clockMin > 90 && !isFullTime ? `ET ${clockLabel}` : isFullTime ? `FT ${formattedTime}` : formattedTime;
-
   const isHalfTime = currentEvent?.type === 'halftime' || (clockMin === 45 && clockSec === 0 && halfTimeOverlay);
   const isFullTime = currentEvent?.type === 'fulltime' || currentEventIndex >= events.length - 1;
+  const clockLabel = fixture.wentToExtraTime && clockMin > 90 && !isFullTime ? `ET ${formattedTime}` : isFullTime ? `FT ${formattedTime}` : formattedTime;
 
   // Active ball carrier identification for glowing possession ring
   const activeCarrierId = useMemo(() => {
