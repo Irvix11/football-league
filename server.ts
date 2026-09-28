@@ -3457,6 +3457,7 @@ wss.on('connection', (ws, request) => {
               const completedThroughFive = room.fixtures.filter(item => item.matchday <= 5).every(item => item.played);
               if (completedThroughFive) {
                 console.info('[payload] room JSON bytes after matchday 5:', JSON.stringify(room).length);
+                console.info('[payload] sanitized room JSON bytes after matchday 5:', JSON.stringify(sanitizeRoomForViewer(room, room.hostId)).length);
               }
             }
             room.liveFixtureId = fix.id;
