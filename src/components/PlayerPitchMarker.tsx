@@ -61,7 +61,6 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
   onClick,
   className = '',
 }) => {
-  if (player?.position === 'OFF') return null;
   const isGK = positionLabel === 'GK' || player?.category === 'GK';
   const jerseyNumber = getTraditionalJerseyNumber(positionLabel, slotIndex);
 
