@@ -10,12 +10,17 @@ interface PhaseReadyTimerProps {
 
 export const PhaseReadyTimer: React.FC<PhaseReadyTimerProps> = ({ room, label, accent = 'amber' }) => {
   const [now, setNow] = useState(() => Date.now());
+  const [serverOffset, setServerOffset] = useState(() => (room.serverNow || Date.now()) - Date.now());
+
+  useEffect(() => {
+    if (room.serverNow) setServerOffset(room.serverNow - Date.now());
+  }, [room.serverNow]);
 
   useEffect(() => {
     if (!room.phaseReadyDeadline) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    const timer = window.setInterval(() => setNow(Date.now() + serverOffset), 250);
     return () => window.clearInterval(timer);
-  }, [room.phaseReadyDeadline]);
+  }, [room.phaseReadyDeadline, serverOffset]);
 
   if (!room.phaseReadyDeadline) return null;
 
