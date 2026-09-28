@@ -2767,10 +2767,12 @@ wss.on('connection', (ws) => {
 
         // --- 7. FORMATION SELECT ---
         case 'SELECT_FORMATION': {
-          const { roomCode, managerId, formation } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode, formation } = payload;
+          // The socket session is the source of truth for identity. Do not trust
+          // a stale managerId from the browser after a reconnect.
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
           if (room.phase !== 'formation_select') return;
 
           const supportedFormations = Object.keys(FORMATIONS_CONFIG) as Formation[];
@@ -2779,11 +2781,10 @@ wss.on('connection', (ws) => {
             return;
           }
 
+          const managerId = session.managerId;
           const manager = room.managers.find(m => m.id === managerId);
           if (manager) {
             manager.formation = formation as Formation;
-            // Formation selection happens before the squad exists, so changing it
-            // never carries over stale positional validation from another formation.
             manager.confirmedTeam = false;
             manager.squad = [];
             manager.teamOverall = 0;
@@ -2795,10 +2796,11 @@ wss.on('connection', (ws) => {
 
         // --- 8. FORMATION READY / BEGIN AUCTION ---
         case 'FORMATION_READY': {
-          const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'formation_select') return;
-          const { room } = auth;
+          const { room, session } = auth;
+          const managerId = session.managerId;
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
           const ready = new Set(room.phaseReadyIds || []);
