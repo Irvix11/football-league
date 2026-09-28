@@ -1120,10 +1120,13 @@ export function simulateMatch(
             defStat.redCard = true;
             defStats.redCards++;
             sentOffIds.add(defender.player.id);
+            if (defStat) defStat.minutes = actionMin;
             homePower = calculateTeamPower(homeManager);
             awayPower = calculateTeamPower(awayManager);
             const affectedTeamIsHome = !isHome;
-            const missingMultiplier = 0.90;
+            const missingMultiplier = Math.pow(0.90, [...sentOffIds].filter(id =>
+              (isHome ? awayStarters : homeStarters).some(player => player.player.id === id)
+            ).length);
             if (affectedTeamIsHome) {
               homePower = { ...homePower, attack: homePower.attack * missingMultiplier, midfield: homePower.midfield * missingMultiplier, defense: homePower.defense * missingMultiplier, overall: homePower.overall * missingMultiplier };
             } else {
@@ -1366,7 +1369,7 @@ export function simulateMatch(
         ...atkAtts,
         ...atkAtts,
         ...atkMids,
-        ...(isHome ? homeDefs : awayDefs).slice(0, 1),
+        ...(isHome ? homeDefs : awayDefs).filter(player => !sentOffIds.has(player.player.id)).slice(0, 1),
       ];
       const shooter = pick(
         chanceShooters.length > 0 ? chanceShooters : attackingStarters,
@@ -1563,7 +1566,7 @@ export function simulateMatch(
         const isEtHome = rand() < 0.5;
         const etAtk = isEtHome ? homePower : awayPower;
         const etDef = isEtHome ? awayPower : homePower;
-        const etAttackers = isEtHome ? homeAtts : awayAtts;
+        const etAttackers = (isEtHome ? homeAtts : awayAtts).filter(player => !sentOffIds.has(player.player.id));
         const etDefenderGK = isEtHome ? awayGK : homeGK;
         const shooter = pick(etAttackers.length ? etAttackers : (isEtHome ? homeStarters : awayStarters));
         const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
