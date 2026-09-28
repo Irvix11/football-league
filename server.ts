@@ -766,6 +766,12 @@ function removeManagerFromRoom(room: GameRoom, managerId: string) {
     // lot's starting price so the remaining managers can bid normally.
     room.auction.currentBid = room.auction.currentPlayer?.startingPrice || 0;
   }
+  if (room.auction?.forcedWinnerId === managerId) {
+    room.auction.forcedWinnerId = null;
+    room.auction.forcedWinnerName = null;
+    room.auction.forcedPurchasePrice = undefined;
+    room.auction.isForcedPurchase = false;
+  }
   room.leagueTable = room.leagueTable.filter(row => row.managerId !== managerId);
 
   // Drop unplayed fixtures involving the departed manager so nobody is
