@@ -87,14 +87,25 @@ jobs:
           sudo systemctl enable football-league
           sudo systemctl restart football-league
 
-          sleep 3
-          if ! curl -fsS http://127.0.0.1:3000/api/health; then
+          echo "Waiting for realtime server..."
+          health_ok=0
+          for attempt in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+              health_ok=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$health_ok" -ne 1 ]; then
             echo "=== football-league service status ==="
             sudo systemctl status football-league --no-pager || true
             echo "=== football-league journal ==="
             sudo journalctl -u football-league -n 120 --no-pager || true
             exit 1
           fi
+
+          curl -fsS http://127.0.0.1:3000/api/health
           echo
 
           sudo tee /etc/nginx/sites-available/football-league >/dev/null <<'NGINX'
