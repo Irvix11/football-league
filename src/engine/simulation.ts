@@ -40,11 +40,15 @@ function estimateShotXg(ballX: number, ballY: number, isHome: boolean, shooter: 
   const goalX = isHome ? 105 : 0;
   const pitchY = (ballY / 100) * 68;
   const distance = Math.hypot((goalX - (ballX / 100) * 105), pitchY - 34);
-  const anglePenalty = Math.min(0.38, Math.abs(pitchY - 34) / 34 * 0.30);
-  const boxBonus = distance <= 16 ? 0.025 : 0;
-  const shotQuality = shooter.player.attributes.sho * 0.0015 + shooter.player.attributes.dri * 0.00035;
-  const raw = 0.025 + 0.22 * Math.exp(-distance / 17) * (0.98 - anglePenalty) + boxBonus + shotQuality;
-  return clamp(raw, 0.018, 0.42);
+  const anglePenalty = Math.min(0.42, Math.abs(pitchY - 34) / 34 * 0.34);
+  const locationXg = 0.010 + 0.65 * Math.exp(-distance / 6.5) * (1 - anglePenalty);
+  const boxBonus = distance <= 16 ? 0.018 : 0;
+  const shooterMultiplier = clamp(
+    0.85 + (shooter.player.attributes.sho - 70) * 0.0025 + (shooter.player.attributes.dri - 70) * 0.001,
+    0.85,
+    1.15
+  );
+  return clamp((locationXg + boxBonus) * shooterMultiplier, 0.01, 0.45);
 }
 
 interface TeamPower {
@@ -1452,10 +1456,13 @@ export function simulateMatch(
       } else {
         // Low Block cuts goal probability, Possession/Counter increases chance quality
         // Non-penalty conversion is tuned toward realistic match-level scoring.
+        const shooterGoalMultiplier = clamp(0.85 + (shooterQuality - 70) * 0.0022, 0.85, 1.15);
+        const keeperGoalMultiplier = clamp(1.05 - (gkQuality - 70) * 0.0022, 0.85, 1.15);
         let goalProbability =
-          shotXg *
-          (0.82 + (shooterQuality - 75) * 0.0028) *
-          (1.02 - (gkQuality - 80) * 0.0032);
+          0.10 *
+          clamp(shotXg / 0.06, 0.45, 2.0) *
+          shooterGoalMultiplier *
+          keeperGoalMultiplier;
 
         // Tactical modifiers change chance quality, but cannot turn a bad chance
         // into a free goal.
