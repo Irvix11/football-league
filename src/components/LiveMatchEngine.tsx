@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Fixture, MatchEvent, LivePlayerPosition, PenaltyKickResult } from '../types/football';
 import { sound } from '../utils/audio';
+import { separatePlayerPositions } from '../utils/pitch';
 import { 
   Play, Pause, SkipForward, RotateCcw, 
   Volume2, VolumeX, Activity, ChevronRight,
@@ -31,71 +32,6 @@ interface InspectedPlayerState {
   screenY: number;
 }
 
-/**
- * Force-directed anti-overlap pass that prevents player markers from stacking
- * while maintaining tactical shape and keeping the ball-carrier central.
- */
-function separatePlayerPositions(positions: LivePlayerPosition[]): LivePlayerPosition[] {
-  const resolved = positions.map(p => ({ ...p }));
-  const MIN_DIST = 6.0; // Minimum distance in % units (with pitch aspect ratio compensation)
-  const PASSES = 4;     // 8 iterative relaxation passes
-
-  for (let pass = 0; pass < PASSES; pass++) {
-    for (let i = 0; i < resolved.length; i++) {
-      for (let j = i + 1; j < resolved.length; j++) {
-        const p1 = resolved[i];
-        const p2 = resolved[j];
-
-        let dx = p2.x - p1.x;
-        let dy = (p2.y - p1.y) * 1.54; // Aspect ratio adjustment
-        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-          dx = (j % 2 === 0 ? 1 : -1) * 0.5;
-          dy = (i % 2 === 0 ? 1 : -1) * 0.5;
-        }
-        const dist = Math.hypot(dx, dy);
-
-        if (dist < MIN_DIST) {
-          const overlap = (MIN_DIST - dist) / 2;
-          const nx = dx / (dist || 0.001);
-          const ny = (dy / 1.54) / (dist || 0.001);
-
-          if (p1.hasBall && !p2.hasBall) {
-            p2.x += nx * overlap * 2.2;
-            p2.y += ny * overlap * 2.2;
-          } else if (p2.hasBall && !p1.hasBall) {
-            p1.x -= nx * overlap * 2.2;
-            p1.y -= ny * overlap * 2.2;
-          } else {
-            p1.x -= nx * overlap * 1.05;
-            p1.y -= ny * overlap * 1.05;
-            p2.x += nx * overlap * 1.05;
-            p2.y += ny * overlap * 1.05;
-          }
-
-          p1.x = Math.max(4.0, Math.min(96.0, p1.x));
-          p1.y = Math.max(7.0, Math.min(93.0, p1.y));
-          p2.x = Math.max(4.0, Math.min(96.0, p2.x));
-          p2.y = Math.max(7.0, Math.min(93.0, p2.y));
-        }
-      }
-    }
-  }
-
-  // Anchor GKs to their boxes
-  for (const p of resolved) {
-    if (p.position === 'GK' || p.category === 'GK') {
-      if (p.team === 'home') {
-        p.x = Math.max(4.5, Math.min(13.0, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      } else {
-        p.x = Math.max(87.0, Math.min(95.5, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      }
-    }
-  }
-
-  return resolved;
-}
 
 /**
  * Smooth cubic easing function for realistic player and ball acceleration/deceleration.
