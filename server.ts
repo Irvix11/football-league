@@ -564,6 +564,7 @@ function resolveManagerId(room: GameRoom | undefined, suppliedId: unknown): stri
 
 function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRoom {
   const sanitized = JSON.parse(JSON.stringify(room)) as GameRoom;
+  sanitized.serverNow = Date.now();
   const ref = (id: string | null | undefined) => {
     if (!id) return id;
     return id === viewerManagerId ? id : publicManagerRef(id);
@@ -4069,6 +4070,7 @@ app.get('/api/room/:code', async (req, res) => {
     }
     snapshot.auction.hasSubmittedSecretBid = undefined;
   }
+  snapshot.serverNow = Date.now();
   return res.json(snapshot);
 });
 
