@@ -45,7 +45,8 @@
     "typescript": "^7.0.2",
     "@types/express": "^4.17.21",
     "@types/canvas-confetti": "^1.9.0",
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": "24.x"
