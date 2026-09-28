@@ -1,5 +1,8 @@
 import type { GameRoom } from '../src/types/football.js';
 
+export const persistenceQueues = new Map<string, Promise<void>>();
+export const persistenceTimers = new Map<string, NodeJS.Timeout>();
+
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 
 // Persistence runs only on the trusted server. RLS is intentionally locked down
