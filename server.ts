@@ -144,17 +144,7 @@ const AI_SYSTEM_PROMPT =
 
 app.post('/api/ai/chat', async (req, res) => {
   try {
-    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
-    const now = Date.now();
-    const window = aiRequestWindows.get(clientKey);
-    if (!window || now - window.startedAt >= 60_000) {
-      aiRequestWindows.set(clientKey, { startedAt: now, count: 1 });
-    } else {
-      window.count++;
-      if (window.count > 20) {
-        return res.status(429).json({ error: 'AI chat rate limit reached. Try again in a minute.' });
-      }
-    }
+    if (!checkAiRateLimit(req, res)) return;
 
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
     if (!messages.length || messages.length > 20) {
@@ -186,7 +176,15 @@ const roomSockets = new Map<string, Set<WebSocket>>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
 const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
 const soloRequestWindows = new Map<string, { startedAt: number; count: number }>();
-const aiAdviceWindows = new Map<string, { startedAt: number; count: number }>();
+
+function checkAiRateLimit(req: import('express').Request, res: import('express').Response): boolean {
+  const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!allowRateLimit(aiRequestWindows, clientKey, 20)) {
+    res.status(429).json({ error: 'AI request failed' });
+    return false;
+  }
+  return true;
+}
 const apiRequestWindows = new Map<string, { startedAt: number; count: number }>();
 const wsConnectionCounts = new Map<string, number>();
 const MAX_WS_CONNECTIONS_PER_IP = 25;
@@ -204,7 +202,7 @@ function allowRateLimit(map: Map<string, { startedAt: number; count: number }>, 
 
 setInterval(() => {
   const cutoff = Date.now() - 60_000;
-  for (const map of [aiRequestWindows, soloRequestWindows, aiAdviceWindows, apiRequestWindows]) {
+  for (const map of [aiRequestWindows, soloRequestWindows, apiRequestWindows]) {
     for (const [key, w] of map) if (w.startedAt < cutoff) map.delete(key);
   }
 }, 60_000).unref();
@@ -4026,9 +4024,8 @@ app.post('/api/solo-game', (req, res) => {
 // Server-side AI endpoint. The API key never reaches the browser.
 app.post('/api/ai/advice', async (req, res) => {
   try {
-    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!allowRateLimit(aiAdviceWindows, clientKey, 20)) return res.status(429).json({ error: 'AI advice rate limit reached. Try again in a minute.' });
-    const prompt = String(req.body?.prompt || '').trim().slice(0, 4000);
+    if (!checkAiRateLimit(req, res)) return;
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 2000);
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     const content = await callOpenRouter([
       { role: 'system', content: 'You are the tactical assistant for Football Auction League. Give concise, practical football-management advice. Do not invent player data that is not supplied by the user.' },
