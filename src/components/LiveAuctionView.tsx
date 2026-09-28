@@ -51,10 +51,11 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   // Render the countdown from the server's absolute deadline. This keeps the
   // UI moving even if a websocket snapshot is only arriving every few seconds.
   const [auctionClock, setAuctionClock] = useState(() => Date.now());
-  useEffect(() => {
   const displaySecondsRemaining = auction.auctionEndsAt
     ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
     : auction.secondsRemaining;
+
+  useEffect(() => {
     if (!auction.currentPlayer || auction.isSold || auction.isPaused) return;
     const timer = window.setInterval(() => setAuctionClock(Date.now() + serverOffsetRef.current), 250);
     return () => window.clearInterval(timer);
