@@ -51,7 +51,7 @@ jobs:
           cd "$APP"
           git fetch origin main
           git reset --hard origin/main
-          npm install --include=dev
+          npm ci
           npm run lint
           npm audit --audit-level=high
           npm run smoke
