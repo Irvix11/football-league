@@ -355,12 +355,13 @@ const ADDITIONAL_PRIME_METADATA: PrimeMeta[] = [
 ];
 
 function primeAttributes(position: Player['position'], overall: number): Player['attributes'] {
+  const cap = (value: number) => Math.min(99, Math.max(1, value));
   const delta = Math.max(0, overall - 88);
-  if (position === 'GK') return { pac:82 + delta, sho:78 + delta, pas:82 + delta, dri:86 + delta, def:55, phy:84 + delta };
-  if (position === 'CB' || position === 'LB' || position === 'RB') return { pac:78 + delta, sho:45 + delta, pas:72 + delta, dri:74 + delta, def:84 + delta, phy:84 + delta };
-  if (position === 'CDM' || position === 'CM') return { pac:76 + delta, sho:72 + delta, pas:88 + delta, dri:86 + delta, def:72 + Math.floor(delta / 2), phy:80 + delta };
-  if (position === 'CAM' || position === 'RM') return { pac:86 + delta, sho:84 + delta, pas:90 + delta, dri:94 + delta, def:42, phy:78 + delta };
-  return { pac:94 + delta, sho:94 + delta, pas:82 + delta, dri:96 + delta, def:35, phy:82 + delta };
+  if (position === 'GK') return { pac:cap(82 + delta), sho:cap(78 + delta), pas:cap(82 + delta), dri:cap(86 + delta), def:55, phy:cap(84 + delta) };
+  if (position === 'CB' || position === 'LB' || position === 'RB') return { pac:cap(78 + delta), sho:cap(45 + delta), pas:cap(72 + delta), dri:cap(74 + delta), def:cap(84 + delta), phy:cap(84 + delta) };
+  if (position === 'CDM' || position === 'CM') return { pac:cap(76 + delta), sho:cap(72 + delta), pas:cap(88 + delta), dri:cap(86 + delta), def:cap(72 + Math.floor(delta / 2)), phy:cap(80 + delta) };
+  if (position === 'CAM' || position === 'RM') return { pac:cap(86 + delta), sho:cap(84 + delta), pas:cap(90 + delta), dri:cap(94 + delta), def:42, phy:cap(78 + delta) };
+  return { pac:cap(94 + delta), sho:cap(94 + delta), pas:cap(82 + delta), dri:cap(96 + delta), def:35, phy:cap(82 + delta) };
 }
 
 const EXISTING_PRIME_NAMES = new Set(ALL_TIME_PLAYERS_BASE.map(p => p.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')));
