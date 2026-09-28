@@ -106,6 +106,8 @@ export interface SquadPlayerEntry {
 
 export interface Manager {
   id: string;
+  /** Server-only reconnect credential hash; never sent to browsers. */
+  reconnectTokenHash?: string;
   name: string;
   isHost: boolean;
   isBot: boolean;
