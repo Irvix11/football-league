@@ -1,6 +1,4 @@
 import React from 'react';
-import {
-  if (player?.position === 'OFF') return null;
 import { Player, Position } from '../types/football';
 
 interface PlayerPitchMarkerProps {
@@ -63,6 +61,7 @@ export const PlayerPitchMarker: React.FC<PlayerPitchMarkerProps> = ({
   onClick,
   className = '',
 }) => {
+  if (player?.position === 'OFF') return null;
   const isGK = positionLabel === 'GK' || player?.category === 'GK';
   const jerseyNumber = getTraditionalJerseyNumber(positionLabel, slotIndex);
 
