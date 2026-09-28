@@ -17,7 +17,9 @@
     "build:full": "tsc --noEmit && vite build",
     "refresh:fc27": "npm run import:fc27:remote && npm run lint && npm run build",
     "build:fc27": "npm run import:fc27:remote && vite build",
-    "audit:security": "npm audit --audit-level=high"
+    "audit:security": "npm audit --audit-level=high",
+    "test": "vitest run",
+    "test:simulation": "vitest run src/engine/simulation.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
