@@ -49,14 +49,6 @@ function getWebSocketBaseUrl(): string {
   return url.toString().replace(/\/$/, '');
 }
 
-function restoreViewerIdentity(snapshot: GameRoom, _viewerId: string | null, _viewerName: string | null): GameRoom {
-  // The server already returns the viewer's real manager ID and public references
-  // for every other manager. Never reconstruct identity from manager names:
-  // duplicate names or stale localStorage can otherwise make multiple cards appear
-  // to belong to the current user.
-  return snapshot;
-}
-
 export function useGameSocket() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [managerId, setManagerId] = useState<string | null>(null);
@@ -183,7 +175,7 @@ export function useGameSocket() {
           case 'ROOM_UPDATE': {
             const saved = getSavedSession();
             setRoom(current => {
-              const next = restoreViewerIdentity(newRoom, managerIdRef.current, saved?.managerName || null);
+              const next = newRoom;
               if (isSimulatingRef.current && simulatedFixtureIdRef.current) {
                 const fixture = next.fixtures?.find(f => f.id === simulatedFixtureIdRef.current);
                 const completed = Boolean(fixture?.played);
@@ -316,7 +308,7 @@ export function useGameSocket() {
         setRoom(current => {
           if (!current || snapshot.updatedAt > current.updatedAt) {
             const saved = getSavedSession();
-            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || null);
+            return snapshot;
           }
           return current;
         });
