@@ -68,6 +68,7 @@ function AppContent() {
     room,
     managerId,
     isConnected,
+    isReconnecting,
     errorMessage,
     startSoloGame,
     createLobby,
@@ -140,6 +141,12 @@ function AppContent() {
 
   return (
     <div className="min-h-screen min-h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 pb-[env(safe-area-inset-bottom)]">
+      {isReconnecting && room && (
+        <div className="fixed top-[calc(env(safe-area-inset-top)+8px)] left-1/2 -translate-x-1/2 z-40 max-w-[92vw] rounded-xl border border-amber-400/30 bg-slate-950/95 px-4 py-2 text-xs font-black text-amber-300 shadow-2xl pointer-events-none">
+          Reconnecting to game server…
+        </div>
+      )}
+
       {/* Global Error Banner */}
       {errorMessage && (
         <div className="fixed top-[calc(env(safe-area-inset-top)+8px)] left-1/2 -translate-x-1/2 z-50 max-w-[92vw] px-4 py-2.5 rounded-xl bg-rose-500 text-slate-950 font-bold text-xs shadow-2xl flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-4">
