@@ -11,6 +11,7 @@ interface LeagueDashboardViewProps {
   room: GameRoom;
   managerId: string;
   onRunMatchday: (matchday: number) => Promise<void> | void;
+  onMatchComplete?: (fixtureId: string) => Promise<void> | void;
   onProceedNextMatchday?: (nextMatchday: number) => Promise<void> | void;
   onFinishSeason?: () => Promise<void> | void;
   onProposeTransfer: (offer: any) => void;
@@ -25,6 +26,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   room,
   managerId,
   onRunMatchday,
+  onMatchComplete,
   onProceedNextMatchday,
   onFinishSeason,
   onProposeTransfer,
@@ -92,13 +94,23 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   // Check if current matchday is completely played
   const isCurrentMatchdayPlayed = matchdayFixtures.length > 0 && matchdayFixtures.every((f) => f.played);
 
-  // Handler for simulating current matchday
+  // Start the current matchday one fixture at a time. The live engine's
+  // FULL TIME -> CONTINUE action calls onMatchComplete, which starts the
+  // next fixture so every match can be watched instead of only the final one.
   const handleSimulateClick = async () => {
     if (isSimulating) return;
     try {
+      const nextFixture = matchdayFixtures.find((f) => !f.played);
+      if (nextFixture) setSelectedFixtureId(nextFixture.id);
       await onRunMatchday(currentMatchday);
     } catch (err) {
       console.error('Failed to simulate matchday:', err);
+    }
+  };
+
+  const handleMatchComplete = async (fixtureId: string) => {
+    if (onMatchComplete) {
+      await onMatchComplete(fixtureId);
     }
   };
 
@@ -351,6 +363,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
               <LiveMatchEngine
                 fixture={activeFixture}
                 userTeamId={managerId}
+                onMatchComplete={handleMatchComplete}
               />
             ) : (
               /* PRE-MATCH ARENA PREVIEW */
