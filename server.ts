@@ -3958,8 +3958,12 @@ async function startServer() {
     });
   }
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Football Auction League server running on port ${PORT}`);
+  // On the Oracle VM, Nginx is the only public entry point. Bind the
+  // Node process to localhost by default so port 3000 cannot be reached
+  // directly even if a cloud firewall rule is accidentally opened.
+  const HOST = process.env.SERVER_HOST || '127.0.0.1';
+  server.listen(PORT, HOST, () => {
+    console.log(`Football Auction League server running on ${HOST}:${PORT}`);
   });
 }
 
