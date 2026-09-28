@@ -367,11 +367,23 @@ export function useGameSocket() {
   }, [getSavedSession, send]);
 
   const resumeLobby = useCallback((session: SavedSession) => {
-    if (!session?.roomCode || !session?.managerId) return;
-    const roomCode = session.roomCode.trim().toUpperCase();
-    saveSession(session);
+    const stored = getSavedSession();
+    const merged: SavedSession = {
+      ...stored,
+      ...session,
+      roomCode: session.roomCode?.trim().toUpperCase() || stored?.roomCode || '',
+      managerId: session.managerId || stored?.managerId || '',
+      managerName: session.managerName || stored?.managerName || '',
+      reconnectToken: session.reconnectToken || stored?.reconnectToken,
+    };
+    if (!merged.roomCode || !merged.managerId || !merged.reconnectToken) {
+      setErrorMessage('No valid reconnect session is saved. Join the lobby again.');
+      return;
+    }
+    saveSession(merged);
+    const roomCode = merged.roomCode;
 
-      fetch(getRoomRequestUrl(roomCode, getSavedSession()), { ...getRoomRequestOptions(getSavedSession()), cache: 'no-store' })
+      fetch(getRoomRequestUrl(roomCode, merged), { ...getRoomRequestOptions(merged), cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
@@ -385,9 +397,9 @@ export function useGameSocket() {
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           send('JOIN_LOBBY', {
             roomCode,
-            managerName: session.managerName,
-            reconnectId: session.managerId,
-            reconnectToken: session.reconnectToken,
+            managerName: merged.managerName,
+            reconnectId: merged.managerId,
+            reconnectToken: merged.reconnectToken,
           });
         } else {
           setErrorMessage('Connecting to game server...');
@@ -407,7 +419,7 @@ export function useGameSocket() {
           setErrorMessage('Connecting to game server...');
         }
       });
-  }, [saveSession, send]);
+  }, [getSavedSession, saveSession, send]);
 
   const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
     if (!room) return;
