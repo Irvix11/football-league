@@ -200,8 +200,34 @@ function createPrng(seed: number) {
 }
 
 function getPlayerNumber(starters: SquadPlayerEntry[], playerId: string): number {
-  const index = starters.findIndex(entry => entry.player.id === playerId);
+  const entry = starters.find(candidate => candidate.player.id === playerId);
+  if (!entry) return 9;
+  if (getPositionCategory(entry.assignedPosition || entry.player.position) === 'GK') return 1;
+  if (Number.isInteger(entry.startingSlotIndex)) return (entry.startingSlotIndex as number) + 1;
+  const index = starters.findIndex(candidate => candidate.player.id === playerId);
   return index >= 0 ? index + 1 : 9;
+}
+
+function orderStartersForFormation(starters: SquadPlayerEntry[], slots: Array<{ index: number; position: Position; category: PositionCategory }>): SquadPlayerEntry[] {
+  const source = starters.filter(Boolean);
+  const used = new Set<string>();
+  const ordered: SquadPlayerEntry[] = [];
+  for (const slot of slots) {
+    const candidate = source.find(entry => entry.startingSlotIndex === slot.index && !used.has(entry.player.id)) ||
+      source
+        .filter(entry => !used.has(entry.player.id))
+        .sort((a, b) => {
+          const aFit = calculatePositionFit(a.player.position, a.player.alternatePositions || [], slot.position);
+          const bFit = calculatePositionFit(b.player.position, b.player.alternatePositions || [], slot.position);
+          const aCat = getPositionCategory(a.assignedPosition || a.player.position) === slot.category ? 1 : 0;
+          const bCat = getPositionCategory(b.assignedPosition || b.player.position) === slot.category ? 1 : 0;
+          return bCat - aCat || bFit - aFit;
+        })[0];
+    if (!candidate) continue;
+    used.add(candidate.player.id);
+    ordered.push(candidate);
+  }
+  return ordered;
 }
 
 /**
@@ -322,11 +348,13 @@ function generate22PlayerCoordinates(
   const awayConfig = FORMATIONS_CONFIG[awayFormation as keyof typeof FORMATIONS_CONFIG] || FORMATIONS_CONFIG['4-3-3'];
 
   const coords: LivePlayerPosition[] = [];
+  const orderedHomeStarters = orderStartersForFormation(homeStarters, homeConfig.slots);
+  const orderedAwayStarters = orderStartersForFormation(awayStarters, awayConfig.slots);
 
   // Home Outfielders (defend left goal X=3, attack right goal X=97)
-  homeStarters.slice(0, 11).forEach((entry, idx) => {
-    const slot = homeConfig.slots[idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
-    const isGK = idx === 0;
+  orderedHomeStarters.forEach((entry, idx) => {
+    const slot = homeConfig.slots[entry.startingSlotIndex ?? idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
+    const isGK = slot.category === 'GK';
 
     let x = 0;
     let y = 0;
@@ -416,7 +444,7 @@ function generate22PlayerCoordinates(
     coords.push({
       id: entry.player.id,
       name: entry.player.name,
-      number: idx + 1,
+      number: getPlayerNumber(orderedHomeStarters, entry.player.id),
       position: (entry.assignedPosition || slot.position || entry.player.position) as any,
       category: entry.player.category,
       overall: entry.player.overall,
@@ -429,9 +457,9 @@ function generate22PlayerCoordinates(
   });
 
   // Away Outfielders (defend right goal X=97, attack left goal X=3)
-  awayStarters.slice(0, 11).forEach((entry, idx) => {
-    const slot = awayConfig.slots[idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
-    const isGK = idx === 0;
+  orderedAwayStarters.forEach((entry, idx) => {
+    const slot = awayConfig.slots[entry.startingSlotIndex ?? idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
+    const isGK = slot.category === 'GK';
 
     let x = 0;
     let y = 0;
@@ -514,7 +542,7 @@ function generate22PlayerCoordinates(
     coords.push({
       id: entry.player.id,
       name: entry.player.name,
-      number: idx + 1,
+      number: getPlayerNumber(orderedAwayStarters, entry.player.id),
       position: (entry.assignedPosition || slot.position || entry.player.position) as any,
       category: entry.player.category,
       overall: entry.player.overall,
