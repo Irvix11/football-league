@@ -1590,7 +1590,7 @@ function calculateSeasonAwards(room: GameRoom): SeasonAwards {
 
     for (const stat of fix.playerStats) {
       const managerId = stat.team === 'home' ? fix.homeManagerId : fix.awayManagerId;
-      const manager = room.managers.find(m => m.id === actorId);
+      const manager = room.managers.find(m => m.id === managerId);
       const aggregate = aggregates.get(stat.playerId) || {
         playerId: stat.playerId,
         playerName: stat.playerName,
