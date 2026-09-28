@@ -173,6 +173,7 @@ app.post('/api/ai/chat', async (req, res) => {
 // In-Memory Storage for Active Rooms
 const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
+const roomDisconnectedAt = new Map<string, number>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
 const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
 const soloRequestWindows = new Map<string, { startedAt: number; count: number }>();
@@ -215,6 +216,39 @@ const matchSimulationLocks = new Set<string>();
 // accumulate forever. The client does not need any special code: ws pong frames
 // are handled at the protocol level.
 const socketAlive = new WeakMap<WebSocket, boolean>();
+const roomEvictionTicker = setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of rooms) {
+    const sockets = roomSockets.get(code);
+    if (sockets && sockets.size > 0) {
+      roomDisconnectedAt.delete(code);
+      continue;
+    }
+    const disconnectedAt = roomDisconnectedAt.get(code) || room.updatedAt || now;
+    if (room.phase === 'season_end' && now - room.updatedAt > 24 * 60 * 60 * 1000) {
+      rooms.delete(code);
+      roomSockets.delete(code);
+      roomDisconnectedAt.delete(code);
+      blindSecretBids.delete(code);
+      const auctionTimer = auctionIntervals.get(code);
+      if (auctionTimer) clearInterval(auctionTimer);
+      auctionIntervals.delete(code);
+      clearPhaseReadyTimer(room);
+      void deletePersistedRoomSnapshot(code).catch(error => console.error('[rooms] season snapshot eviction failed:', error));
+    } else if (now - disconnectedAt > 30 * 60 * 1000) {
+      rooms.delete(code);
+      roomSockets.delete(code);
+      roomDisconnectedAt.delete(code);
+      blindSecretBids.delete(code);
+      const auctionTimer = auctionIntervals.get(code);
+      if (auctionTimer) clearInterval(auctionTimer);
+      auctionIntervals.delete(code);
+      clearPhaseReadyTimer(room);
+      void deletePersistedRoomSnapshot(code).catch(error => console.error('[rooms] inactive room eviction failed:', error));
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
 const websocketHeartbeat = setInterval(() => {
   for (const ws of wss.clients) {
     if (socketAlive.get(ws) === false) {
@@ -226,7 +260,7 @@ const websocketHeartbeat = setInterval(() => {
   }
 }, 30_000).unref();
 
-server.on('close', () => clearInterval(websocketHeartbeat));
+server.on('close', () => { clearInterval(websocketHeartbeat); clearInterval(roomEvictionTicker); });
 
 // Remove abandoned persisted rooms periodically. Active rooms refresh their
 // snapshot timestamp whenever authoritative state is broadcast.
@@ -2296,9 +2330,8 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     auctionMode: 'Classic',
     transfersEnabled: true,
     leagueType: 'Double Round Robin',
+    competitionFormat: 'League',
   };
-
-  const fixtures = generateLeagueFixtures(managers);
 
   const room: GameRoom = {
     code: roomCode,
@@ -2402,6 +2435,8 @@ wss.on('connection', (ws, request) => {
     return;
   }
   wsConnectionCounts.set(clientIp, currentConnections + 1);
+  const initialSocketRoom = socketToRoom.get(ws);
+  if (initialSocketRoom) roomDisconnectedAt.delete(initialSocketRoom.roomCode);
 
   socketAlive.set(ws, true);
   ws.on('pong', () => socketAlive.set(ws, true));
@@ -3425,6 +3460,7 @@ wss.on('connection', (ws, request) => {
             console.error('[WS] RUN_MATCHDAY failed:', error);
             sendSocketError(ws, 'Failed to simulate the match. Please retry.');
           }
+          break;
         }
 
         // --- 14b. COMPLETE CURRENT LEAGUE MATCH ---
@@ -3709,19 +3745,68 @@ wss.on('connection', (ws, request) => {
           const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
           const { room, session } = auth;
+          if (room.phase !== 'season_end') {
+            sendSocketError(ws, 'Rematch is only available after the season ends.');
+            return;
+          }
           if (!isRoomHost(room, session.managerId)) {
             sendSocketError(ws, 'Only the host can start a rematch.');
             return;
           }
 
           room.awards = null;
-          room.fixtures = generateLeagueFixtures(room.managers);
+          room.fixtures = [];
           room.currentMatchday = 1;
-          room.totalMatchdays = Math.max(...room.fixtures.map(f => f.matchday), 1);
+          room.totalMatchdays = 1;
           room.leagueTable = calculateInitialTable(room.managers);
           room.knockoutStage = undefined;
-          room.phase = 'league';
-
+          room.liveFixtureId = undefined;
+          room.transferOffers = [];
+          room.transferWindowOpen = false;
+          room.transferWindowReadyIds = [];
+          room.transferWindowMatchday = undefined;
+          room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+          room.managers.forEach(manager => {
+            manager.squad = [];
+            manager.budget = manager.initialBudget;
+            manager.confirmedTeam = false;
+            manager.isReady = manager.isBot;
+            manager.tactics = {
+              style: 'Balanced',
+              mentality: 'Balanced',
+              defensiveLine: 50,
+              pressingIntensity: 50,
+              attackWidth: 50,
+              tempo: 50,
+              risk: 50,
+            };
+            manager.roles = {
+              captainId: '',
+              penaltyTakerId: '',
+              freeKickTakerId: '',
+              cornerTakerId: '',
+            };
+            manager.teamOverall = 0;
+          });
+          room.auction = {
+            currentPlayerIndex: 0,
+            totalPlayersInPool: getPlayersForLobby(room.settings.playerPool, room.settings.era).length,
+            currentPlayer: null,
+            currentBid: 0,
+            highestBidderId: null,
+            highestBidderName: null,
+            secondsRemaining: 0,
+            isPaused: false,
+            isSold: false,
+            winnerId: null,
+            soldPrice: 0,
+            auctionHistory: [],
+          };
+          room.phase = 'lobby';
+          room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+          room.updatedAt = Date.now();
+          ensurePhaseReadyTicker(room);
+          await saveRoomSnapshot(room);
           broadcastRoom(room.code);
           break;
         }
@@ -3754,10 +3839,11 @@ wss.on('connection', (ws, request) => {
             if (auctionTimer) clearInterval(auctionTimer);
             auctionIntervals.delete(info.roomCode);
             clearPhaseReadyTimer(room);
-            void deletePersistedRoomSnapshot(info.roomCode);
+            void deletePersistedRoomSnapshot(info.roomCode).catch(error => console.error('[persistence] season-end cleanup failed:', error));
           }
         }
       }
+      if (sockets && sockets.size === 0) roomDisconnectedAt.set(info.roomCode, Date.now());
       socketToRoom.delete(ws);
     }
   });
