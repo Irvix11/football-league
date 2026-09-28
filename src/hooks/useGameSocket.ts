@@ -14,12 +14,13 @@ function getGameServerBaseUrl(): string {
 
   // The realtime backend runs on Render in production. Keep the env override
   // so local development or a future backend host can be selected explicitly.
+  if (import.meta.env.DEV) return window.location.origin;
   return 'https://football-auction-league-server.onrender.com';
 }
 
 function getWebSocketBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
-  const base = configured || 'https://football-auction-league-server.onrender.com';
+  const base = configured || (import.meta.env.DEV ? window.location.origin : 'https://football-auction-league-server.onrender.com');
 
   const url = new URL(base);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -440,7 +441,8 @@ export function useGameSocket() {
     send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId: currentManagerId, fixtureId });
   }, [room, managerId, send]);
   const completeKnockoutMatch = useCallback((fixtureId: string) => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     if (socketRef.current?.readyState !== WebSocket.OPEN) {
       setSimulationError('Connection lost. Reconnect before continuing the knockout round.');
       return;
@@ -456,7 +458,8 @@ export function useGameSocket() {
   }, [room, managerId, send]);
 
   const runMatchday = useCallback((matchday: number) => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     if (socketRef.current?.readyState !== WebSocket.OPEN) {
       setSimulationError('Connection lost. Reconnect before starting the match.');
       return;
