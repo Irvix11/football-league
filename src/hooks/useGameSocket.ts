@@ -432,9 +432,9 @@ export function useGameSocket() {
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           send('JOIN_LOBBY', {
             roomCode,
-            managerName: session.managerName,
-            reconnectId: session.managerId,
-            reconnectToken: session.reconnectToken,
+            managerName: merged.managerName,
+            reconnectId: merged.managerId,
+            reconnectToken: merged.reconnectToken,
           });
         } else {
           setErrorMessage('Connecting to game server...');
