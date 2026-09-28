@@ -57,8 +57,10 @@ describe('simulation invariants', () => {
   it('is deterministic, monotonic, and structurally valid for 300 seeded matches', () => {
     for (let i = 0; i < 300; i++) {
       const knockout = i % 4 === 0;
-      const home = makeManager('home', 'Home', 0, i % 7 === 0);
-      const away = makeManager('away', 'Away', 11, i % 9 === 0);
+      const homeInput = makeManager('home', 'Home', 0, i % 7 === 0);
+      const awayInput = makeManager('away', 'Away', 11, i % 9 === 0);
+      const home = structuredClone(homeInput);
+      const away = structuredClone(awayInput);
       const result = simulateMatch(home, away, `test-${i}`, i + 1, 100000 + i, knockout, knockout ? 'Final' : undefined, knockout && i % 8 === 0);
 
       const events = result.events || [];
@@ -98,7 +100,7 @@ describe('simulation invariants', () => {
         }
       }
 
-      const repeat = simulateMatch(makeManager('home', 'Home', 0), makeManager('away', 'Away', 11), `test-${i}`, i + 1, 100000 + i, knockout, knockout ? 'Final' : undefined, knockout && i % 8 === 0);
+      const repeat = simulateMatch(structuredClone(homeInput), structuredClone(awayInput), `test-${i}`, i + 1, 100000 + i, knockout, knockout ? 'Final' : undefined, knockout && i % 8 === 0);
       expect(JSON.stringify(repeat)).toBe(JSON.stringify(result));
     }
   });
