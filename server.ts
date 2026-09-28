@@ -43,8 +43,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-// Needed so req.ip is the real client IP behind Vercel/Render proxies.
-app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
@@ -213,6 +211,23 @@ setInterval(() => {
 // Prevent double-clicks / concurrent websocket messages from simulating the same
 // fixture twice before the first simulation has committed its result.
 const matchSimulationLocks = new Set<string>();
+
+// Terminate dead WebSocket connections so abandoned mobile/browser tabs do not
+// accumulate forever. The client does not need any special code: ws pong frames
+// are handled at the protocol level.
+const socketAlive = new WeakMap<WebSocket, boolean>();
+const websocketHeartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (socketAlive.get(ws) === false) {
+      ws.terminate();
+      continue;
+    }
+    socketAlive.set(ws, false);
+    ws.ping();
+  }
+}, 30_000).unref();
+
+server.on('close', () => clearInterval(websocketHeartbeat));
 
 // Remove abandoned persisted rooms periodically. Active rooms refresh their
 // snapshot timestamp whenever authoritative state is broadcast.
@@ -2357,6 +2372,9 @@ function repairManagersForMatch(room: GameRoom) {
 
 // WebSocket Connection Handler
 wss.on('connection', (ws) => {
+  socketAlive.set(ws, true);
+  ws.on('pong', () => socketAlive.set(ws, true));
+
   let messageWindowStartedAt = Date.now();
   let messageCount = 0;
 
