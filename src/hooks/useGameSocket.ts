@@ -288,7 +288,19 @@ export function useGameSocket() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const response = await fetch(getRoomRequestUrl(room.code, getSavedSession()), { ...getRoomRequestOptions(getSavedSession()), cache: 'no-store' });
+        const session = getSavedSession();
+        const url = getRoomRequestUrl(room.code, session);
+        const separator = url.includes('?') ? '&' : '?';
+        const response = await fetch(`${url}${separator}since=${encodeURIComponent(String(room.updatedAt || 0))}`, { ...getRoomRequestOptions(session), cache: 'no-store' });
+        if (response.status === 304) return;
+        if (response.status === 404) {
+          saveSession(null);
+          managerIdRef.current = null;
+          setManagerId(null);
+          setRoom(null);
+          setErrorMessage('This lobby no longer exists.');
+          return;
+        }
         if (!response.ok) return;
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
