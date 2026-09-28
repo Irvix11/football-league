@@ -1027,7 +1027,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                     className="absolute left-1/2 top-10 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] transition-transform duration-1000"
                     style={{
                       transform: penaltyRevealStage === 'result' && currentPenalty?.outcome === 'saved'
-                        ? `translateX(${penaltyDiveDirection * 42}px) rotate(${penaltyDiveDirection * 8}deg)`
+                        ? `translateX(calc(-50% + ${penaltyDiveDirection * 42}px)) rotate(${penaltyDiveDirection * 8}deg)`
                         : 'translateX(0)',
                     }}
                   >
