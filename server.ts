@@ -3293,6 +3293,11 @@ wss.on('connection', (ws) => {
             return;
           }
 
+          if (room.liveFixtureId) {
+            sendSocketError(ws, 'Finish the current live match before starting another.');
+            return;
+          }
+
           const currentFixtures = room.fixtures.filter(f => f.matchday === targetMatchday && !f.played);
           if (!currentFixtures.length) {
             sendSocketError(ws, 'This matchday is already complete.');
@@ -3320,26 +3325,9 @@ wss.on('connection', (ws) => {
           try {
             const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday, undefined, false, undefined, false);
             Object.assign(fix, result);
-            room.leagueTable = updateLeagueTable(room.leagueTable, fix);
-
-            // The league is always a double round robin. Once every home/away
-            // fixture is complete, build the playoff bracket from the final table.
-            const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
+            fix.played = false;
+            room.liveFixtureId = fix.id;
             room.currentMatchday = targetMatchday;
-
-            const midpointMatchday = getMidSeasonWindowMatchday(room);
-            const midpointComplete =
-              midpointMatchday > 0 &&
-              targetMatchday === midpointMatchday &&
-              room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
-
-            if (midpointComplete && !leagueComplete) {
-              openMidSeasonWindow(room);
-            }
-
-            if (leagueComplete) {
-              initializeLeaguePlayoffs(room);
-            }
 
             await saveRoomSnapshot(room);
             broadcastRoom(room.code);
@@ -3351,6 +3339,46 @@ wss.on('connection', (ws) => {
             console.error('[WS] RUN_MATCHDAY failed:', error);
             sendSocketError(ws, 'Failed to simulate the match. Please retry.');
           }
+        }
+
+        // --- 14b. COMPLETE CURRENT LEAGUE MATCH ---
+        case 'COMPLETE_LEAGUE_MATCH': {
+          try {
+            const { roomCode, fixtureId } = payload;
+            const auth = authorizeSocket(ws, roomCode);
+            if (!auth || auth.room.phase !== 'league') return;
+            const { room, session } = auth;
+            if (!isRoomHost(room, session.managerId)) {
+              sendSocketError(ws, 'Only the host can complete the live match.');
+              return;
+            }
+            if (!room.liveFixtureId || room.liveFixtureId !== fixtureId) {
+              sendSocketError(ws, 'That match is not the current live fixture.');
+              return;
+            }
+            const fix = room.fixtures.find(f => f.id === fixtureId);
+            if (!fix || fix.matchday !== room.currentMatchday) {
+              sendSocketError(ws, 'Invalid live fixture.');
+              return;
+            }
+            if (!fix.played) {
+              fix.played = true;
+              room.leagueTable = updateLeagueTable(room.leagueTable, fix);
+            }
+            room.liveFixtureId = undefined;
+            const leagueComplete = room.fixtures.length > 0 && room.fixtures.every(f => f.played);
+            const midpointMatchday = getMidSeasonWindowMatchday(room);
+            const midpointComplete = midpointMatchday > 0 &&
+              room.fixtures.filter(f => f.matchday === midpointMatchday).every(f => f.played);
+            if (midpointComplete && !leagueComplete) openMidSeasonWindow(room);
+            if (leagueComplete) initializeLeaguePlayoffs(room);
+            await saveRoomSnapshot(room);
+            broadcastRoom(room.code);
+          } catch (error) {
+            console.error('[WS] COMPLETE_LEAGUE_MATCH failed:', error);
+            sendSocketError(ws, 'Failed to complete the live match. Please retry.');
+          }
+          break;
         }
 
         // --- 14b. NEXT MATCHDAY ---
