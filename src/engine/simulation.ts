@@ -1422,6 +1422,7 @@ export function simulateMatch(
       );
 
       if (!isOnTarget) {
+        recordShot(atkStats, shooterStat, false, false);
         pushEvent({
           minute: actionMin,
           second: actionSec,
@@ -1440,7 +1441,6 @@ export function simulateMatch(
         });
         currentPossession = isHome ? 'away' : 'home';
       } else {
-        recordShot(atkStats, shooterStat, true, false);
         // Low Block cuts goal probability, Possession/Counter increases chance quality
         // Non-penalty conversion is tuned toward realistic match-level scoring.
         let goalProbability =
