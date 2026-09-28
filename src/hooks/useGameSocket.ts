@@ -303,8 +303,19 @@ export function useGameSocket() {
   }, [send, startSoloGame]);
 
   const joinLobby = useCallback((roomCode: string, managerName: string, reconnectId?: string) => {
-    send('JOIN_LOBBY', { roomCode: roomCode.trim().toUpperCase(), managerName, reconnectId });
-  }, [send]);
+    const saved = getSavedSession();
+    const normalizedCode = roomCode.trim().toUpperCase();
+    const sameLobby = saved?.roomCode?.trim().toUpperCase() === normalizedCode;
+
+    // If this browser is rejoining its own lobby, always send the saved
+    // cryptographic reconnect token. A name is never an identity credential.
+    send('JOIN_LOBBY', {
+      roomCode: normalizedCode,
+      managerName,
+      reconnectId: reconnectId || (sameLobby ? saved?.managerId : undefined),
+      reconnectToken: sameLobby ? saved?.reconnectToken : undefined,
+    });
+  }, [getSavedSession, send]);
 
   const resumeLobby = useCallback((session: SavedSession) => {
     if (!session?.roomCode || !session?.managerId) return;
