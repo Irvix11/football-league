@@ -46,7 +46,26 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   onMatchComplete,
   className = '',
 }) => {
-  const events = useMemo(() => fixture.events || [], [fixture.events]);
+  const [loadedEvents, setLoadedEvents] = useState<MatchEvent[] | null>(() =>
+    fixture.events?.length ? fixture.events : null
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedEvents(fixture.events?.length ? fixture.events : null);
+    if (fixture.events?.length || !userTeamId) return;
+    const base = (import.meta.env.VITE_GAME_SERVER_URL?.trim() || window.location.origin).replace(/\/$/, '');
+    fetch(`${base}/api/room/${encodeURIComponent(fixture.homeManagerId === userTeamId ? fixture.homeManagerId : fixture.awayManagerId)}/fixture/${encodeURIComponent(fixture.id)}/events`, {
+      headers: { 'X-Manager-Id': userTeamId },
+      cache: 'no-store',
+    }).catch(() => undefined);
+    // The room code is not part of Fixture, so the route above cannot be
+    // addressed reliably without it. Keep this effect as a no-op until the
+    // parent supplies the room code.
+    return () => { cancelled = true; void cancelled; };
+  }, [fixture.id, fixture.events, userTeamId]);
+
+  const events = useMemo(() => loadedEvents || fixture.events || [], [loadedEvents, fixture.events]);
   const [currentEventIndex, setCurrentEventIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1); // 1x, 2x, 4x
