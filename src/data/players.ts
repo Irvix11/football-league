@@ -1168,7 +1168,19 @@ export function getPlayersForLobby(pool: PlayerPool, era: Era): Player[] {
     name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const legendNames = new Set(ALL_TIME_PLAYERS.map(legend => normalizePlayerName(legend.name)));
   const source = era === 'All-Time'
-    ? [...ALL_TIME_PLAYERS, ...currentSource.filter(current => !legendNames.has(normalizePlayerName(current.name)))]
+    ? (() => {
+        // Keep the curated prime/legend entry when a current player shares the
+        // same normalized identity, and also remove duplicate identities inside
+        // the imported current dataset (for example Ederson/Éderson).
+        const seenNames = new Set(legendNames);
+        const dedupedCurrent = currentSource.filter(current => {
+          const key = normalizePlayerName(current.name);
+          if (seenNames.has(key)) return false;
+          seenNames.add(key);
+          return true;
+        });
+        return [...ALL_TIME_PLAYERS, ...dedupedCurrent];
+      })()
     : currentSource;
   let list = [...source];
 
