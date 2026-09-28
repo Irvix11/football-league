@@ -3034,7 +3034,7 @@ wss.on('connection', (ws) => {
             secretMap = {};
             blindSecretBids.set(roomCode, secretMap);
           }
-          secretMap[managerId] = bidAmount;
+          secretMap[actorId] = bidAmount;
 
           // Acknowledge submission privately to this client only
           ws.send(JSON.stringify({
@@ -3064,7 +3064,7 @@ wss.on('connection', (ws) => {
             return;
           }
           const ready = new Set(room.phaseReadyIds || []);
-          ready.add(managerId);
+          ready.add(actorId);
           room.phaseReadyIds = [...ready];
           broadcastRoom(room.code);
           break;
