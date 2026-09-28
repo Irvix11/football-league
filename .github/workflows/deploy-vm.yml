@@ -54,7 +54,7 @@ jobs:
           npm run lint
           npm audit --audit-level=high
           npm run smoke
-          VITE_GAME_SERVER_URL=http://140.245.195.89 npm run build
+          VITE_GAME_SERVER_URL=https://footballauction.runs-on.dev npm run build
 
           sudo tee /etc/systemd/system/football-league.service >/dev/null <<'UNIT'
           [Unit]
@@ -112,7 +112,7 @@ jobs:
           server {
               listen 80 default_server;
               listen [::]:80 default_server;
-              server_name _;
+              server_name footballauction.runs-on.dev _;
 
               location / {
                   proxy_pass http://127.0.0.1:3000;
