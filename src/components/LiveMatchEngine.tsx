@@ -10,6 +10,7 @@ import {
 
 interface LiveMatchEngineProps {
   fixture: Fixture;
+  roomCode?: string;
   userTeamId?: string;
   onMatchComplete?: (fixtureId: string) => void;
   className?: string;
@@ -42,6 +43,7 @@ function easeInOutCubic(t: number): number {
 
 export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   fixture,
+  roomCode,
   userTeamId,
   onMatchComplete,
   className = '',
@@ -53,17 +55,19 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   useEffect(() => {
     let cancelled = false;
     setLoadedEvents(fixture.events?.length ? fixture.events : null);
-    if (fixture.events?.length || !userTeamId) return;
+    if (fixture.events?.length || !roomCode || !userTeamId) return;
     const base = (import.meta.env.VITE_GAME_SERVER_URL?.trim() || window.location.origin).replace(/\/$/, '');
-    fetch(`${base}/api/room/${encodeURIComponent(fixture.homeManagerId === userTeamId ? fixture.homeManagerId : fixture.awayManagerId)}/fixture/${encodeURIComponent(fixture.id)}/events`, {
+    fetch(`${base}/api/room/${encodeURIComponent(roomCode)}/fixture/${encodeURIComponent(fixture.id)}/events`, {
       headers: { 'X-Manager-Id': userTeamId },
       cache: 'no-store',
-    }).catch(() => undefined);
-    // The room code is not part of Fixture, so the route above cannot be
-    // addressed reliably without it. Keep this effect as a no-op until the
-    // parent supplies the room code.
-    return () => { cancelled = true; void cancelled; };
-  }, [fixture.id, fixture.events, userTeamId]);
+    })
+      .then(response => response.ok ? response.json() : null)
+      .then(payload => {
+        if (!cancelled && Array.isArray(payload?.events)) setLoadedEvents(payload.events as MatchEvent[]);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [fixture.id, fixture.events, roomCode, userTeamId]);
 
   const events = useMemo(() => loadedEvents || fixture.events || [], [loadedEvents, fixture.events]);
   const [currentEventIndex, setCurrentEventIndex] = useState<number>(0);
