@@ -1742,6 +1742,41 @@ export function simulateMatch(
       };
     };
 
+    const penaltyCoordinates = (team: 'home' | 'away', takerId: string, keeperId: string): LivePlayerPosition[] => {
+      const coords = generate22PlayerCoordinates(
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)),
+        awayStarters.filter(s => !sentOffIds.has(s.player.id)),
+        homeManager.formation,
+        awayManager.formation,
+        homeTactics,
+        awayTactics,
+        team === 'home' ? 97 : 3,
+        50,
+        team,
+        takerId,
+        keeperId,
+        'shooting'
+      );
+      const taker = coords.find(p => p.id === takerId);
+      const keeper = coords.find(p => p.id === keeperId);
+      if (taker) {
+        taker.x = team === 'home' ? 97 : 3;
+        taker.y = 50;
+        taker.action = 'shooting';
+      }
+      if (keeper) {
+        keeper.x = team === 'home' ? 92 : 8;
+        keeper.y = 50;
+        keeper.action = 'diving';
+      }
+      for (const player of coords) {
+        if (player.id !== takerId && player.id !== keeperId) {
+          player.x = team === 'home' ? Math.min(49, player.x) : Math.max(51, player.x);
+        }
+      }
+      return coords;
+    };
+
     // Push Shootout Start Event
     pushEvent({
       minute: 121,
@@ -1754,6 +1789,7 @@ export function simulateMatch(
       ballCoordinates: { x: 88.5, y: 50 },
       ballStartCoordinates: { x: 88.5, y: 50 },
       momentum,
+      playerCoordinates: penaltyCoordinates('home', homeTakers[0].player.id, awayGK.player.id),
     });
 
     // 5 standard rounds
@@ -1794,6 +1830,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
         ballStartCoordinates: { x: 88.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, awayGK.player.id),
         momentum,
       });
 
@@ -1835,6 +1872,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, homeGK.player.id),
         momentum,
       });
       if (Math.abs(hPens - aPens) > (5 - round)) break;
