@@ -2,9 +2,6 @@ import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlay
 import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory, calculatePositionFit } from '../constants/formations.js';
 import { separatePlayerPositions } from '../utils/pitch.js';
 
-/**
- * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
- */
 function average(values: number[], fallback = 70) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
 }
@@ -274,6 +271,9 @@ function normalizeEventTimeline(events: MatchEvent[], firstHalfEnd: number, seco
   }
 }
 
+/**
+ * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
+ */
 function createPrng(seed: number) {
   let s = seed >>> 0;
   return function () {
@@ -1629,7 +1629,7 @@ export function simulateMatch(
       }
     };
 
-    runExtraTimePeriod(96);
+    runExtraTimePeriod(91);
 
     // Extra Time Halftime (105:00)
     currentTotalSeconds = 6300; // 105:00
@@ -1650,7 +1650,7 @@ export function simulateMatch(
       momentum,
     });
 
-    runExtraTimePeriod(108);
+    runExtraTimePeriod(106);
 
     // Extra Time Full-Time (120:00)
     currentTotalSeconds = 7200; // 120:00
