@@ -2795,7 +2795,7 @@ wss.on('connection', (ws) => {
           }
 
           const managerId = session.managerId;
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === session.managerId);
           if (manager) {
             manager.formation = formation as Formation;
             manager.confirmedTeam = false;
@@ -2813,9 +2813,8 @@ wss.on('connection', (ws) => {
           const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'formation_select') return;
           const { room, session } = auth;
-          const managerId = session.managerId;
-           const actorId = managerId;
-          const manager = room.managers.find(m => m.id === managerId);
+          const actorId = session.managerId;
+          const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
           const ready = new Set(room.phaseReadyIds || []);
           ready.add(actorId);
@@ -2916,7 +2915,7 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
           if ((room.phaseReadyIds || []).includes(actorId)) {
             sendSocketError(ws, 'You marked the auction done and cannot bid again.');
@@ -2988,15 +2987,15 @@ wss.on('connection', (ws) => {
 
         // --- 11. BLIND AUCTION SECRET BID SUBMISSION ---
         case 'SUBMIT_BLIND_BID': {
-          const { roomCode, managerId, amount } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode, amount } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
-           const actorId = session.managerId;
+          const actorId = session.managerId;
 
           if (room.auction.isForcedPurchase) {
             const forcedId = room.auction.forcedWinnerId;
-            if (forcedId === managerId) {
+            if (forcedId === actorId) {
               sendSocketError(ws, 'This positional slot is a mandatory purchase. The player will be assigned automatically.');
             } else {
               sendSocketError(ws, `${room.auction.forcedWinnerName || 'Another manager'} must complete this positional slot before the auction continues.`);
@@ -3004,7 +3003,7 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
 
           if (room.auction.isSold || room.auction.secondsRemaining <= 0) {
