@@ -455,6 +455,19 @@ function queueRoomSnapshot(room: GameRoom) {
   }, 350));
 }
 
+
+async function deletePersistedRoomSnapshot(code: string) {
+  const pendingTimer = persistenceTimers.get(code);
+  if (pendingTimer) {
+    clearTimeout(pendingTimer);
+    persistenceTimers.delete(code);
+  }
+  const pendingSave = persistenceQueues.get(code);
+  persistenceQueues.delete(code);
+  if (pendingSave) await pendingSave.catch(() => {});
+  await deleteRoomSnapshot(code);
+}
+
 function publicManagerRef(managerId: string): string {
   // Opaque client-facing reference. Never expose the server's manager UUID/ID.
   return 'p-' + crypto.createHash('sha256').update(managerId).digest('hex').slice(0, 12);
@@ -1854,7 +1867,7 @@ function initializeLeaguePlayoffs(room: GameRoom) {
     room.awards = calculateSeasonAwards(room);
     // Keep the finished result available to currently connected clients, but
     // never retain completed games in durable storage.
-    void deleteRoomSnapshot(room.code);
+    void deletePersistedRoomSnapshot(room.code);
     return;
   }
 
@@ -2229,7 +2242,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     leagueType: 'Double Round Robin',
   };
 
-  const fixtures = generateLeagueFixtures(managers, settings.leagueType);
+  const fixtures = generateLeagueFixtures(managers);
 
   const room: GameRoom = {
     code: roomCode,
@@ -2650,7 +2663,7 @@ wss.on('connection', (ws) => {
             }
           }
 
-          await deleteRoomSnapshot(room.code);
+          await deletePersistedRoomSnapshot(room.code);
           break;
         }
 
@@ -2661,7 +2674,7 @@ wss.on('connection', (ws) => {
           if (!auth) return;
           const { room, session } = auth;
           const resolvedTargetId = resolveManagerId(room, targetManagerId);
-          if (!isRoomHost(room, session.managerId) || resolvedTargetId === room.hostId) {
+          if (!resolvedTargetId || !isRoomHost(room, session.managerId) || resolvedTargetId === room.hostId) {
             sendSocketError(ws, 'Only the host can kick another manager.');
             return;
           }
@@ -3358,7 +3371,7 @@ wss.on('connection', (ws) => {
           // to retain finished games and this also prevents stale rooms from
           // reappearing after a server restart.
           broadcastRoom(room.code, undefined, false);
-          void deleteRoomSnapshot(room.code);
+          void deletePersistedRoomSnapshot(room.code);
           break;
         }
 
@@ -3525,7 +3538,7 @@ wss.on('connection', (ws) => {
               if (auctionTimer) clearInterval(auctionTimer);
               auctionIntervals.delete(room.code);
               clearPhaseReadyTimer(room);
-              await deleteRoomSnapshot(room.code);
+              await deletePersistedRoomSnapshot(room.code);
             } else {
               broadcastRoom(room.code, undefined, false);
             }
@@ -3583,7 +3596,7 @@ wss.on('connection', (ws) => {
             if (auctionTimer) clearInterval(auctionTimer);
             auctionIntervals.delete(info.roomCode);
             clearPhaseReadyTimer(room);
-            void deleteRoomSnapshot(info.roomCode);
+            void deletePersistedRoomSnapshot(info.roomCode);
           }
         }
       }
