@@ -410,6 +410,8 @@ export interface GameRoom {
   transferWindowMatchday?: number;
   /** Managers who have finished their mid-season review. */
   transferWindowReadyIds?: string[];
+  /** Fixture currently being presented in the live league match engine. */
+  liveFixtureId?: string;
   knockoutStage?: KnockoutStageState;
   awards: SeasonAwards | null;
   createdAt: number;
