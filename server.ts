@@ -162,7 +162,7 @@ app.post('/api/ai/chat', async (req, res) => {
       { role: 'system', content: AI_SYSTEM_PROMPT },
       ...clientMessages,
     ]);
-    return res.json({ answer, model: OPENROUTER_MODEL });
+    return res.json({ answer });
   } catch (error: any) {
     console.error('[openrouter]', error);
     // Don't leak upstream error details to the browser.
@@ -3175,7 +3175,7 @@ wss.on('connection', (ws) => {
               return;
             }
 
-            const { room } = auth;
+            const { room, session } = auth;
             const stage = room.knockoutStage;
             if (!stage) {
               sendSocketError(ws, 'Knockout stage is unavailable.');
@@ -3699,7 +3699,7 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
     }
   } catch (error: any) {
     console.error('[REST] run-knockout-match failed:', error);
-    return res.status(500).json({ error: error?.message || 'Failed to simulate knockout match.' });
+    return res.status(500).json({ error: 'Failed to simulate knockout match.' });
   }
 });
 app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
@@ -3731,7 +3731,7 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
     return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
   } catch (error: any) {
     console.error('[REST] complete-knockout-match failed:', error);
-    return res.status(500).json({ error: error?.message || 'Failed to advance knockout round.' });
+    return res.status(500).json({ error: 'Failed to advance knockout round.' });
   }
 });
 
@@ -3787,11 +3787,13 @@ app.get('/api/room/:code', async (req, res) => {
   return res.json(snapshot);
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', activeRooms: rooms.size });
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 app.get('/api/players', (req, res) => {
+  const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!allowRateLimit(apiRequestWindows, clientKey, 60)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   const requestedEra = String(req.query?.era || 'Current');
   const era = requestedEra === 'All-Time' ? 'All-Time' : 'Current';
   const validPools = new Set([
