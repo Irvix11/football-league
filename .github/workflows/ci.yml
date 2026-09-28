@@ -17,4 +17,5 @@ jobs:
       - run: npm ci
       - run: npm run build:full
       - run: npm run smoke
+      - run: npm test
       - run: npm audit --audit-level=high
