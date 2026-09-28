@@ -2087,6 +2087,7 @@ export function simulateMatch(
 
   // Final player ratings: contributions in both directions, with a 3.0 floor.
   for (const stat of playerStatsMap.values()) {
+    if (!stat.redCard) stat.minutes = wentToExtraTime ? 120 : 90;
     const conceded = stat.team === 'home' ? awayScore : homeScore;
     const entry = (stat.team === 'home' ? homeStarters : awayStarters).find(s => s.player.id === stat.playerId);
     if (stat.team === 'home' && awayScore === 0 && entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating += 0.4;
