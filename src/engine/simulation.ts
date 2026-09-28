@@ -1894,6 +1894,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
         ballStartCoordinates: { x: 88.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, awayGK.player.id),
         momentum,
       });
 
@@ -1927,6 +1928,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, homeGK.player.id),
         momentum,
       });
 
