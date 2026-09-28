@@ -108,7 +108,7 @@ describe('simulation invariants', () => {
     const away = makeManager('away', 'Away', 11);
     [home.squad[0], home.squad[1]] = [home.squad[1], home.squad[0]];
     const result = simulateMatch(home, away, 'shuffle', 1, 424242);
-    const kickoff = result.events[0];
+    const kickoff = (result.events || [])[0]!;
     const gk = home.squad.find(s => s.player.position === 'GK');
     expect(kickoff.playerId).toBeDefined();
     expect(kickoff.playerNumber).toBe(gk ? 1 : kickoff.playerNumber);
