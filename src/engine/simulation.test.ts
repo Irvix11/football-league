@@ -82,12 +82,13 @@ describe('simulation invariants', () => {
       expect(playerGoals).toBe((result.homeScore || 0) + (result.awayScore || 0));
 
       for (const event of events) {
+        const playerCoordinates = event.playerCoordinates || [];
         expect(event.ballCoordinates.x).toBeGreaterThanOrEqual(0);
         expect(event.ballCoordinates.x).toBeLessThanOrEqual(100);
         expect(event.ballCoordinates.y).toBeGreaterThanOrEqual(0);
         expect(event.ballCoordinates.y).toBeLessThanOrEqual(100);
-        expect(event.playerCoordinates).toHaveLength(22);
-        for (const p of event.playerCoordinates) {
+        expect(playerCoordinates).toHaveLength(22);
+        for (const p of playerCoordinates) {
           expect(Number.isFinite(p.x)).toBe(true);
           expect(Number.isFinite(p.y)).toBe(true);
           expect(p.x).toBeGreaterThanOrEqual(0);
