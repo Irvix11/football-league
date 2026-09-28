@@ -1959,7 +1959,7 @@ function initializeLeaguePlayoffs(room: GameRoom) {
     room.awards = calculateSeasonAwards(room);
     // Keep the finished result available to currently connected clients, but
     // never retain completed games in durable storage.
-    void deletePersistedRoomSnapshot(room.code);
+    void deletePersistedRoomSnapshot(room.code).catch(error => console.error('[persistence] room deletion failed:', error));
     return;
   }
 
@@ -2370,7 +2370,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
   };
 
   rooms.set(roomCode, room);
-  void saveRoomSnapshot(room);
+  void saveRoomSnapshot(room).catch(error => console.error('[persistence] room save failed:', error));
 
   return { roomCode, managerId: hostId, room };
 }
@@ -4200,7 +4200,7 @@ async function gracefulShutdown(signal: string) {
 }
 
 if (!process.env.VERCEL) {
-  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM').catch(error => console.error('[shutdown] failed:', error));
+  process.on('SIGINT', () => void gracefulShutdown('SIGINT').catch(error => console.error('[shutdown] failed:', error));
   startServer();
 }
