@@ -509,6 +509,14 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     if (currentEvent?.type === 'pass') return currentEvent.targetPlayerId || currentEvent.playerId;
     return currentEvent?.playerId;
   }, [currentEvent]);
+  const inspectedVisual = inspectedPlayer ? visualPlayerCoordsRef.current.get(inspectedPlayer.player.id) : null;
+  const inspectedRect = pitchRef.current?.getBoundingClientRect();
+  const inspectedScreenX = inspectedRect && inspectedVisual ? inspectedRect.left + (inspectedVisual.x / 100) * inspectedRect.width : inspectedPlayer?.screenX;
+  const inspectedScreenY = inspectedRect && inspectedVisual ? inspectedRect.top + (inspectedVisual.y / 100) * inspectedRect.height : inspectedPlayer?.screenY;
+
+  useEffect(() => {
+    setInspectedPlayer(null);
+  }, [currentEventIndex]);
 
   return (
     <div className={`flex flex-col space-y-3 ${className}`}>
@@ -703,9 +711,11 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   if (node) playerNodesRef.current.set(player.id, node);
                   else playerNodesRef.current.delete(player.id);
                 }}
-                className="absolute left-0 top-0 z-10 cursor-pointer will-change-transform"
+                className="absolute z-10 min-w-9 min-h-9 cursor-pointer will-change-transform flex items-center justify-center"
                 style={{
-                  transform: `translate3d(0, 0, 0)`,
+                  left: `${player.x}%`,
+                  top: `${player.y}%`,
+                  transform: 'translate(-50%, -50%)',
                 }}
               >
                 <div className="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
@@ -1112,8 +1122,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         <div 
           className="fixed z-50 p-3 rounded-xl bg-slate-950/95 border border-slate-700 shadow-2xl text-xs flex items-center gap-3 animate-in fade-in zoom-in-95 duration-150"
           style={{
-            left: `${Math.min(window.innerWidth - 180, Math.max(16, inspectedPlayer.screenX - 80))}px`,
-            top: `${Math.max(20, inspectedPlayer.screenY - 70)}px`,
+            left: `${Math.min(window.innerWidth - 180, Math.max(16, (inspectedScreenX || 80) - 80))}px`,
+            top: `${Math.max(20, (inspectedScreenY || 80) - 70)}px`,
           }}
         >
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 font-display font-black flex items-center justify-center text-sm border border-emerald-500/40">
