@@ -348,8 +348,9 @@ export function useGameSocket() {
   }, [room, send]);
 
   const toggleReady = useCallback(() => {
-    if (!room || !managerId) return;
-    send('TOGGLE_READY', { roomCode: room.code, managerId });
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
+    send('TOGGLE_READY', { roomCode: room.code, managerId: currentManagerId });
   }, [room, managerId, send]);
 
   const kickPlayer = useCallback((targetManagerId: string) => {
@@ -376,13 +377,15 @@ export function useGameSocket() {
   }, [room, send]);
 
   const markFormationDone = useCallback(() => {
-    if (!room || !managerId) return;
-    send('FORMATION_READY', { roomCode: room.code, managerId });
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
+    send('FORMATION_READY', { roomCode: room.code, managerId: currentManagerId });
   }, [room, managerId, send]);
 
   const markAuctionDone = useCallback(() => {
-    if (!room || !managerId) return;
-    send('AUCTION_READY', { roomCode: room.code, managerId });
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
+    send('AUCTION_READY', { roomCode: room.code, managerId: currentManagerId });
   }, [room, managerId, send]);
 
   const skipAuctionSolo = useCallback(() => {
@@ -391,37 +394,42 @@ export function useGameSocket() {
   }, [room, send]);
 
   const placeBid = useCallback((amount: number) => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     sound.playBid();
-    send('AUCTION_BID', { roomCode: room.code, managerId, amount });
+    send('AUCTION_BID', { roomCode: room.code, managerId: currentManagerId, amount });
   }, [room, managerId, send]);
 
   const submitBlindBid = useCallback((amount: number) => {
-    if (!room || !managerId) return;
-    send('SUBMIT_BLIND_BID', { roomCode: room.code, managerId, amount });
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
+    send('SUBMIT_BLIND_BID', { roomCode: room.code, managerId: currentManagerId, amount });
   }, [room, managerId, send]);
 
   const updateLineup = useCallback((squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('UPDATE_LINEUP', { roomCode: room.code, managerId, squad, formation, tactics, roles });
+      send('UPDATE_LINEUP', { roomCode: room.code, managerId: currentManagerId, squad, formation, tactics, roles });
     } else {
       setErrorMessage('Connection lost. Reconnect before changing your lineup.');
     }
   }, [room, managerId, send]);
 
   const confirmTeam = useCallback(async () => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     sound.playWhistle();
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('CONFIRM_TEAM', { roomCode: room.code, managerId });
+      send('CONFIRM_TEAM', { roomCode: room.code, managerId: currentManagerId });
     } else {
       setErrorMessage('Connection lost. Reconnect before confirming your team.');
     }
   }, [room, managerId, send]);
 
   const runKnockoutMatch = useCallback((fixtureId: string) => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     if (socketRef.current?.readyState !== WebSocket.OPEN) {
       setSimulationError('Connection lost. Reconnect before starting the knockout match.');
       return;
@@ -429,7 +437,7 @@ export function useGameSocket() {
     setSimulationError(null);
     isSimulatingRef.current = true;
     setIsSimulating(true);
-    send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId, fixtureId });
+    send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId: currentManagerId, fixtureId });
   }, [room, managerId, send]);
   const completeKnockoutMatch = useCallback((fixtureId: string) => {
     if (!room || !managerId) return;
@@ -444,7 +452,7 @@ export function useGameSocket() {
     setSimulationError(null);
     isSimulatingRef.current = true;
     setIsSimulating(true);
-    send('COMPLETE_KNOCKOUT_MATCH', { roomCode: room.code, managerId, fixtureId });
+    send('COMPLETE_KNOCKOUT_MATCH', { roomCode: room.code, managerId: currentManagerId, fixtureId });
   }, [room, managerId, send]);
 
   const runMatchday = useCallback((matchday: number) => {
@@ -461,7 +469,7 @@ export function useGameSocket() {
     isSimulatingRef.current = true;
     setIsSimulating(true);
     sound.playWhistle();
-    send('RUN_MATCHDAY', { roomCode: room.code, managerId, matchday });
+    send('RUN_MATCHDAY', { roomCode: room.code, managerId: currentManagerId, matchday });
   }, [room, managerId, send]);
 
   const proceedToNextMatchday = useCallback(async (nextMatchday: number) => {
@@ -501,17 +509,19 @@ export function useGameSocket() {
   }, [room, send]);
 
   const respondTransfer = useCallback((offerId: string, accept: boolean) => {
-    if (!room || !managerId) return;
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      send('RESPOND_TRANSFER', { roomCode: room.code, managerId, offerId, accept });
+      send('RESPOND_TRANSFER', { roomCode: room.code, managerId: currentManagerId, offerId, accept });
     } else {
       setErrorMessage('Connection lost. Reconnect before responding to a transfer.');
     }
   }, [room, managerId, send]);
 
   const closeTransferWindow = useCallback(() => {
-    if (!room || !managerId) return;
-    send('CLOSE_TRANSFER_WINDOW', { roomCode: room.code, managerId });
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
+    send('CLOSE_TRANSFER_WINDOW', { roomCode: room.code, managerId: currentManagerId });
   }, [room, managerId, send]);
 
   const rematch = useCallback(() => {
@@ -520,8 +530,9 @@ export function useGameSocket() {
   }, [room, send]);
 
   const leaveLobby = useCallback(() => {
-    if (room && managerId && socketRef.current?.readyState === WebSocket.OPEN) {
-      send('LEAVE_ROOM', { roomCode: room.code, managerId });
+    const currentManagerId = managerIdRef.current;
+    if (room && currentManagerId && socketRef.current?.readyState === WebSocket.OPEN) {
+      send('LEAVE_ROOM', { roomCode: room.code, managerId: currentManagerId });
     }
     saveSession(null);
     managerIdRef.current = null;
