@@ -638,6 +638,23 @@ function generate22PlayerCoordinates(
     });
   });
 
+  while (coords.length < 22) {
+    const fillerIndex = coords.length + 1;
+    coords.push({
+      id: `off-pitch-${fillerIndex}`,
+      name: 'Off pitch',
+      number: 0,
+      position: 'OFF' as any,
+      category: 'OFF' as any,
+      overall: 0,
+      team: fillerIndex % 2 === 0 ? 'home' : 'away',
+      x: fillerIndex % 2 === 0 ? 1 : 99,
+      y: 1 + (fillerIndex % 10) * 5,
+      hasBall: false,
+      action: 'idle',
+    });
+  }
+
   return resolveCollisionSeparation(coords, activeAction === 'passing' ? targetPlayerId : activePlayerId);
 }
 
