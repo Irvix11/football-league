@@ -1478,14 +1478,14 @@ export function simulateMatch(
         const shooter = pick(etAttackers.length ? etAttackers : (isEtHome ? homeStarters : awayStarters));
         const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
         const gkQuality = goalkeeperQuality(etDefenderGK);
+        const etX = isEtHome ? 97.5 : 2.5;
+        const etY = 35 + rand() * 30;
         const etXg = estimateShotXg(etX, etY, isEtHome, shooter);
         let etGoalProbability = etXg * (0.90 + (shooterQuality - 75) * 0.0025) * (1.02 - (gkQuality - 80) * 0.003);
         etGoalProbability *= 0.92;
         if ((isEtHome ? homeTactics : awayTactics).mentality === 'Aggressive') etGoalProbability *= 1.07;
         etGoalProbability = Math.max(0.06, Math.min(0.48, etGoalProbability));
 
-        const etX = isEtHome ? 97.5 : 2.5;
-        const etY = 35 + rand() * 30;
         const isGoal = rand() < etGoalProbability;
         const etSec = Math.floor(rand() * 59);
 
