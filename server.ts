@@ -4200,7 +4200,7 @@ async function gracefulShutdown(signal: string) {
 }
 
 if (!process.env.VERCEL) {
-  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM').catch(error => console.error('[shutdown] failed:', error));
-  process.on('SIGINT', () => void gracefulShutdown('SIGINT').catch(error => console.error('[shutdown] failed:', error));
+  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM').catch(error => console.error('[shutdown] failed:', error)));
+  process.on('SIGINT', () => void gracefulShutdown('SIGINT').catch(error => console.error('[shutdown] failed:', error)));
   startServer();
 }
