@@ -1,4 +1,4 @@
-import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult } from '../types/football.js';
+import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult, Position, PositionCategory } from '../types/football.js';
 import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory, calculatePositionFit } from '../constants/formations.js';
 
 /**
@@ -814,6 +814,7 @@ export function simulateMatch(
       saves: 0,
       yellowCard: false,
       redCard: false,
+      fouls: 0,
       rating: 6.0,
     });
   }
