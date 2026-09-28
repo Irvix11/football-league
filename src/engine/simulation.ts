@@ -1969,10 +1969,20 @@ export function simulateMatch(
     winnerManagerId = homeScore > awayScore ? homeManager.id : awayManager.id;
   }
 
+  normalizeEventTimeline(events, firstHalfEnd, secondHalfEnd);
+  const lastTimelineSeconds = events.length > 0
+    ? Math.max(...events.map(event => event.minute * 60 + (event.second || 0)))
+    : secondHalfEnd;
+  const finalWhistleSeconds = wentToPenalties
+    ? Math.max(122 * 60, lastTimelineSeconds + 1)
+    : wentToExtraTime
+      ? 120 * 60
+      : secondHalfEnd;
+
   // Final Whistle at the actual second-half/extra-time/shootout end.
   pushEvent({
-    minute: wentToExtraTime ? (wentToPenalties ? 122 : 120) : Math.floor(secondHalfEnd / 60),
-    second: wentToExtraTime ? 0 : secondHalfEnd % 60,
+    minute: Math.floor(finalWhistleSeconds / 60),
+    second: finalWhistleSeconds % 60,
     type: 'fulltime',
     team: 'home',
     playerId: homeKicker.player.id,
