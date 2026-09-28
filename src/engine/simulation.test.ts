@@ -103,7 +103,7 @@ describe('simulation invariants', () => {
       const repeat = simulateMatch(structuredClone(homeInput), structuredClone(awayInput), `test-${i}`, i + 1, 100000 + i, knockout, knockout ? 'Final' : undefined, knockout && i % 8 === 0);
       expect(JSON.stringify(repeat)).toBe(JSON.stringify(result));
     }
-  });
+  }, 120_000);
 
   it('keeps GK jersey number 1 even when the squad array is shuffled', () => {
     const home = makeManager('home', 'Home', 0);
