@@ -71,6 +71,12 @@ jobs:
           ExecStart=/usr/bin/node /var/www/football-league-app/node_modules/tsx/dist/cli.mjs server.ts
           Restart=always
           RestartSec=3
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+          ProtectSystem=full
+          UMask=027
+          LimitNOFILE=65535
 
           [Install]
           WantedBy=multi-user.target
