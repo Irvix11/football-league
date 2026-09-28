@@ -538,10 +538,13 @@ function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRo
   };
 
   sanitized.hostId = ref(sanitized.hostId) as string;
-  sanitized.managers = sanitized.managers.map(m => ({
-    ...m,
-    id: ref(m.id) as string,
-  }));
+  sanitized.managers = sanitized.managers.map(m => {
+    const { reconnectTokenHash: _reconnectTokenHash, ...publicManager } = m;
+    return {
+      ...publicManager,
+      id: ref(m.id) as string,
+    };
+  });
   sanitized.leagueTable = sanitized.leagueTable.map(row => ({
     ...row,
     managerId: ref(row.managerId) as string,
@@ -2423,17 +2426,15 @@ wss.on('connection', (ws) => {
 
           if (type === 'START_SOLO_GAME' || isSolo) {
             const result = createSoloGameRoom(managerName || 'Solo Manager', soloFormation);
-            // Persist the initial solo room before returning it so a browser refresh
-            // or Vercel function hop can recover the saved session.
+            const soloManager = result.room.managers.find(m => m.id === result.managerId);
+            const reconnectToken = soloManager ? setReconnectCredential(soloManager) : '';
+            // Persist the credential hash before returning the session so refresh/recovery works.
             await saveRoomSnapshot(result.room);
             if (!roomSockets.has(result.roomCode)) {
               roomSockets.set(result.roomCode, new Set());
             }
             roomSockets.get(result.roomCode)!.add(ws);
             socketToRoom.set(ws, { roomCode: result.roomCode, managerId: result.managerId });
-            const soloManager = result.room.managers.find(m => m.id === result.managerId);
-            const reconnectToken = soloManager ? setReconnectCredential(soloManager) : '';
-
             ws.send(JSON.stringify({
               type: 'LOBBY_CREATED',
               roomCode: result.roomCode,
