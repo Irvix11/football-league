@@ -36,6 +36,14 @@ npm run build
 
 The realtime WebSocket endpoint is served from `/api/ws`. Durable room snapshots are written to Supabase so reconnects can recover across function instances.
 
+## Realtime deployment options
+
+Vercel supports WebSockets through Fluid Compute, but connections are pinned to a Function instance and can close when the Function reaches its maximum duration. This application therefore treats reconnect/resync as mandatory and can use Redis for multi-instance fan-out when `REDIS_URL` is configured.
+
+For a simpler always-on realtime deployment, use the included `render.yaml` to run the Node/Express WebSocket server on Render and keep the Vercel deployment as the static frontend. Set `VITE_GAME_SERVER_URL` in the Vercel environment to the Render HTTPS/WSS origin.
+
+When `REDIS_URL` is configured, production should use Redis/Upstash for shared room broadcasts, timer coordination, and blind-bid state. Without it, the server retains the single-instance in-memory behavior.
+
 ## Development
 
 ```bash
