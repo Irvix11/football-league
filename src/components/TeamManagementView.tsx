@@ -78,13 +78,6 @@ function autoFillBestLineup(squad: SquadPlayerEntry[], formation: Formation): Sq
 // Local, dependency-free position categorizer. Keeping this helper in the view
 // prevents a runtime ReferenceError if a stale/cached module graph drops the
 // named export during a production hot update.
-function getPositionCategory(pos: Position): 'GK' | 'DEF' | 'MID' | 'ATT' {
-  if (pos === 'GK') return 'GK';
-  if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(pos)) return 'DEF';
-  if (['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(pos)) return 'MID';
-  return 'ATT';
-}
-
 const ALL_POSITIONS: Position[] = [
   'GK','LB','CB','RB','LWB','RWB','CDM','CM','CAM','LM','RM','LW','RW','ST','CF',
 ];
@@ -102,7 +95,12 @@ function allowedPositionsForPlayer(player: Player, _starterCategory?: 'GK' | 'DE
 }
 
 function bestPositionForCategory(entry: SquadPlayerEntry, category: 'GK' | 'DEF' | 'MID' | 'ATT'): Position {
-  const candidates = ALL_POSITIONS.filter((p) => getPositionCategory(p) === category);
+  const candidates = ALL_POSITIONS.filter((p) => {
+    if (p === 'GK') return category === 'GK';
+    if (['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(p)) return category === 'DEF';
+    if (['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p)) return category === 'MID';
+    return category === 'ATT';
+  });
   return [...candidates].sort(
     (a, b) =>
       calculatePositionFit(entry.player.position, entry.player.alternatePositions, b) -
@@ -274,7 +272,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     const entry = currentManager.squad.find((s) => s.player.id === playerId);
     if (!entry) return;
 
-    const nextCategory = getPositionCategory(position);
+    const nextCategory = position === 'GK' ? 'GK' : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(position) ? 'DEF' : ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(position) ? 'MID' : 'ATT';
     if (entry.player.category === 'GK' && nextCategory !== 'GK') {
       setActionError('Goalkeepers can only be assigned to GK.');
       return;
