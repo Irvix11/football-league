@@ -70,7 +70,7 @@ describe('simulation invariants', () => {
         expect(seconds(events[j])).toBeGreaterThanOrEqual(seconds(events[j - 1]));
       }
 
-      const openPlayGoals = result.events.filter(e => e.type === 'goal').length;
+      const openPlayGoals = events.filter(e => e.type === 'goal').length;
       expect(openPlayGoals).toBe((result.homeScore || 0) + (result.awayScore || 0));
 
       for (const team of [result.homeStats!, result.awayStats!]) {
