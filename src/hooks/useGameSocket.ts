@@ -246,7 +246,7 @@ export function useGameSocket() {
         setRoom(current => {
           if (!current || snapshot.updatedAt >= current.updatedAt) {
             const saved = getSavedSession();
-            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || current.managers.find(m => m.id === managerIdRef.current)?.name || null);
+            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || null);
           }
           return current;
         });
