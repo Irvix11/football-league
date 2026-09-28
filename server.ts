@@ -24,7 +24,7 @@ import {
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
-import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots } from './server/persistence.js';
+import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots, persistenceQueues, persistenceTimers } from './server/persistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +47,10 @@ app.use((req, res, next) => {
 });
 
 const server = http.createServer(app);
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection:', reason);
+});
 const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
@@ -231,7 +235,7 @@ server.on('close', () => clearInterval(websocketHeartbeat));
 setInterval(() => {
   cleanupOldRoomSnapshots().catch(() => undefined);
 }, 10 * 60 * 1000).unref();
-void cleanupOldRoomSnapshots();
+void cleanupOldRoomSnapshots().catch(error => console.error('[persistence] initial cleanup failed:', error));
 
 function sendSocketError(ws: WebSocket, message: string) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -476,8 +480,6 @@ function ensurePhaseReadyTicker(room: GameRoom) {
 // write storm. Broadcasts can be frequent; durable state only needs the latest
 // snapshot a few times per second. The timer always captures the newest room state
 // when it fires, so reconnects never overwrite a fresh snapshot with an older one.
-const persistenceQueues = new Map<string, Promise<void>>();
-const persistenceTimers = new Map<string, NodeJS.Timeout>();
 
 function queueRoomSnapshot(room: GameRoom) {
   const code = room.code;
