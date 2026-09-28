@@ -102,6 +102,21 @@ function AppContent() {
   const currentManager = room?.managers.find((m) => m.id === managerId);
   const isHost = currentManager?.isHost ?? false;
   const kickTargets = room?.managers.filter((m) => m.id !== managerId && !m.isHost) ?? [];
+
+  const handleLeagueMatchComplete = async (fixtureId: string) => {
+    if (!room || !managerId || !isHost) return;
+    const remaining = room.fixtures.some(
+      (fixture) =>
+        fixture.matchday === room.currentMatchday &&
+        fixture.id !== fixtureId &&
+        !fixture.played
+    );
+    if (remaining) {
+      await runMatchday(room.currentMatchday);
+    }
+  };
+
+
   const knownPhases = new Set([
     'lobby',
     'formation_select',
@@ -245,6 +260,7 @@ function AppContent() {
           room={room}
           managerId={managerId}
           onRunMatchday={runMatchday}
+          onMatchComplete={handleLeagueMatchComplete}
           onProceedNextMatchday={proceedToNextMatchday}
           onFinishSeason={finishSeason}
           onProposeTransfer={proposeTransfer}
