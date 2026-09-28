@@ -76,15 +76,17 @@ for (let i = 0; i < matches; i++) {
   const away = makeManager('away', 'Away', awayBase);
   const fixture = simulateMatch(home, away, `cal-${i}`, i + 1, 0x700000 + i, false);
   averages.goals += (fixture.homeScore || 0) + (fixture.awayScore || 0);
-  averages.shots += fixture.homeStats.shots + fixture.awayStats.shots;
-  averages.onTarget += fixture.homeStats.shotsOnTarget + fixture.awayStats.shotsOnTarget;
-  averages.yellows += fixture.homeStats.yellowCards + fixture.awayStats.yellowCards;
-  averages.fouls += fixture.homeStats.fouls + fixture.awayStats.fouls;
-  averages.reds += fixture.homeStats.redCards + fixture.awayStats.redCards;
+  const homeStats = fixture.homeStats!;
+  const awayStats = fixture.awayStats!;
+  averages.shots += homeStats.shots + awayStats.shots;
+  averages.onTarget += homeStats.shotsOnTarget + awayStats.shotsOnTarget;
+  averages.yellows += homeStats.yellowCards + awayStats.yellowCards;
+  averages.fouls += homeStats.fouls + awayStats.fouls;
+  averages.reds += homeStats.redCards + awayStats.redCards;
   if ((fixture.homeScore || 0) > (fixture.awayScore || 0)) averages.homeWins++;
   else if ((fixture.homeScore || 0) === (fixture.awayScore || 0)) averages.draws++;
   else averages.awayWins++;
-  if (fixture.homeStats.possession < 35 || fixture.homeStats.possession > 65) averages.possessionOutOfRange++;
+  if (homeStats.possession < 35 || homeStats.possession > 65) averages.possessionOutOfRange++;
 }
 
 console.log(JSON.stringify({
