@@ -96,6 +96,16 @@ export function useGameSocket() {
     } catch {}
   }, []);
 
+  const clearSimulationState = useCallback(() => {
+    if (simulationSafetyTimerRef.current !== null) {
+      window.clearTimeout(simulationSafetyTimerRef.current);
+      simulationSafetyTimerRef.current = null;
+    }
+    simulatedFixtureIdRef.current = null;
+    isSimulatingRef.current = false;
+    setIsSimulating(false);
+  }, []);
+
   const connect = useCallback(() => {
     if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
       return;
@@ -155,7 +165,7 @@ export function useGameSocket() {
 
           case 'LOBBY_CREATED':
           case 'LOBBY_JOINED': {
-            setRoom(restoreViewerIdentity(newRoom, assignedId, null));
+            setRoom(newRoom);
             setManagerId(assignedId);
             managerIdRef.current = assignedId;
             setSecretBidSubmitted(null);
@@ -176,7 +186,7 @@ export function useGameSocket() {
             setRoom(current => {
               const next = newRoom;
               if (isSimulatingRef.current && simulatedFixtureIdRef.current) {
-                const fixture = next.fixtures?.find(f => f.id === simulatedFixtureIdRef.current);
+                const fixture = next.fixtures?.find((f: GameRoom['fixtures'][number]) => f.id === simulatedFixtureIdRef.current);
                 const completed = Boolean(fixture?.played);
                 const liveFixtureChanged = current?.liveFixtureId !== next.liveFixtureId &&
                   next.liveFixtureId !== simulatedFixtureIdRef.current;
@@ -320,16 +330,6 @@ export function useGameSocket() {
     }, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [room?.code]);
-
-  const clearSimulationState = useCallback(() => {
-    if (simulationSafetyTimerRef.current !== null) {
-      window.clearTimeout(simulationSafetyTimerRef.current);
-      simulationSafetyTimerRef.current = null;
-    }
-    simulatedFixtureIdRef.current = null;
-    isSimulatingRef.current = false;
-    setIsSimulating(false);
-  }, []);
 
   // Actions
   const send = useCallback((type: string, payload: any) => {
