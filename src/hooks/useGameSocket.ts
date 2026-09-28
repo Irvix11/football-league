@@ -184,18 +184,15 @@ export function useGameSocket() {
           }
 
           case 'ROOM_UPDATE': {
-            const saved = getSavedSession();
-            setRoom(current => {
-              const next = newRoom;
-              if (isSimulatingRef.current && simulatedFixtureIdRef.current) {
-                const fixture = next.fixtures?.find((f: GameRoom['fixtures'][number]) => f.id === simulatedFixtureIdRef.current);
-                const completed = Boolean(fixture?.played);
-                const liveFixtureChanged = current?.liveFixtureId !== next.liveFixtureId &&
-                  next.liveFixtureId !== simulatedFixtureIdRef.current;
-                if (completed || liveFixtureChanged) clearSimulationState();
-              }
-              return next;
-            });
+            const current = roomRef.current;
+            if (isSimulatingRef.current && simulatedFixtureIdRef.current) {
+              const fixture = newRoom?.fixtures?.find((f: GameRoom['fixtures'][number]) => f.id === simulatedFixtureIdRef.current);
+              const completed = Boolean(fixture?.played);
+              const liveFixtureChanged = current?.liveFixtureId !== newRoom?.liveFixtureId &&
+                newRoom?.liveFixtureId !== simulatedFixtureIdRef.current;
+              if (completed || liveFixtureChanged) clearSimulationState();
+            }
+            setRoom(newRoom);
             break;
           }
 
