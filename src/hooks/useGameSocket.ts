@@ -123,13 +123,15 @@ export function useGameSocket() {
       const saved = getSavedSession();
       const liveRoom = roomRef.current;
       const liveManagerId = managerIdRef.current;
-      if (saved && liveRoom?.code && liveManagerId) {
+      const reconnectRoomCode = liveRoom?.code || saved?.roomCode;
+      const reconnectManagerId = liveManagerId || saved?.managerId;
+      if (saved?.reconnectToken && reconnectRoomCode && reconnectManagerId) {
         ws.send(JSON.stringify({
           type: 'JOIN_LOBBY',
           payload: {
-            roomCode: liveRoom.code,
+            roomCode: reconnectRoomCode,
             managerName: saved.managerName,
-            reconnectId: saved.managerId,
+            reconnectId: reconnectManagerId,
             reconnectToken: saved.reconnectToken,
           },
         }));
