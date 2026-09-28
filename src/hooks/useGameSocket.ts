@@ -61,12 +61,14 @@ export function useGameSocket() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [managerId, setManagerId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationError, setSimulationError] = useState<string | null>(null);
   const [secretBidSubmitted, setSecretBidSubmitted] = useState<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptRef = useRef(0);
   const managerIdRef = useRef<string | null>(null);
   const intentionalCloseRef = useRef(false);
   const isSimulatingRef = useRef(false);
@@ -106,11 +108,24 @@ export function useGameSocket() {
 
     ws.onopen = () => {
       setIsConnected(true);
+      setIsReconnecting(false);
       setErrorMessage(null);
+      reconnectAttemptRef.current = 0;
 
-      // Reconnect is intentionally user-confirmed. A stale saved credential must
-      // never silently re-enter a lobby, especially after the manager was kicked.
-      // The main menu exposes an explicit "Rejoin" action instead.
+      const saved = getSavedSession();
+      const liveRoom = room;
+      const liveManagerId = managerIdRef.current;
+      if (saved && liveRoom?.code && liveManagerId) {
+        ws.send(JSON.stringify({
+          type: 'JOIN_LOBBY',
+          payload: {
+            roomCode: liveRoom.code,
+            managerName: saved.managerName,
+            reconnectId: saved.managerId,
+            reconnectToken: saved.reconnectToken,
+          },
+        }));
+      }
     };
 
     ws.onmessage = (event) => {
@@ -227,13 +242,18 @@ export function useGameSocket() {
     };
 
     ws.onclose = () => {
+      if (socketRef.current !== ws) return;
       setIsConnected(false);
       socketRef.current = null;
       if (!intentionalCloseRef.current) {
+        setIsReconnecting(Boolean(room));
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        const attempt = reconnectAttemptRef.current++;
+        const base = Math.min(15000, 1000 * (2 ** Math.min(attempt, 4)));
+        const jitter = Math.floor(Math.random() * Math.max(250, base * 0.25));
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
-        }, 2000);
+        }, Math.min(15000, base + jitter));
       }
     };
 
@@ -243,7 +263,7 @@ export function useGameSocket() {
     };
 
     socketRef.current = ws;
-  }, [getSavedSession, saveSession]);
+  }, [getSavedSession, saveSession, room]);
 
   useEffect(() => {
     connect();
@@ -268,7 +288,7 @@ export function useGameSocket() {
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
         setRoom(current => {
-          if (!current || snapshot.updatedAt >= current.updatedAt) {
+          if (!current || snapshot.updatedAt > current.updatedAt) {
             const saved = getSavedSession();
             return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || null);
           }
@@ -276,7 +296,11 @@ export function useGameSocket() {
         });
       } catch {}
     };
-    const timer = window.setInterval(sync, 3000);
+    const timer = window.setInterval(() => {
+      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+        if (document.visibilityState === 'visible') sync();
+      }
+    }, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [room?.code]);
 
@@ -433,20 +457,20 @@ export function useGameSocket() {
 
   const placeBid = useCallback((amount: number) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     sound.playBid();
     send('AUCTION_BID', { roomCode: room.code, managerId: currentManagerId, amount });
   }, [room, managerId, send]);
 
   const submitBlindBid = useCallback((amount: number) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     send('SUBMIT_BLIND_BID', { roomCode: room.code, managerId: currentManagerId, amount });
   }, [room, managerId, send]);
 
   const updateLineup = useCallback((squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       send('UPDATE_LINEUP', { roomCode: room.code, managerId: currentManagerId, squad, formation, tactics, roles });
     } else {
@@ -456,7 +480,7 @@ export function useGameSocket() {
 
   const confirmTeam = useCallback(async () => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     sound.playWhistle();
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       send('CONFIRM_TEAM', { roomCode: room.code, managerId: currentManagerId });
@@ -467,8 +491,7 @@ export function useGameSocket() {
 
   const runKnockoutMatch = useCallback((fixtureId: string) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before starting the knockout match.');
       return;
     }
@@ -479,8 +502,7 @@ export function useGameSocket() {
   }, [room, managerId, send]);
   const completeKnockoutMatch = useCallback((fixtureId: string) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before continuing the knockout round.');
       return;
     }
@@ -496,8 +518,7 @@ export function useGameSocket() {
 
   const runMatchday = useCallback((matchday: number) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before starting the match.');
       return;
     }
@@ -514,8 +535,7 @@ export function useGameSocket() {
 
   const completeLeagueMatch = useCallback((fixtureId: string) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before completing the match.');
       return;
     }
@@ -603,6 +623,7 @@ export function useGameSocket() {
     isConnected,
     errorMessage,
     isSimulating,
+    isReconnecting,
     simulationError,
     secretBidSubmitted,
     startSoloGame,
