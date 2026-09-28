@@ -756,7 +756,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
               <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
                 <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-400 text-xs font-mono font-black uppercase tracking-widest">
-                  ⏸ HALF TIME (${formattedTime})
+                  ⏸ HALF TIME ({formattedTime})
                 </div>
 
                 {/* Score Display */}
@@ -817,7 +817,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
               <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
                 <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-black uppercase tracking-widest">
-                  🏁 FULL TIME (${formattedTime})
+                  🏁 FULL TIME ({formattedTime})
                 </div>
 
                 {/* Score Display */}
