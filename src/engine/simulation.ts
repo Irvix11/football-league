@@ -2020,16 +2020,39 @@ export function simulateMatch(
     }
   }
 
-  // Calculate team possession
-  const totalPasses = Math.max(1, homeStats.passes + awayStats.passes);
-  homeStats.possession = Math.round((homeStats.passes / totalPasses) * 100);
+  // Possession is derived from the event timeline, not pass counters.
+  const possessionSeconds = { home: 0, away: 0 };
+  for (let i = 0; i < events.length - 1; i++) {
+    const current = events[i];
+    const next = events[i + 1];
+    const duration = Math.max(0, (next.minute * 60 + (next.second || 0)) - (current.minute * 60 + (current.second || 0)));
+    if (current.team === 'home' || current.team === 'away') possessionSeconds[current.team] += duration;
+  }
+  const totalPossessionSeconds = Math.max(1, possessionSeconds.home + possessionSeconds.away);
+  homeStats.possession = Math.round((possessionSeconds.home / totalPossessionSeconds) * 100);
   awayStats.possession = 100 - homeStats.possession;
+
+  const midfieldQualityHome = homePower.midfield;
+  const midfieldQualityAway = awayPower.midfield;
+  homeStats.passAccuracy = Math.round(clamp(82 + (midfieldQualityHome - midfieldQualityAway) * 0.12 - (awayTactics.pressingIntensity - 50) * 0.12, 72, 92));
+  awayStats.passAccuracy = Math.round(clamp(82 + (midfieldQualityAway - midfieldQualityHome) * 0.12 - (homeTactics.pressingIntensity - 50) * 0.12, 72, 92));
   homeStats.score = homeScore;
   awayStats.score = awayScore;
 
+  // Final player ratings: contributions in both directions, with a 3.0 floor.
+  for (const stat of playerStatsMap.values()) {
+    const conceded = stat.team === 'home' ? awayScore : homeScore;
+    const entry = (stat.team === 'home' ? homeStarters : awayStarters).find(s => s.player.id === stat.playerId);
+    if (stat.team === 'home' && awayScore === 0 && entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating += 0.4;
+    if (stat.team === 'away' && homeScore === 0 && entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating += 0.4;
+    if (entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating -= conceded * 0.35;
+    stat.rating += stat.tackles * 0.08 + stat.interceptions * 0.10 + stat.saves * 0.18;
+    stat.rating -= (stat.yellowCard ? 0.3 : 0) + (stat.redCard ? 1.5 : 0) + stat.fouls * 0.05;
+  }
+
   const playerStatsList = Array.from(playerStatsMap.values()).map(stat => ({
     ...stat,
-    rating: Math.min(10.0, Math.max(5.0, Number(stat.rating.toFixed(1)))),
+    rating: Math.min(10.0, Math.max(3.0, Number(stat.rating.toFixed(1)))),
   }));
 
   return {
