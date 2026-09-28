@@ -3748,7 +3748,7 @@ app.get('/api/room/:code', async (req, res) => {
     if (room) rooms.set(code, room);
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
-  if (viewerId && !room.managers.some(m => m.id === viewerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+  if (!viewerId || !room.managers.some(m => m.id === viewerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
   // HTTP polling can be the first request after a serverless instance changes.
   // Resume absolute auction and phase-readiness clocks after a cold start.
   ensureAuctionTicker(room);
