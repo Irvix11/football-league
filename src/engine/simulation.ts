@@ -988,6 +988,7 @@ export function simulateMatch(
 
     ballX = newBallX;
     ballY = newBallY;
+    const wasCounter = isCounterAttacking;
     isCounterAttacking = false; // reset counter flag after initial surge
 
     // Advance 8-16 seconds for the ensuing duel or shot
@@ -1039,7 +1040,7 @@ export function simulateMatch(
         0.125 +
           (atkTactics.tempo - 50) * 0.0009 +
           (atkTactics.risk - 50) * 0.0008 +
-          (isCounterAttacking ? 0.035 : 0)
+          (wasCounter ? 0.035 : 0)
       )
     );
     const crossCutoff = Math.min(0.82, turnoverThreshold + crossChance);
@@ -1358,7 +1359,7 @@ export function simulateMatch(
         // into a free goal.
         if (defTactics.style === 'Low Block') goalProbability *= 0.78;
         if (atkTactics.style === 'Possession') goalProbability *= 1.03;
-        if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.10;
+        if (atkTactics.style === 'Counter Attack' || wasCounter) goalProbability *= 1.10;
         if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.04;
         goalProbability *= isHome ? 1.035 : 0.985;
         if (atkTactics.mentality === 'Defensive') goalProbability *= 0.95;
