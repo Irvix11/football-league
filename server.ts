@@ -3098,13 +3098,16 @@ wss.on('connection', (ws) => {
           const manager = room.managers.find(m => m.id === session.managerId);
           if (manager) {
             const nextFormation = formation || manager.formation;
-            const sanitized = squad
-              ? validateAndSanitizeLineupUpdate(manager, squad, nextFormation, tactics, roles)
-              : {
-                  squad: manager.squad,
-                  tactics: tactics || manager.tactics,
-                  roles: roles || manager.roles,
-                };
+            // Always run the authoritative validator, even when the client
+            // only changes tactics/roles. Never accept raw tactic or role objects
+            // without server-side validation.
+            const sanitized = validateAndSanitizeLineupUpdate(
+              manager,
+              Array.isArray(squad) ? squad : manager.squad,
+              nextFormation,
+              tactics,
+              roles
+            );
 
             if (!sanitized) {
               sendSocketError(ws, 'Invalid lineup. You can only rearrange players you already own and must keep a valid formation.');
@@ -3779,6 +3782,8 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
       Object.assign(fix, result);
       room.fixtures = round.fixtures;
 
+      // Keep the REST fallback durable just like the WebSocket path.
+      await saveRoomSnapshot(room);
       broadcastRoom(room.code);
       return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
     } finally {
@@ -3814,6 +3819,7 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
     }
 
     advanceKnockoutRound(room);
+    await saveRoomSnapshot(room);
     broadcastRoom(room.code);
     return res.json({ success: true, room: sanitizeRoomForViewer(room, managerId) });
   } catch (error: any) {
