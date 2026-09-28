@@ -57,6 +57,25 @@ interface TeamPower {
   overall: number;
 }
 
+function getAvailableGoalkeeper(
+  preferred: SquadPlayerEntry,
+  starters: SquadPlayerEntry[],
+  sentOffIds: Set<string>,
+): SquadPlayerEntry {
+  if (!sentOffIds.has(preferred.player.id)) return preferred;
+  const replacement = starters.find(player => !sentOffIds.has(player.player.id));
+  if (!replacement) return preferred;
+  return {
+    ...replacement,
+    player: {
+      ...replacement.player,
+      position: 'GK',
+      category: 'GK',
+    },
+    assignedPosition: 'GK',
+  };
+}
+
 function calculateTeamPower(manager: Manager): TeamPower {
   const starters = manager.squad.filter(s => s.isStarting);
   // Use the manager's assigned position when determining the tactical unit.
@@ -968,7 +987,7 @@ export function simulateMatch(
     const atkAtts = (isHome ? homeAtts : awayAtts).filter(s => !sentOffIds.has(s.player.id));
     const atkDefs = (isHome ? homeDefs : awayDefs).filter(s => !sentOffIds.has(s.player.id));
     const defDefs = (isHome ? awayDefs : homeDefs).filter(s => !sentOffIds.has(s.player.id));
-    const defGK = isHome ? awayGK : homeGK;
+    const defGK = getAvailableGoalkeeper(isHome ? awayGK : homeGK, defendingStarters, sentOffIds);
 
     // Step 1: Progression Pass / Buildup (Tactics Influence: Possession vs Counter vs Long Ball)
     const isPossessionStyle = atkTactics.style === 'Possession' || atkTactics.tempo < 45;
@@ -1567,7 +1586,7 @@ export function simulateMatch(
         const etAtk = isEtHome ? homePower : awayPower;
         const etDef = isEtHome ? awayPower : homePower;
         const etAttackers = (isEtHome ? homeAtts : awayAtts).filter(player => !sentOffIds.has(player.player.id));
-        const etDefenderGK = isEtHome ? awayGK : homeGK;
+        const etDefenderGK = getAvailableGoalkeeper(isEtHome ? awayGK : homeGK, isEtHome ? awayStarters : homeStarters, sentOffIds);
         const shooter = pick(etAttackers.length ? etAttackers : (isEtHome ? homeStarters : awayStarters));
         const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
         const gkQuality = goalkeeperQuality(etDefenderGK);
