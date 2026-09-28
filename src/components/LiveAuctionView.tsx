@@ -54,6 +54,10 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const displaySecondsRemaining = auction.auctionEndsAt
     ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
     : auction.secondsRemaining;
+  const formatCountdown = (totalSeconds: number) => {
+    const safe = Math.max(0, Math.floor(totalSeconds));
+    return `${Math.floor(safe / 60).toString().padStart(2, '0')}:${(safe % 60).toString().padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     if (!auction.currentPlayer || auction.isSold || auction.isPaused) return;
@@ -403,7 +407,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                         : 'text-slate-100 bg-slate-950 border-slate-800'
                     }`}
                   >
-                    00:{displaySecondsRemaining < 10 ? `0${displaySecondsRemaining}` : displaySecondsRemaining}
+                    {formatCountdown(displaySecondsRemaining)}
                   </div>
                 </div>
 
@@ -496,8 +500,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     ) : (
                       <div className="space-y-3">
                         <div className="grid grid-cols-4 gap-2">
-                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [0])).map((inc) => {
-                             const targetBid = auction.highestBidderId ? auction.currentBid + inc : auction.currentBid;
+                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [player.startingPrice])).map((inc) => {
+                             const targetBid = auction.highestBidderId ? auction.currentBid + inc : Math.max(player.startingPrice, auction.currentBid);
                              const possible = currentManager.budget >= targetBid;
                             return (
                               <button
@@ -511,7 +515,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                                     : 'bg-slate-950 text-slate-600 border border-slate-900 cursor-not-allowed'
                                 }`}
                               >
-                                +£{inc}M
+                                {auction.highestBidderId ? `+£${inc}M` : `BID £${targetBid}M`}
                               </button>
                             );
                           })}
@@ -558,7 +562,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                       <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/40 text-center">
                         <div className="flex items-center justify-center gap-1.5 text-emerald-400 font-bold text-xs">
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>Secret Bid Submitted!</span>
+                          <span>Secret Bid Submitted{secretBidSubmitted !== null ? ` — £${secretBidSubmitted}M` : ''}!</span>
                         </div>
                       </div>
                     )}
@@ -569,15 +573,15 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                           type="number"
                           min={player.startingPrice}
                           max={currentManager.budget}
-                          disabled={auction.isSold}
-                          placeholder={`Min Starting Price: £${player.startingPrice}M`}
-                          value={blindBidInput}
+                          disabled={auction.isSold || hasSubmittedSecret}
+                          placeholder={hasSubmittedSecret ? `Submitted £${secretBidSubmitted ?? '?'}M` : `Min Starting Price: £${player.startingPrice}M`}
+                          value={hasSubmittedSecret ? '' : blindBidInput}
                           onChange={(e) => setBlindBidInput(e.target.value)}
                           className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
                         />
                         <button
                           type="submit"
-                          disabled={auction.isSold || !canAfford}
+                          disabled={auction.isSold || !canAfford || hasSubmittedSecret}
                           className="px-5 py-2.5 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-amber-400 hover:bg-amber-300 text-slate-950 transition-all shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
                         >
                           SUBMIT BID
