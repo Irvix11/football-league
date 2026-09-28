@@ -2817,7 +2817,7 @@ wss.on('connection', (ws) => {
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
           const ready = new Set(room.phaseReadyIds || []);
-          ready.add(managerId);
+          ready.add(actorId);
           room.phaseReadyIds = [...ready];
           if (allFormationReady(room)) {
             beginAuctionFromFormation(room);
@@ -2909,7 +2909,7 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          if ((room.phaseReadyIds || []).includes(managerId)) {
+          if ((room.phaseReadyIds || []).includes(actorId)) {
             sendSocketError(ws, 'You marked the auction done and cannot bid again.');
             return;
           }
@@ -3450,7 +3450,7 @@ wss.on('connection', (ws) => {
           }
 
           const offer = room.transferOffers.find(o => o.id === offerId && o.status === 'pending');
-          if (!offer || offer.toManagerId !== managerId) {
+          if (!offer || offer.toManagerId !== actorId) {
             sendSocketError(ws, 'Transfer proposal not found or already resolved.');
             return;
           }
@@ -3476,7 +3476,7 @@ wss.on('connection', (ws) => {
           if (!manager) return;
 
           const readyIds = new Set(room.transferWindowReadyIds || []);
-          readyIds.add(managerId);
+          readyIds.add(actorId);
           room.transferWindowReadyIds = [...readyIds];
 
           if (maybeCloseMidSeasonWindow(room)) {
