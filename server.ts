@@ -3757,7 +3757,7 @@ app.get('/api/room/:code', async (req, res) => {
   ensurePhaseReadyTicker(room);
   // HTTP snapshots are public to anyone holding the six-character room code.
   // Never expose internal manager IDs through this endpoint.
-  const snapshot = sanitizeRoomForViewer(room);
+  const snapshot = sanitizeRoomForViewer(room, viewerId);
   if (snapshot.settings.auctionMode === 'Blind' && snapshot.phase === 'auction' && !snapshot.auction.isSold) {
     // Keep the REST snapshot behind the same privacy boundary as WebSocket
     // broadcasts: humans see exactly two clues, never the real identity/OVR.
