@@ -37,37 +37,43 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   // Bid animation tracking
   const prevBidRef = useRef(auction.currentBid);
   const prevBidderRef = useRef(auction.highestBidderId);
+  const prevLotRef = useRef(auction.currentPlayer?.id || null);
+  const serverOffsetRef = useRef(0);
   const [bidUpdated, setBidUpdated] = useState(false);
   const [wasOutbid, setWasOutbid] = useState(false);
+
+  useEffect(() => {
+    if (room.serverNow) serverOffsetRef.current = room.serverNow - Date.now();
+  }, [room.serverNow]);
 
   // Render the countdown from the server's absolute deadline. This keeps the
   // UI moving even if a websocket snapshot is only arriving every few seconds.
   const [auctionClock, setAuctionClock] = useState(() => Date.now());
   useEffect(() => {
     if (!auction.currentPlayer || auction.isSold || auction.isPaused) return;
-    const timer = window.setInterval(() => setAuctionClock(Date.now()), 250);
+    const timer = window.setInterval(() => setAuctionClock(Date.now() + serverOffsetRef.current), 250);
     return () => window.clearInterval(timer);
   }, [auction.currentPlayer?.id, auction.isSold, auction.isPaused, auction.auctionEndsAt]);
 
   // Detect new bid or outbid
   useEffect(() => {
-    if (auction.currentBid !== prevBidRef.current) {
-      setBidUpdated(true);
-      const timer = setTimeout(() => setBidUpdated(false), 900);
+    const lotId = auction.currentPlayer?.id || null;
+    const sameLot = prevLotRef.current === lotId;
+    const wasWinning = sameLot && prevBidderRef.current === managerId;
+    const nowOutbid = wasWinning && auction.highestBidderId !== null && auction.highestBidderId !== managerId && !auction.isSold;
 
-      // Check if current user was previously winning and got outbid
-      if (prevBidderRef.current === managerId && auction.highestBidderId !== managerId && !auction.isSold) {
-        setWasOutbid(true);
-        sound.playWhistle();
-        const outbidTimer = setTimeout(() => setWasOutbid(false), 3500);
-        return () => clearTimeout(outbidTimer);
-      }
+    prevLotRef.current = lotId;
+    prevBidRef.current = auction.currentBid;
+    prevBidderRef.current = auction.highestBidderId;
 
-      prevBidRef.current = auction.currentBid;
-      prevBidderRef.current = auction.highestBidderId;
-      return () => clearTimeout(timer);
+    if (auction.currentBid !== prevBidRef.current) setBidUpdated(true);
+    if (nowOutbid) {
+      setWasOutbid(true);
+      sound.playWhistle();
+      const outbidTimer = window.setTimeout(() => setWasOutbid(false), 3500);
+      return () => window.clearTimeout(outbidTimer);
     }
-  }, [auction.currentBid, auction.highestBidderId, auction.isSold, managerId]);
+  }, [auction.currentPlayer?.id, auction.currentBid, auction.highestBidderId, auction.isSold, managerId]);
 
   // Audio & confetti on SOLD
   useEffect(() => {
@@ -84,12 +90,16 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     }
   }, [auction.isSold, auction.winnerId, managerId]);
 
-  // Audio tick on last 3 seconds
+  // Audio tick on the displayed countdown, not the stale server integer.
   useEffect(() => {
-    if (displaySecondsRemaining > 0 && auction.secondsRemaining <= 3 && !auction.isSold) {
+    if (displaySecondsRemaining > 0 && displaySecondsRemaining <= 3 && !auction.isSold) {
       sound.playTick();
     }
-  }, [auction.secondsRemaining, auction.isSold]);
+  }, [displaySecondsRemaining, auction.isSold]);
+
+  const displaySecondsRemaining = auction.auctionEndsAt
+    ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
+    : auction.secondsRemaining;
 
   if (!currentManager) return null;
 
@@ -153,9 +163,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const auctionReadyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
   const squadComplete = currentManager.squad.length === 11;
 
-  const displaySecondsRemaining = auction.auctionEndsAt
-    ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
-    : auction.secondsRemaining;
+
 
   const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
 
