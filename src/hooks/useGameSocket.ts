@@ -364,9 +364,11 @@ export function useGameSocket() {
   }, [room, send]);
 
   const selectFormation = useCallback((formation: Formation) => {
-    if (!room || !managerId) return;
-    send('SELECT_FORMATION', { roomCode: room.code, managerId, formation });
-  }, [room, managerId, send]);
+    if (!room) return;
+    const currentManagerId = managerIdRef.current;
+    if (!currentManagerId) return;
+    send('SELECT_FORMATION', { roomCode: room.code, managerId: currentManagerId, formation });
+  }, [room, send]);
 
   const beginAuction = useCallback(() => {
     if (!room) return;
