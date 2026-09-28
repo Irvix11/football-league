@@ -9,6 +9,26 @@ export interface SavedSession {
   reconnectToken?: string;
 }
 
+function getRoomRequestOptions(session: SavedSession | null): RequestInit {
+  const headers: Record<string, string> = {};
+  if (session?.reconnectToken) headers.Authorization = `Bearer ${session.reconnectToken}`;
+  if (session?.managerId) headers['X-Manager-Id'] = session.managerId;
+  if (import.meta.env.DEV && session?.reconnectToken) {
+    return {
+      headers,
+    };
+  }
+  return { headers };
+}
+
+function getRoomRequestUrl(roomCode: string, session: SavedSession | null): string {
+  const url = `${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}`;
+  if (import.meta.env.DEV && session?.reconnectToken) {
+    return `${url}?reconnectToken=${encodeURIComponent(session.reconnectToken)}&managerId=${encodeURIComponent(session.managerId)}`;
+  }
+  return url;
+}
+
 function getGameServerBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
@@ -162,7 +182,7 @@ export function useGameSocket() {
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
               const saved = getSavedSession();
               if (saved) {
-                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
+                fetch(getRoomRequestUrl(saved.roomCode, getSavedSession()), { ...getRoomRequestOptions(getSavedSession()), cache: 'no-store' })
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
@@ -243,7 +263,7 @@ export function useGameSocket() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' });
+        const response = await fetch(getRoomRequestUrl(room.code, getSavedSession()), { ...getRoomRequestOptions(getSavedSession()), cache: 'no-store' });
         if (!response.ok) return;
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
@@ -322,7 +342,7 @@ export function useGameSocket() {
     const roomCode = session.roomCode.trim().toUpperCase();
     saveSession(session);
 
-      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
+      fetch(getRoomRequestUrl(roomCode, getSavedSession()), { ...getRoomRequestOptions(getSavedSession()), cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
