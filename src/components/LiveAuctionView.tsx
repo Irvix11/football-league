@@ -14,6 +14,7 @@ interface LiveAuctionViewProps {
   managerId: string;
   onPlaceBid: (amount: number) => void;
   onSubmitBlindBid: (amount: number) => void;
+  secretBidSubmitted: number | null;
   onMarkDone: () => void;
   onLeaveMatch: () => void;
 }
@@ -23,6 +24,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   managerId,
   onPlaceBid,
   onSubmitBlindBid,
+  secretBidSubmitted,
   onMarkDone,
   onLeaveMatch,
 }) => {
@@ -166,7 +168,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
 
 
-  const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
+  const hasSubmittedSecret = Boolean(isBlind && (secretBidSubmitted !== null || auction.hasSubmittedSecretBid?.[managerId]));
 
   const handleCustomBid = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,7 +182,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const handleBlindBid = (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseInt(blindBidInput, 10);
-    if (!isNaN(val) && val >= (player?.startingPrice ?? 0) && val <= currentManager.budget) {
+    if (!secretBidSubmitted && !isNaN(val) && val >= (player?.startingPrice ?? 0) && val <= currentManager.budget) {
       onSubmitBlindBid(val);
       setBlindBidInput('');
     }
