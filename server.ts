@@ -3454,7 +3454,7 @@ wss.on('connection', (ws, request) => {
             Object.assign(fix, result);
             fix.played = false;
             if (targetMatchday === 5) {
-              const completedThroughFive = room.fixtures.filter(item => item.matchday <= 5).every(item => item.played === false || item.played === true);
+              const completedThroughFive = room.fixtures.filter(item => item.matchday <= 5).every(item => item.played);
               if (completedThroughFive) {
                 console.info('[payload] room JSON bytes after matchday 5:', JSON.stringify(room).length);
               }
