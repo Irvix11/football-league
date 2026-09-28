@@ -4083,6 +4083,38 @@ app.get('/api/room/:code', async (req, res) => {
   return res.json(snapshot);
 });
 
+app.get('/api/room/:code/fixture/:fixtureId/events', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const code = String(req.params.code || '').toUpperCase();
+  const fixtureId = String(req.params.fixtureId || '');
+  const authHeader = String(req.headers.authorization || '');
+  const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const viewerId = String(req.headers['x-manager-id'] || '');
+  const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
+
+  let room = rooms.get(code);
+  if (!room) {
+    room = await loadRoomSnapshot(code) || undefined;
+    if (room) rooms.set(code, room);
+  }
+  if (!room) return res.status(404).json({ error: 'Lobby not found' });
+
+  const viewer = room.managers.find(m =>
+    (reconnectToken && matchesReconnectCredential(m, reconnectToken)) ||
+    (!reconnectToken && viewerId && m.id === viewerId)
+  );
+  if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+
+  const fixture = room.fixtures.find(item => item.id === fixtureId);
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' });
+  if (viewer.id !== fixture.homeManagerId && viewer.id !== fixture.awayManagerId && viewer.id !== room.hostId) {
+    return res.status(403).json({ error: 'Only a fixture participant or the host can view match events.' });
+  }
+
+  return res.json({ fixtureId, events: fixture.events || [] });
+});
+
 app.get('/api/health', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({
