@@ -77,6 +77,7 @@ function AppContent() {
     updateLineup,
     confirmTeam,
     runMatchday,
+    completeLeagueMatch,
     runKnockoutMatch,
     completeKnockoutMatch,
     proceedToNextMatchday,
@@ -105,15 +106,7 @@ function AppContent() {
 
   const handleLeagueMatchComplete = async (fixtureId: string) => {
     if (!room || !managerId || !isHost) return;
-    const remaining = room.fixtures.some(
-      (fixture) =>
-        fixture.matchday === room.currentMatchday &&
-        fixture.id !== fixtureId &&
-        !fixture.played
-    );
-    if (remaining) {
-      await runMatchday(room.currentMatchday);
-    }
+    completeLeagueMatch(fixtureId);
   };
 
 
