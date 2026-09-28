@@ -927,15 +927,21 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   >
                     MATCH STATS
                   </button>
-                  <button
-                    onClick={() => {
-                      setFullTimeOverlay(false);
-                      if (onMatchComplete) onMatchComplete(fixture.id);
-                    }}
-                    className="flex-1 py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
-                  >
-                    CONTINUE
-                  </button>
+                  {onMatchComplete ? (
+                    <button
+                      onClick={() => {
+                        setFullTimeOverlay(false);
+                        onMatchComplete(fixture.id);
+                      }}
+                      className="flex-1 py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
+                    >
+                      CONTINUE
+                    </button>
+                  ) : (
+                    <div className="flex-1 py-2 rounded-xl border border-slate-700 bg-slate-950 text-slate-400 text-center text-xs font-black uppercase tracking-wider">
+                      WAITING FOR HOST TO CONTINUE...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
