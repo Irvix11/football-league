@@ -72,6 +72,22 @@ export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | nul
   }
 }
 
+export async function cleanupOldRoomSnapshots(maxAgeMs = 24 * 60 * 60 * 1000): Promise<void> {
+  if (!persistenceConfigured()) return;
+  const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/game_room_snapshots?updated_at=lt.${encodeURIComponent(cutoff)}`,
+      { method: 'DELETE', headers: headers({ Prefer: 'return=minimal' }) }
+    );
+    if (!response.ok) {
+      console.error(`[persistence] old room cleanup failed with HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.error('[persistence] old room cleanup failed:', error);
+  }
+}
+
 export async function deleteRoomSnapshot(roomCode: string): Promise<void> {
   if (!persistenceConfigured()) return;
 
