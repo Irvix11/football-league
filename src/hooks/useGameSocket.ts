@@ -475,6 +475,19 @@ export function useGameSocket() {
     send('RUN_MATCHDAY', { roomCode: room.code, managerId: currentManagerId, matchday });
   }, [room, managerId, send]);
 
+  const completeLeagueMatch = useCallback((fixtureId: string) => {
+    const currentManagerId = managerIdRef.current;
+    if (!room || !currentManagerId) return;
+    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+      setSimulationError('Connection lost. Reconnect before completing the match.');
+      return;
+    }
+    setSimulationError(null);
+    isSimulatingRef.current = true;
+    setIsSimulating(true);
+    send('COMPLETE_LEAGUE_MATCH', { roomCode: room.code, managerId: currentManagerId, fixtureId });
+  }, [room, managerId, send]);
+
   const proceedToNextMatchday = useCallback(async (nextMatchday: number) => {
     if (!room) return;
     setSimulationError(null);
@@ -573,6 +586,7 @@ export function useGameSocket() {
     updateLineup,
     confirmTeam,
     runMatchday,
+    completeLeagueMatch,
     runKnockoutMatch,
     completeKnockoutMatch,
     proceedToNextMatchday,
