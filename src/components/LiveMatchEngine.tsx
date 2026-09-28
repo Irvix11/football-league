@@ -342,7 +342,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           const node = playerNodesRef.current.get(target.id);
           visualPlayerCoordsRef.current.set(target.id, { x: currX, y: currY });
           if (node && width > 0 && height > 0) {
-            node.style.transform = `translate3d(${(currX / 100) * width}px, ${(currY / 100) * height}px, 0)`;
+            node.style.left = `${currX}%`;
+            node.style.top = `${currY}%`;
+            node.style.transform = 'translate(-50%, -50%)';
           }
         }
       }
