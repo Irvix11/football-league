@@ -18,11 +18,15 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, { hasErr
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
-    console.error('[AppErrorBoundary]', error);
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AppErrorBoundary]', error, info.componentStack);
   }
 
   handleRecovery = () => {
+    this.setState({ hasError: false });
+  };
+
+  handleResetSavedGame = () => {
     try {
       localStorage.removeItem('fal_session');
     } catch {}
@@ -41,9 +45,15 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, { hasErr
             </p>
             <button
               onClick={this.handleRecovery}
-              className="mt-5 px-5 py-3 rounded-xl bg-rose-500 text-slate-950 font-black hover:bg-rose-400"
+              className="mt-5 w-full px-5 py-3 rounded-xl bg-emerald-500 text-slate-950 font-black hover:bg-emerald-400"
             >
-              RESET & RECONNECT
+              TRY AGAIN
+            </button>
+            <button
+              onClick={this.handleResetSavedGame}
+              className="mt-3 w-full px-5 py-3 rounded-xl border border-slate-700 bg-slate-950 text-slate-200 font-black hover:bg-slate-800"
+            >
+              RESET SAVED GAME
             </button>
           </div>
         </div>
@@ -210,7 +220,7 @@ function AppContent() {
           onJoinLobby={(code, name) => joinLobby(code, name)}
           onSoloPlay={(name, formation) => startSoloGame(name, formation)}
           savedSession={savedSession}
-          onResumeSession={(code, name) => resumeLobby({ roomCode: code, managerId: savedSession?.managerId || '', managerName: name })}
+          onResumeSession={(code, name) => savedSession?.reconnectToken && resumeLobby({ ...savedSession, roomCode: code, managerName: name })}
           isConnected={isConnected}
         />
       ) : room.phase === 'lobby' ? (
