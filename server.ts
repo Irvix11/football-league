@@ -3562,7 +3562,7 @@ wss.on('connection', (ws, request) => {
           // to retain finished games and this also prevents stale rooms from
           // reappearing after a server restart.
           broadcastRoom(room.code, undefined, false);
-          void deletePersistedRoomSnapshot(room.code);
+          void deletePersistedRoomSnapshot(room.code).catch(error => console.error('[persistence] season snapshot deletion failed:', error));
           break;
         }
 
