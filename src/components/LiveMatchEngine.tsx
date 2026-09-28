@@ -298,6 +298,39 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     }
   };
 
+  const advanceToNextEvent = useCallback(() => {
+    if (currentEventIndex >= events.length - 1) {
+      setIsPlaying(false);
+      return;
+    }
+    const nextIndex = currentEventIndex + 1;
+    const nextEvent = events[nextIndex];
+    if (nextEvent.type === 'goal' && sound.enabled) sound.playGoal();
+    if (nextEvent.type === 'halftime') {
+      if (sound.enabled) sound.playWhistle();
+      setCurrentEventIndex(nextIndex);
+      setHalfTimeOverlay(true);
+      setIsPlaying(false);
+      return;
+    }
+    if (nextEvent.type === 'fulltime') {
+      if (sound.enabled) sound.playWhistle();
+      setCurrentEventIndex(nextIndex);
+      if (fixture.wentToPenalties && penaltySequence.length > 0) {
+        setPenaltyIndex(0);
+        setPenaltyRevealStage('walkup');
+        setShowPenaltyShootout(true);
+        setFullTimeOverlay(false);
+      } else {
+        setFullTimeOverlay(true);
+      }
+      setIsPlaying(false);
+      return;
+    }
+    setCurrentEventIndex(nextIndex);
+    setIsPlaying(true);
+  }, [currentEventIndex, events, fixture.wentToPenalties, penaltySequence.length]);
+
   // Continuous 60fps RequestAnimationFrame Loop
   useEffect(() => {
     let active = true;
@@ -390,89 +423,12 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             setCameraOffset({ x: 0, y: 0, scale: 1 });
           }, Math.max(500, 1200 / playbackSpeed));
 
-          if (currentEventIndex < events.length - 1) {
-            setCurrentEventIndex(prev => prev + 1);
-            setIsPlaying(true);
-          } else {
-            setIsPlaying(false);
-          }
+          advanceToNextEvent();
           return;
         }
 
-        // Current event animation finished, evaluate next event
-        if (currentEventIndex < events.length - 1) {
-          const nextIndex = currentEventIndex + 1;
-          const nextEvent = events[nextIndex];
-
-          if (nextEvent.type === 'goal') {
-            if (sound.enabled) sound.playGoal();
-            setCurrentEventIndex(nextIndex);
-            return;
-          }
-
-          if (nextEvent.type === 'halftime') {
-            if (sound.enabled) sound.playWhistle();
-            setCurrentEventIndex(nextIndex);
-            setHalfTimeOverlay(true);
-            setIsPlaying(false);
-            return;
-          }
-
-          if (nextEvent.type === 'fulltime') {
-            if (sound.enabled) sound.playWhistle();
-            setCurrentEventIndex(nextIndex);
-            if (fixture.wentToPenalties && penaltySequence.length > 0) {
-              // Knockout shootouts should flow straight into the visual spot-kick
-              // sequence instead of hiding it behind another confirmation screen.
-              setPenaltyIndex(0);
-              setPenaltyRevealStage('walkup');
-              setShowPenaltyShootout(true);
-              setFullTimeOverlay(false);
-            } else {
-              setFullTimeOverlay(true);
-            }
-            setIsPlaying(false);
-            return;
-          }
-
-          if (sound.enabled) {
-            switch (nextEvent.type) {
-              case 'pass':
-              case 'carry':
-              case 'cross':
-                sound.playPass();
-                break;
-              case 'shot':
-              case 'shot_saved':
-              case 'shot_missed':
-              case 'shot_blocked':
-              case 'penalty_shot':
-                sound.playShot();
-                break;
-              case 'tackle':
-              case 'interception':
-                sound.playTackle();
-                break;
-              case 'yellow_card':
-              case 'red_card':
-                sound.playCard();
-                break;
-              case 'foul':
-                sound.playWhistle();
-                break;
-              case 'corner':
-                sound.playTick();
-                break;
-            }
-          }
-
-          setCurrentEventIndex(nextIndex);
-        } else {
-          // Reached end of events
-          setIsPlaying(false);
-          setFullTimeOverlay(true);
-        }
-      }
+        // Current event animation finished; one advance path handles every event boundary.
+        advanceToNextEvent();
 
       if (isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
         animationFrameRef.current = requestAnimationFrame(animateFrame);
@@ -492,7 +448,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   }, [
     isPlaying, currentEventIndex, events, playbackSpeed, 
     goalOverlay, halfTimeOverlay, fullTimeOverlay, getEventDuration,
-    fixture, sound.enabled, onMatchComplete, currentScore, currentEvent
+    fixture, advanceToNextEvent, onMatchComplete, currentScore, currentEvent
   ]);
 
   const handleTogglePlay = () => {
@@ -512,11 +468,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   };
 
   const handleSkipToNextEvent = () => {
-    if (currentEventIndex < events.length - 1) {
-      setGoalOverlay(null);
-      setCurrentEventIndex(prev => prev + 1);
-      phaseStartTimeRef.current = performance.now();
-    }
+    setGoalOverlay(null);
+    advanceToNextEvent();
+    phaseStartTimeRef.current = performance.now();
   };
 
   const handleSkipToFullTime = () => {
