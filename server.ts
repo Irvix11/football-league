@@ -30,6 +30,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Needed so req.ip is the real client IP behind Vercel/Render proxies.
+app.set('trust proxy', 1);
 
 const server = http.createServer(app);
 const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
@@ -66,9 +68,13 @@ const wss = new WebSocketServer({
   maxPayload: 64 * 1024,
   perMessageDeflate: false,
   verifyClient: ({ origin, req }: { origin: string; secure: boolean; req: import('http').IncomingMessage }) => {
-    if (process.env.NODE_ENV !== 'production' && !origin) return true;
-    if (allowedWsOrigins.length > 0) return allowedWsOrigins.includes(origin);
-    if (!origin) return false;
+    // Non-browser clients (no Origin) are only allowed outside production.
+    if (!origin) return process.env.NODE_ENV !== 'production';
+
+    // Explicit allowlist (your Vercel URLs + ALLOWED_WS_ORIGINS).
+    if (allowedWsOrigins.includes(origin)) return true;
+
+    // Same-origin: works for local `npm start` and any host serving its own frontend.
     const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
     const protocol = forwardedProto || ((req.socket as any).encrypted ? 'https' : 'http');
     return origin === `${protocol}://${req.headers.host}`;
@@ -110,40 +116,48 @@ async function callOpenRouter(messages: Array<{ role: 'system' | 'user' | 'assis
 }
 
 app.get('/api/ai/status', (_req, res) => {
-  res.json({
-    configured: Boolean(process.env.OPENROUTER_API_KEY),
-    model: OPENROUTER_MODEL,
-    baseUrl: OPENROUTER_BASE_URL,
-  });
+  res.json({ configured: Boolean(process.env.OPENROUTER_API_KEY) });
 });
+
+const AI_SYSTEM_PROMPT =
+  'You are a football auction assistant inside a fantasy football auction game. ' +
+  'Only help with football, squads, formations, tactics and auction strategy. ' +
+  'Politely refuse anything else.';
 
 app.post('/api/ai/chat', async (req, res) => {
   try {
-    const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-    const clientKey = forwardedFor || req.socket.remoteAddress || 'unknown';
+    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
     const now = Date.now();
     const window = aiRequestWindows.get(clientKey);
     if (!window || now - window.startedAt >= 60_000) {
       aiRequestWindows.set(clientKey, { startedAt: now, count: 1 });
     } else {
       window.count++;
-      if (window.count > 20) return res.status(429).json({ error: 'AI chat rate limit reached. Try again in a minute.' });
+      if (window.count > 20) {
+        return res.status(429).json({ error: 'AI chat rate limit reached. Try again in a minute.' });
+      }
     }
+
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
     if (!messages.length || messages.length > 20) {
       return res.status(400).json({ error: 'messages must contain between 1 and 20 items' });
     }
 
-    const safeMessages = messages.map((m: any) => ({
-      role: ['system', 'user', 'assistant'].includes(m?.role) ? m.role : 'user',
-      content: String(m?.content || '').slice(0, 4000),
+    // Clients can never set the system prompt. Anything that isn't "assistant" is treated as "user".
+    const clientMessages = messages.map((m: any) => ({
+      role: m?.role === 'assistant' ? 'assistant' : 'user',
+      content: String(m?.content || '').slice(0, 2000),
     }));
 
-    const answer = await callOpenRouter(safeMessages);
+    const answer = await callOpenRouter([
+      { role: 'system', content: AI_SYSTEM_PROMPT },
+      ...clientMessages,
+    ]);
     return res.json({ answer, model: OPENROUTER_MODEL });
   } catch (error: any) {
     console.error('[openrouter]', error);
-    return res.status(502).json({ error: error?.message || 'AI request failed' });
+    // Don't leak upstream error details to the browser.
+    return res.status(502).json({ error: 'AI request failed' });
   }
 });
 
@@ -153,6 +167,13 @@ const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
 const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
+
+setInterval(() => {
+  const cutoff = Date.now() - 60_000;
+  for (const [key, w] of aiRequestWindows) {
+    if (w.startedAt < cutoff) aiRequestWindows.delete(key);
+  }
+}, 60_000).unref();
 
 // Prevent double-clicks / concurrent websocket messages from simulating the same
 // fixture twice before the first simulation has committed its result.
@@ -344,7 +365,6 @@ function ensurePhaseReadyTicker(room: GameRoom) {
       }
 
       if (current.phase === 'league' && current.transferWindowOpen) {
-        current.transferWindowReadyIds = current.managers.map(m => m.id);
         current.transferWindowOpen = false;
         current.transferWindowReadyIds = [];
         current.transferWindowMatchday = undefined;
@@ -704,6 +724,15 @@ function removeManagerFromRoom(room: GameRoom, managerId: string) {
     room.auction.currentBid = room.auction.currentPlayer?.startingPrice || 0;
   }
   room.leagueTable = room.leagueTable.filter(row => row.managerId !== managerId);
+
+  // Drop unplayed fixtures involving the departed manager so nobody is
+  // scheduled against a ghost. Played results are kept for the history.
+  room.fixtures = (room.fixtures || []).filter(
+    f => f.played || (f.homeManagerId !== managerId && f.awayManagerId !== managerId)
+  );
+  if (room.fixtures.length) {
+    room.totalMatchdays = Math.max(...room.fixtures.map(f => f.matchday), 1);
+  }
 }
 
 function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTableRow[] {
@@ -924,9 +953,19 @@ function normalizeRoomToXI(room: GameRoom): boolean {
   return changed;
 }
 
+// Unbiased Fisher–Yates shuffle.
+function shuffleArray<T>(input: T[]): T[] {
+  const a = [...input];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function generateValidSquad(formation: Formation, availablePool: any[]): SquadPlayerEntry[] {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
-  const shuffled = [...availablePool].sort(() => Math.random() - 0.5);
+  const shuffled = shuffleArray(availablePool);
   const usedIds = new Set<string>();
   const squad: SquadPlayerEntry[] = [];
 
