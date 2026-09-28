@@ -1584,7 +1584,7 @@ function calculateSeasonAwards(room: GameRoom): SeasonAwards {
 
     for (const stat of fix.playerStats) {
       const managerId = stat.team === 'home' ? fix.homeManagerId : fix.awayManagerId;
-      const manager = room.managers.find(m => m.id === managerId);
+      const manager = room.managers.find(m => m.id === actorId);
       const aggregate = aggregates.get(stat.playerId) || {
         playerId: stat.playerId,
         playerName: stat.playerName,
@@ -2616,13 +2616,13 @@ wss.on('connection', (ws) => {
 
         // --- 4. READY TOGGLE ---
         case 'TOGGLE_READY': {
-          const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
           if (room.phase !== 'lobby') return;
 
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === session.managerId);
           if (manager) {
             manager.isReady = !manager.isReady;
             broadcastRoom(room.code);
@@ -2895,15 +2895,15 @@ wss.on('connection', (ws) => {
 
         // --- 10. AUCTION BID (Classic & Quick) ---
         case 'AUCTION_BID': {
-          const { roomCode, managerId, amount } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode, amount } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
-           const actorId = session.managerId;
+          const actorId = session.managerId;
 
           if (room.auction.isForcedPurchase) {
             const forcedId = room.auction.forcedWinnerId;
-            if (forcedId === managerId) {
+            if (forcedId === actorId) {
               sendSocketError(ws, 'This positional slot is a mandatory purchase. The player will be assigned automatically.');
             } else {
               sendSocketError(ws, `${room.auction.forcedWinnerName || 'Another manager'} must complete this positional slot before the auction continues.`);
@@ -2918,7 +2918,7 @@ wss.on('connection', (ws) => {
 
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
-          if ((room.phaseReadyIds || []).includes(managerId)) {
+          if ((room.phaseReadyIds || []).includes(actorId)) {
             sendSocketError(ws, 'You marked the auction done and cannot bid again.');
             return;
           }
@@ -3052,12 +3052,12 @@ wss.on('connection', (ws) => {
 
         // --- 12. AUCTION READY / TEAM MANAGEMENT ---
         case 'AUCTION_READY': {
-          const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
-           const actorId = session.managerId;
-          const manager = room.managers.find(m => m.id === managerId);
+          const actorId = session.managerId;
+          const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
           const required = getFormationSquadCategoryLimits(manager.formation);
           const counts: Record<PositionCategory, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
@@ -3076,13 +3076,13 @@ wss.on('connection', (ws) => {
 
         // --- 13. TEAM MANAGEMENT & TACTICS ---
         case 'UPDATE_LINEUP': {
-          const { roomCode, managerId, squad, formation, tactics, roles } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode, squad, formation, tactics, roles } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
           if (!['team_management', 'league', 'knockout'].includes(room.phase)) return;
 
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === session.managerId);
           if (manager) {
             const nextFormation = formation || manager.formation;
             const sanitized = squad
@@ -3110,12 +3110,12 @@ wss.on('connection', (ws) => {
 
         // --- 13. CONFIRM TEAM ---
         case 'CONFIRM_TEAM': {
-          const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
 
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === session.managerId);
           if (manager) {
             const validation = validateSquadFormation(manager.formation, manager.squad);
             const unavailableStarter = manager.squad.some(
@@ -3467,18 +3467,18 @@ wss.on('connection', (ws) => {
 
         // --- MID-SEASON MANAGEMENT WINDOW ---
         case 'CLOSE_TRANSFER_WINDOW': {
-          const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const { roomCode } = payload;
+          const auth = authorizeSocket(ws, roomCode);
           if (!auth) return;
           const { room, session } = auth;
-           const actorId = session.managerId;
+          const actorId = session.managerId;
 
           if (!room.transferWindowOpen) {
             sendSocketError(ws, 'The mid-season management window is not open.');
             return;
           }
 
-          const manager = room.managers.find(m => m.id === managerId);
+          const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
 
           const readyIds = new Set(room.transferWindowReadyIds || []);
