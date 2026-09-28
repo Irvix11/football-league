@@ -3324,7 +3324,11 @@ wss.on('connection', (ws) => {
             sendSocketError(ws, 'Finish the current matchday before proceeding.');
             return;
           }
-          room.currentMatchday = Math.min(room.totalMatchdays, Math.max(room.currentMatchday, requestedNext));
+          if (!Number.isInteger(requestedNext) || requestedNext !== room.currentMatchday + 1 || requestedNext > room.totalMatchdays) {
+            sendSocketError(ws, 'Matchdays must advance one at a time.');
+            return;
+          }
+          room.currentMatchday = requestedNext;
           broadcastRoom(room.code);
           break;
         }
