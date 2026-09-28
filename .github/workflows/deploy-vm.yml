@@ -51,6 +51,8 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
           npm install --include=dev
+          npm run lint
+          npm audit --audit-level=high
           VITE_GAME_SERVER_URL=http://140.245.195.89 npm run build
 
           sudo tee /etc/systemd/system/football-league.service >/dev/null <<'UNIT'
@@ -64,6 +66,7 @@ jobs:
           WorkingDirectory=/var/www/football-league-app
           Environment=NODE_ENV=production
           Environment=PORT=3000
+          Environment=SERVER_HOST=127.0.0.1
           ExecStart=/usr/bin/node /var/www/football-league-app/node_modules/tsx/dist/cli.mjs server.ts
           Restart=always
           RestartSec=3
