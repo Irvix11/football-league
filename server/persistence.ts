@@ -75,18 +75,6 @@ export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | nul
 export async function deleteRoomSnapshot(roomCode: string): Promise<void> {
   if (!persistenceConfigured()) return;
 
-  // Cancel a delayed snapshot and wait for any already-queued write before
-  // deleting. Otherwise a stale queued upsert could recreate a completed game
-  // immediately after this DELETE.
-  const pendingTimer = persistenceTimers.get(roomCode);
-  if (pendingTimer) {
-    clearTimeout(pendingTimer);
-    persistenceTimers.delete(roomCode);
-  }
-  const pendingSave = persistenceQueues.get(roomCode);
-  persistenceQueues.delete(roomCode);
-  if (pendingSave) await pendingSave.catch(() => {});
-
   try {
     await fetch(
       `${SUPABASE_URL}/rest/v1/game_room_snapshots?room_code=eq.${encodeURIComponent(roomCode)}`,
