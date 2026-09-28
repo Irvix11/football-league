@@ -1718,12 +1718,12 @@ export function simulateMatch(
       const outfield = starters.filter(
         s => getPositionCategory(s.assignedPosition || s.player.position) !== 'GK'
       );
-      const pool = preferred
-        ? [preferred, ...outfield.filter(s => s.player.id !== preferred.player.id)]
-        : outfield.length > 0
-          ? outfield
-          : starters;
-      return pool.sort((a, b) => penaltyAbility(b) - penaltyAbility(a));
+      const sorted = [...(outfield.length > 0 ? outfield : starters)]
+        .sort((a, b) => penaltyAbility(b) - penaltyAbility(a));
+      if (preferred) {
+        return [preferred, ...sorted.filter(s => s.player.id !== preferred.player.id)];
+      }
+      return sorted;
     };
 
     const homeTakers = sortTakers(homeStarters.filter(s => !sentOffIds.has(s.player.id)), homeRoles.penaltyTakerId);
@@ -1797,6 +1797,8 @@ export function simulateMatch(
         momentum,
       });
 
+      if (hPens > aPens + (5 - round)) break;
+
       // Away kick
       const aTaker = awayTakers[(round - 1) % awayTakers.length];
       const aSho = penaltyAbility(aTaker);
@@ -1835,6 +1837,7 @@ export function simulateMatch(
         ballStartCoordinates: { x: 11.5, y: 50 },
         momentum,
       });
+      if (Math.abs(hPens - aPens) > (5 - round)) break;
     }
 
     // Sudden death: one kick each until the score is no longer level.
