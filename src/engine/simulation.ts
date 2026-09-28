@@ -790,6 +790,7 @@ export function simulateMatch(
       saves: 0,
       yellowCard: false,
       redCard: false,
+      fouls: 0,
       rating: 6.0,
     });
   }
@@ -812,6 +813,16 @@ export function simulateMatch(
       rating: 6.0,
     });
   }
+
+  const recordShot = (stats: TeamMatchStats, player: PlayerMatchStat | undefined, onTarget: boolean, goal: boolean) => {
+    stats.shots++;
+    if (onTarget) stats.shotsOnTarget++;
+    if (goal && player) {
+      player.goals++;
+      player.rating += 1.4;
+    }
+    if (player) player.shots++;
+  };
 
   const events: MatchEvent[] = [];
   const sentOffIds = new Set<string>();
@@ -1145,6 +1156,8 @@ export function simulateMatch(
 
       if (isFoul) {
         defStats.fouls++;
+        const defStatForFoul = playerStatsMap.get(defender.player.id);
+        if (defStatForFoul) { defStatForFoul.fouls++; defStatForFoul.rating -= 0.15; }
         const isCard = rand() < 0.22;
         if (isCard) {
           defStats.yellowCards++;
@@ -1282,7 +1295,7 @@ export function simulateMatch(
       const finishMin = Math.floor(currentTotalSeconds / 60);
       const finishSec = currentTotalSeconds % 60;
 
-      atkStats.shots++;
+      const strikerStat = playerStatsMap.get(striker.player.id);
       let crossGoalProbability = 0.105 + (atkPower.attack - defPower.defense) * 0.0018;
       if (defTactics.style === 'Low Block') crossGoalProbability *= 0.74;
       if (atkTactics.attackWidth > 65) crossGoalProbability *= 1.08;
@@ -1293,12 +1306,8 @@ export function simulateMatch(
       if (isGoal) {
         if (isHome) homeScore++; else awayScore++;
         atkStats.score++;
-        const sStat = playerStatsMap.get(striker.player.id);
-        if (sStat) {
-          sStat.goals++;
-          sStat.shots++;
-          sStat.rating += 1.3;
-        }
+        recordShot(atkStats, strikerStat, true, true);
+        if (strikerStat) strikerStat.rating += -0.1;
         const wStat = playerStatsMap.get(winger.player.id);
         if (wStat) {
           wStat.assists++;
@@ -1333,6 +1342,9 @@ export function simulateMatch(
         currentPossession = isHome ? 'away' : 'home';
       } else {
         // Keeper Save or Cleared Corner
+        recordShot(atkStats, strikerStat, true, false);
+        const gkStat = playerStatsMap.get(defGK.player.id);
+        if (gkStat) { gkStat.saves++; gkStat.rating += 0.45; }
         const isCorner = rand() < 0.5;
         if (isCorner) {
           atkStats.corners++;
@@ -1341,8 +1353,8 @@ export function simulateMatch(
             second: finishSec,
             type: 'corner',
             team: isHome ? 'home' : 'away',
-            playerId: defGK.player.id,
-            playerName: defGK.player.name,
+            playerId: isHome ? homeRoles.cornerTakerId || winger.player.id : awayRoles.cornerTakerId || winger.player.id,
+            playerName: (isHome ? homeStarters : awayStarters).find(p => p.player.id === (isHome ? homeRoles.cornerTakerId : awayRoles.cornerTakerId))?.player.name || winger.player.name,
             commentary: `Pushed over the crossbar! Fantastic reaction save by ${defGK.player.name} concedes a corner kick.`,
             ballCoordinates: { x: isHome ? 98 : 2, y: rand() < 0.5 ? 4 : 96 },
             ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
@@ -1353,6 +1365,7 @@ export function simulateMatch(
             momentum,
           });
         } else {
+          recordShot(atkStats, strikerStat, false, false);
           pushEvent({
             minute: finishMin,
             second: finishSec,
@@ -1388,9 +1401,7 @@ export function simulateMatch(
         'shot taker'
       );
       const targetGoalX = isHome ? 97 : 3;
-      atkStats.shots++;
       const shooterStat = playerStatsMap.get(shooter.player.id);
-      if (shooterStat) shooterStat.shots++;
 
       const shooterQuality =
         shooter.player.attributes.sho * 0.52 +
@@ -1429,7 +1440,7 @@ export function simulateMatch(
         });
         currentPossession = isHome ? 'away' : 'home';
       } else {
-        atkStats.shotsOnTarget++;
+        recordShot(atkStats, shooterStat, true, false);
         // Low Block cuts goal probability, Possession/Counter increases chance quality
         // Non-penalty conversion is tuned toward realistic match-level scoring.
         let goalProbability =
@@ -1452,13 +1463,13 @@ export function simulateMatch(
         goalProbability = clamp(goalProbability, 0.018, 0.34);
 
         if (rand() < goalProbability) {
+          recordShot(atkStats, shooterStat, true, true);
           // GOAL! A normal open-play goal is not automatically assisted.
           // If it is assisted, the assister must be a different player from the scorer.
           if (isHome) homeScore++; else awayScore++;
           atkStats.score++;
           if (shooterStat) {
-            shooterStat.goals++;
-            shooterStat.rating += 1.4;
+            shooterStat.rating += 0;
           }
 
           const possibleAssisters = [passer, receiver, ...atkMids, ...atkAtts]
@@ -1597,9 +1608,8 @@ export function simulateMatch(
           if (isEtHome) homeScore++; else awayScore++;
           const stat = playerStatsMap.get(shooter.player.id);
           if (stat) {
-            stat.goals++;
-            stat.shots++;
-            stat.rating += 1.2;
+            recordShot(isEtHome ? homeStats : awayStats, stat, true, true);
+            stat.rating += -0.2;
           }
           pushEvent({
             minute,
@@ -1620,7 +1630,7 @@ export function simulateMatch(
           });
         } else {
           const stat = playerStatsMap.get(shooter.player.id);
-          if (stat) stat.shots++;
+          recordShot(isEtHome ? homeStats : awayStats, stat, false, false);
           pushEvent({
             minute,
             second: etSec,
