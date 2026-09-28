@@ -120,9 +120,9 @@ export const FORMATIONS_CONFIG: Record<Formation, FormationConfig> = {
     name: '3-5-2 Wingbacks',
     categoryRequirements: {
       GK: { min: 1, recommended: 1, max: 2 },
-      DEF: { min: 3, recommended: 4, max: 6 },
-      MID: { min: 5, recommended: 6, max: 8 },
-      ATT: { min: 2, recommended: 3, max: 5 },
+      DEF: { min: 5, recommended: 5, max: 5 },
+      MID: { min: 3, recommended: 3, max: 3 },
+      ATT: { min: 2, recommended: 2, max: 2 },
     },
     slots: [
       { index: 0, position: 'GK', category: 'GK', name: 'Goalkeeper', x: 50, y: 10 },
