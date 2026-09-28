@@ -154,7 +154,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   const getEffectiveOvr = (entry: SquadPlayerEntry, slotPosition: Position) => {
     const fit = calculatePositionFit(entry.player.position, entry.player.alternatePositions, entry.assignedPosition || slotPosition);
     const conditionMultiplier = entry.condition.state === 'INJURED' || entry.condition.state === 'SUSPENDED'
-      ? 0.5
+      ? 0.85
       : entry.condition.state === 'TIRED' || entry.condition.fatigue > 50 ? 0.9 : 1;
     return Math.round(entry.player.overall * (0.6 + 0.4 * (fit / 100)) * conditionMultiplier);
   };
