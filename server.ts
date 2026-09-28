@@ -2897,7 +2897,8 @@ wss.on('connection', (ws) => {
           const { roomCode, managerId, amount } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth || auth.room.phase !== 'auction') return;
-          const { room } = auth;
+          const { room, session } = auth;
+           const actorId = session.managerId;
 
           if (room.auction.isForcedPurchase) {
             const forcedId = room.auction.forcedWinnerId;
@@ -2989,7 +2990,8 @@ wss.on('connection', (ws) => {
           const { roomCode, managerId, amount } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth || auth.room.phase !== 'auction') return;
-          const { room } = auth;
+          const { room, session } = auth;
+           const actorId = session.managerId;
 
           if (room.auction.isForcedPurchase) {
             const forcedId = room.auction.forcedWinnerId;
@@ -3052,7 +3054,8 @@ wss.on('connection', (ws) => {
           const { roomCode, managerId } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth || auth.room.phase !== 'auction') return;
-          const { room } = auth;
+          const { room, session } = auth;
+           const actorId = session.managerId;
           const manager = room.managers.find(m => m.id === managerId);
           if (!manager) return;
           const required = getFormationSquadCategoryLimits(manager.formation);
@@ -3442,7 +3445,8 @@ wss.on('connection', (ws) => {
           const { roomCode, managerId, offerId, accept } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
+           const actorId = session.managerId;
 
           if (!room.settings.transfersEnabled || !isTransferWindowOpen(room)) {
             sendSocketError(ws, 'Transfers are only available during the mid-season management window.');
@@ -3465,7 +3469,8 @@ wss.on('connection', (ws) => {
           const { roomCode, managerId } = payload;
           const auth = authorizeSocket(ws, roomCode, managerId);
           if (!auth) return;
-          const { room } = auth;
+          const { room, session } = auth;
+           const actorId = session.managerId;
 
           if (!room.transferWindowOpen) {
             sendSocketError(ws, 'The mid-season management window is not open.');
