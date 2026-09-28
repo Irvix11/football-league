@@ -2567,11 +2567,18 @@ wss.on('connection', (ws) => {
             ? room.managers.find(m => matchesReconnectCredential(m, reconnectToken))
             : null;
 
-          // Backward compatibility: older browser sessions stored the manager ID.
-          // Accept that legacy credential only once, then issue the stronger token.
+          // Backward compatibility: some browsers may have a saved manager ID
+          // from before reconnect tokens were introduced. The manager ID is not
+          // shown publicly, and the supplied manager name must also match before
+          // we migrate that session to a fresh cryptographic token.
           if (!existing && reconnectId) {
             const legacy = room.managers.find(m => m.id === reconnectId);
-            if (legacy && !legacy.reconnectTokenHash) {
+            const suppliedName = sanitizeManagerName(managerName, '');
+            if (
+              legacy &&
+              suppliedName &&
+              legacy.name.toLowerCase() === suppliedName.toLowerCase()
+            ) {
               existing = legacy;
               setReconnectCredential(existing);
             }
