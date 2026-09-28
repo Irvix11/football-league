@@ -35,8 +35,7 @@ function getGameServerBaseUrl(): string {
 
   // In production the VM serves both the frontend and realtime backend through
   // the same Nginx origin. Keep an explicit override for local development or
-  // a separately hosted backend, but never silently fall back to the old Render
-  // instance after a deployment migration.
+  // a separately hosted backend, but never silently fall back to a stale deployment.
   return window.location.origin;
 }
 
