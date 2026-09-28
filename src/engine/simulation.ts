@@ -1342,10 +1342,10 @@ export function simulateMatch(
         currentPossession = isHome ? 'away' : 'home';
       } else {
         // Keeper Save or Cleared Corner
-        recordShot(atkStats, strikerStat, true, false);
         const gkStat = playerStatsMap.get(defGK.player.id);
         if (gkStat) { gkStat.saves++; gkStat.rating += 0.45; }
         const isCorner = rand() < 0.5;
+        recordShot(atkStats, strikerStat, isCorner, false);
         if (isCorner) {
           atkStats.corners++;
           pushEvent({
