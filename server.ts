@@ -24,7 +24,7 @@ import {
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
-import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot } from './server/persistence.js';
+import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots } from './server/persistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -208,6 +208,13 @@ setInterval(() => {
 // Prevent double-clicks / concurrent websocket messages from simulating the same
 // fixture twice before the first simulation has committed its result.
 const matchSimulationLocks = new Set<string>();
+
+// Remove abandoned persisted rooms periodically. Active rooms refresh their
+// snapshot timestamp whenever authoritative state is broadcast.
+setInterval(() => {
+  cleanupOldRoomSnapshots().catch(() => undefined);
+}, 10 * 60 * 1000).unref();
+void cleanupOldRoomSnapshots();
 
 function sendSocketError(ws: WebSocket, message: string) {
   if (ws.readyState === WebSocket.OPEN) {
