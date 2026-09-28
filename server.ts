@@ -2650,6 +2650,7 @@ wss.on('connection', (ws) => {
             teamOverall: 0,
           };
 
+          const newManagerReconnectToken = setReconnectCredential(newManager);
           room.managers.push(newManager);
           room.leagueTable = calculateInitialTable(room.managers);
           if (room.managers.length >= 2 && room.phase === 'lobby' && !room.phaseReadyDeadline) {
@@ -2661,10 +2662,12 @@ wss.on('connection', (ws) => {
           roomSockets.get(room.code)!.add(ws);
           socketToRoom.set(ws, { roomCode: room.code, managerId: newManagerId });
 
+          await saveRoomSnapshot(room);
           ws.send(JSON.stringify({
             type: 'LOBBY_JOINED',
             roomCode: room.code,
             managerId: newManagerId,
+            reconnectToken: newManagerReconnectToken,
             room: sanitizeRoomForViewer(room, newManagerId),
           }));
           broadcastRoom(room.code);
