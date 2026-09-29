@@ -516,57 +516,6 @@ function removeManagerFromRoom(room: GameRoom, managerId: string) {
   }
 }
 
-function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTableRow[] {
-  if (!fixture.played || fixture.homeScore === undefined || fixture.awayScore === undefined) return table;
-
-  const newTable = table.map(row => {
-    if (row.managerId === fixture.homeManagerId) {
-      const isWin = fixture.homeScore! > fixture.awayScore!;
-      const isDraw = fixture.homeScore! === fixture.awayScore!;
-      const result: 'W' | 'D' | 'L' = isWin ? 'W' : (isDraw ? 'D' : 'L');
-      return {
-        ...row,
-        played: row.played + 1,
-        won: row.won + (isWin ? 1 : 0),
-        drawn: row.drawn + (isDraw ? 1 : 0),
-        lost: row.lost + (!isWin && !isDraw ? 1 : 0),
-        goalsFor: row.goalsFor + fixture.homeScore!,
-        goalsAgainst: row.goalsAgainst + fixture.awayScore!,
-        goalDifference: row.goalDifference + (fixture.homeScore! - fixture.awayScore!),
-        points: row.points + (isWin ? 3 : (isDraw ? 1 : 0)),
-        form: [...row.form.slice(-4), result],
-      };
-    }
-    if (row.managerId === fixture.awayManagerId) {
-      const isWin = fixture.awayScore! > fixture.homeScore!;
-      const isDraw = fixture.homeScore! === fixture.awayScore!;
-      const result: 'W' | 'D' | 'L' = isWin ? 'W' : (isDraw ? 'D' : 'L');
-      return {
-        ...row,
-        played: row.played + 1,
-        won: row.won + (isWin ? 1 : 0),
-        drawn: row.drawn + (isDraw ? 1 : 0),
-        lost: row.lost + (!isWin && !isDraw ? 1 : 0),
-        goalsFor: row.goalsFor + fixture.awayScore!,
-        goalsAgainst: row.goalsAgainst + fixture.homeScore!,
-        goalDifference: row.goalDifference + (fixture.awayScore! - fixture.homeScore!),
-        points: row.points + (isWin ? 3 : (isDraw ? 1 : 0)),
-        form: [...row.form.slice(-4), result],
-      };
-    }
-    return row;
-  });
-
-  // Sort table by Points DESC, Goal Difference DESC, Goals For DESC
-  newTable.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-    return b.goalsFor - a.goalsFor;
-  });
-
-  return newTable;
-}
-
 // Automatic 11-player XI generator for Skip Auction or Bot Setup
 function createFitCondition(): SquadPlayerEntry['condition'] {
   return {
