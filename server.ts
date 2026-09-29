@@ -109,7 +109,7 @@ const wss = new WebSocketServer({
     // Non-browser clients (no Origin) are only allowed outside production.
     if (!origin) return process.env.NODE_ENV !== 'production';
 
-    // Explicit allowlist (your Vercel URLs + ALLOWED_WS_ORIGINS).
+    // Explicit allowlist from ALLOWED_WS_ORIGINS.
     if (allowedWsOrigins.includes(origin)) return true;
 
     // Same-origin: works for local `npm start` and any host serving its own frontend.
@@ -1208,9 +1208,8 @@ function finalizeAuctionItem(room: GameRoom) {
 
   broadcastRoom(room.code);
 
-  // IMPORTANT: do not rely on a long-lived serverless timer to move the auction.
-  // Vercel can suspend the function after the response, which previously left
-  // rooms permanently stuck on the SOLD / NO VALID BIDS screen.
+  // IMPORTANT: the Oracle VM process owns the live auction timer. Persisted
+  // absolute deadlines still let reconnects recover after process restarts.
   const finishedPlayerId = player.id;
   setTimeout(() => {
     try {
@@ -2145,8 +2144,7 @@ wss.on('connection', (ws, request) => {
             const tokenForClient = reconnectToken && matchesReconnectCredential(existing, reconnectToken)
               ? reconnectToken
               : setReconnectCredential(existing);
-            // A reconnect may land on a fresh Vercel Function instance. Resume
-            // the in-memory ticker from the persisted absolute deadline.
+            // Resume the in-memory ticker from the persisted absolute deadline.
             ensureAuctionTicker(room);
             ensurePhaseReadyTicker(room);
             if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
