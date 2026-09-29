@@ -11,3 +11,6 @@ export const matchSimulationLocks = new Set<string>();
 
 // WebSocket liveness is connection-local and does not belong in room state.
 export const socketAlive = new WeakMap<WebSocket, boolean>();
+
+// Hidden bids are transient room state and must never be serialized into snapshots.
+export const blindSecretBids = new Map<string, Record<string, number>>();
