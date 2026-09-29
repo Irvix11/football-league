@@ -549,6 +549,22 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const inspectedScreenX = inspectedRect && inspectedVisual ? inspectedRect.left + (inspectedVisual.x / 100) * inspectedRect.width : inspectedPlayer?.screenX;
   const inspectedScreenY = inspectedRect && inspectedVisual ? inspectedRect.top + (inspectedVisual.y / 100) * inspectedRect.height : inspectedPlayer?.screenY;
 
+  // Recalculate the inspected player's screen position after rotation/resize.
+  // The pitch uses percentage coordinates, so the tooltip must not retain stale
+  // pixel coordinates from before the viewport changed.
+  useEffect(() => {
+    if (!inspectedPlayer || typeof ResizeObserver === 'undefined') return;
+    const pitch = pitchRef.current;
+    if (!pitch) return;
+    const observer = new ResizeObserver(() => setInspectedPlayer(current => current ? { ...current } : current));
+    observer.observe(pitch);
+    window.addEventListener('orientationchange', () => setInspectedPlayer(current => current ? { ...current } : current));
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('orientationchange', () => setInspectedPlayer(current => current ? { ...current } : current));
+    };
+  }, [inspectedPlayer?.player.id]);
+
   useEffect(() => {
     setInspectedPlayer(null);
   }, [currentEventIndex]);
@@ -746,7 +762,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   if (node) playerNodesRef.current.set(player.id, node);
                   else playerNodesRef.current.delete(player.id);
                 }}
-                className="absolute z-10 min-w-9 min-h-9 cursor-pointer will-change-transform flex items-center justify-center"
+                className="absolute z-10 min-w-11 min-h-11 cursor-pointer will-change-transform flex items-center justify-center"
                 style={{
                   left: `${player.x}%`,
                   top: `${player.y}%`,
@@ -766,7 +782,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
                   {/* Circular Player Kit Marker: ONLY JERSEY NUMBER DISPLAYED */}
                   <div
-                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-display font-black text-[9px] sm:text-[10.5px] shadow-lg border ${kitStyle} ${
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-display font-black text-[9px] sm:text-[10.5px] shadow-lg border ${kitStyle} ${
                       hasBall ? 'scale-110 ring-2 ring-amber-300/80' : ''
                     } transition-transform`}
                   >
