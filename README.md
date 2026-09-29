@@ -92,3 +92,4 @@ Before shipping a release, verify:
 - Knockout draws are decided by extra time and then a visual penalty shootout.
 - Semi-Finals are followed by a Third-Place match, then the Final.
 
+<!-- release deployment trigger: 2026-09-29 -->
