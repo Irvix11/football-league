@@ -19,3 +19,36 @@ jobs:
       - run: npm run smoke
       - run: npm test
       - run: npm audit --audit-level=high
+
+  deploy-oracle:
+    needs: verify
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/full-review')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Oracle VM
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USERNAME }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: ${{ secrets.ORACLE_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.ORACLE_APP_DIR }}"
+            git fetch origin
+            git checkout "${{ github.ref_name }}"
+            git reset --hard "origin/${{ github.ref_name }}"
+            npm ci
+            npm run build:full
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 restart football-auction-league --update-env
+            else
+              sudo systemctl restart football-league
+            fi
+            sleep 3
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 status football-auction-league
+            else
+              sudo systemctl is-active --quiet football-league
+            fi
