@@ -21,12 +21,8 @@ function getRoomRequestOptions(session: SavedSession | null): RequestInit {
   return { headers };
 }
 
-function getRoomRequestUrl(roomCode: string, session: SavedSession | null): string {
-  const url = `${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}`;
-  if (import.meta.env.DEV && session?.reconnectToken) {
-    return `${url}?reconnectToken=${encodeURIComponent(session.reconnectToken)}&managerId=${encodeURIComponent(session.managerId)}`;
-  }
-  return url;
+function getRoomRequestUrl(roomCode: string): string {
+  return `${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}`;
 }
 
 function getGameServerBaseUrl(): string {
@@ -206,18 +202,17 @@ export function useGameSocket() {
               clearSimulationState();
               setSimulationError(typeof message === 'string' ? message : 'Knockout match failed to start.');
             }
-            // Reconnects can land on a different Vercel Function instance. Give the
-            // durable snapshot one HTTP retry before deciding that a saved room is gone.
+            // Give the durable snapshot one HTTP retry before deciding that a saved room is gone.
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
               const saved = getSavedSession();
               if (saved) {
-                fetch(getRoomRequestUrl(saved.roomCode, getSavedSession()), { ...getRoomRequestOptions(getSavedSession()), cache: 'no-store' })
+                fetch(getRoomRequestUrl(saved.roomCode), { ...getRoomRequestOptions(saved), cache: 'no-store' })
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
                       // Restore the server snapshot into the UI before retrying the
-                      // WebSocket join. This prevents the home screen from flashing
-                      // a false "lobby not found" state during a Vercel cold start.
+                      // WebSocket join so a transient reconnect does not flash a
+                      // false "lobby not found" state.
                       response.json().then((snapshot) => {
                         if (snapshot?.code) setRoom(snapshot as GameRoom);
                       }).catch(() => {});
@@ -298,7 +293,7 @@ export function useGameSocket() {
     const sync = async () => {
       try {
         const session = getSavedSession();
-        const url = getRoomRequestUrl(room.code, session);
+        const url = getRoomRequestUrl(room.code);
         const separator = url.includes('?') ? '&' : '?';
         const response = await fetch(`${url}${separator}since=${encodeURIComponent(String(room.updatedAt || 0))}`, { ...getRoomRequestOptions(session), cache: 'no-store' });
         if (response.status === 304) return;
@@ -343,7 +338,7 @@ export function useGameSocket() {
     try {
       setErrorMessage(null);
 
-      // Give the Vercel realtime function a short window to cold-start and complete
+      // Give the realtime server a short window to complete
       // the WebSocket handshake before reporting the connection as unavailable.
       const deadline = Date.now() + 8000;
       while ((!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) && Date.now() < deadline) {
@@ -404,7 +399,7 @@ export function useGameSocket() {
     saveSession(merged);
     const roomCode = merged.roomCode;
 
-      fetch(getRoomRequestUrl(roomCode, merged), { ...getRoomRequestOptions(merged), cache: 'no-store' })
+      fetch(getRoomRequestUrl(roomCode), { ...getRoomRequestOptions(merged), cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
@@ -548,9 +543,8 @@ export function useGameSocket() {
       return;
     }
 
-    // Keep bracket advancement on the same authoritative WebSocket instance that
-    // simulated the match. Using a REST request here can hit a different Vercel
-    // function instance before the just-finished fixture has been persisted.
+    // Keep bracket advancement on the same authoritative WebSocket session that
+    // simulated the match.
     setSimulationError(null);
     isSimulatingRef.current = true;
     setIsSimulating(true);
@@ -564,9 +558,7 @@ export function useGameSocket() {
       return;
     }
 
-    // Matchday simulation now uses the same authoritative WebSocket instance as
-    // knockout matches. This prevents a Vercel REST request from landing on a
-    // different serverless instance with a stale room snapshot.
+    // Matchday simulation uses the same authoritative WebSocket session.
     setSimulationError(null);
     isSimulatingRef.current = true;
     const fixture = room.fixtures.find(f => f.matchday === matchday && !f.played);
