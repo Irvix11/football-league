@@ -26,6 +26,7 @@ import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calcul
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
 import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots, persistenceQueues, persistenceTimers } from './server/persistence.js';
+import { aiRequestWindows, soloRequestWindows, apiRequestWindows, wsConnectionCounts, MAX_WS_CONNECTIONS_PER_IP, allowRateLimit, checkAiRateLimit } from './server/rate-limit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -170,39 +171,6 @@ const rooms = new Map<string, GameRoom>();
 const roomSockets = new Map<string, Set<WebSocket>>();
 const roomDisconnectedAt = new Map<string, number>();
 const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
-const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
-const soloRequestWindows = new Map<string, { startedAt: number; count: number }>();
-
-function checkAiRateLimit(req: import('express').Request, res: import('express').Response): boolean {
-  const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
-  if (!allowRateLimit(aiRequestWindows, clientKey, 20)) {
-    res.status(429).json({ error: 'AI request failed' });
-    return false;
-  }
-  return true;
-}
-const apiRequestWindows = new Map<string, { startedAt: number; count: number }>();
-const wsConnectionCounts = new Map<string, number>();
-const MAX_WS_CONNECTIONS_PER_IP = 25;
-
-function allowRateLimit(map: Map<string, { startedAt: number; count: number }>, key: string, max: number, windowMs = 60_000) {
-  const now = Date.now();
-  const current = map.get(key);
-  if (!current || now - current.startedAt >= windowMs) {
-    map.set(key, { startedAt: now, count: 1 });
-    return true;
-  }
-  current.count++;
-  return current.count <= max;
-}
-
-setInterval(() => {
-  const cutoff = Date.now() - 60_000;
-  for (const map of [aiRequestWindows, soloRequestWindows, apiRequestWindows]) {
-    for (const [key, w] of map) if (w.startedAt < cutoff) map.delete(key);
-  }
-}, 60_000).unref();
-
 // Prevent double-clicks / concurrent websocket messages from simulating the same
 // fixture twice before the first simulation has committed its result.
 const matchSimulationLocks = new Set<string>();
