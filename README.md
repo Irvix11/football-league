@@ -6,7 +6,7 @@ A production-focused real-time football auction and league game with multiplayer
 
 - **Frontend:** React + Vite
 - **Realtime:** Node/Express + WebSocket
-- **Hosting:** Vercel Fluid Compute
+- **Hosting:** Oracle Cloud VM (GitHub-linked deployment)
 - **Persistence:** Supabase room snapshots
 - **Runtime:** Node 24
 - **Player database:** 510 FC27 players rated 80+ in the checked-in generated dataset, plus 200 curated all-time players
@@ -24,25 +24,23 @@ npm start
 
 Open the address printed by the server. The Node/Express server hosts the React build and WebSocket game server from the same origin.
 
-## Vercel deployment
+## Oracle VM deployment
 
-Push to the `main` branch and let the Vercel project deploy the repository using `vercel.json`.
-
-The production build command is:
+The production runtime is the Node/Express process running on an Oracle Cloud VM, linked to this GitHub repository. The VM should run the same production command used by the application:
 
 ```bash
-npm run build
+npm ci
+npm run build:full
+NODE_ENV=production npm start
 ```
 
-The realtime WebSocket endpoint is served from `/api/ws`. Durable room snapshots are written to Supabase so reconnects can recover across function instances.
+The server hosts the React build, HTTP API, and WebSocket endpoint from the same Node process. Put a TLS reverse proxy such as Nginx in front of the Node process and forward WebSocket upgrades to the same origin.
 
-## Realtime deployment options
+Durable room snapshots are written to Supabase so reconnects and VM/process restarts can recover persisted room state.
 
-Vercel supports WebSockets through Fluid Compute, but connections are pinned to a Function instance and can close when the Function reaches its maximum duration. This application therefore treats reconnect/resync as mandatory and can use Redis for multi-instance fan-out when `REDIS_URL` is configured.
+### Realtime scaling
 
-For a simpler always-on realtime deployment, use the included `render.yaml` to run the Node/Express WebSocket server on Render and keep the Vercel deployment as the static frontend. Set `VITE_GAME_SERVER_URL` in the Vercel environment to the Render HTTPS/WSS origin.
-
-When `REDIS_URL` is configured, production should use Redis/Upstash for shared room broadcasts, timer coordination, and blind-bid state. Without it, the server retains the single-instance in-memory behavior.
+A single Oracle VM is authoritative for live in-memory room state. If the game is later scaled to multiple Node instances, shared Redis pub/sub and distributed locking must be enabled before traffic is split across instances. Do not treat `REDIS_URL` as configured until the Redis adapter is actually implemented and tested.
 
 ## Development
 
