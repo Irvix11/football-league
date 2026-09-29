@@ -27,6 +27,19 @@ import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
 import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots, persistenceQueues, persistenceTimers } from './server/persistence.js';
 import { aiRequestWindows, soloRequestWindows, apiRequestWindows, wsConnectionCounts, MAX_WS_CONNECTIONS_PER_IP, allowRateLimit, checkAiRateLimit } from './server/rate-limit.js';
+import {
+  authorizeSocket,
+  createReconnectToken,
+  hashReconnectToken,
+  isRoomHost,
+  matchesReconnectCredential,
+  newId,
+  publicManagerRef,
+  resolveManagerId,
+  sanitizeRoomForViewer,
+  sendSocketError,
+  setReconnectCredential,
+} from './server/security.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -232,19 +245,6 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 void cleanupOldRoomSnapshots().catch(error => console.error('[persistence] initial cleanup failed:', error));
 
-import {
-  authorizeSocket,
-  createReconnectToken,
-  hashReconnectToken,
-  isRoomHost,
-  matchesReconnectCredential,
-  newId,
-  publicManagerRef,
-  resolveManagerId,
-  sanitizeRoomForViewer,
-  sendSocketError,
-  setReconnectCredential,
-} from './server/security.js';
 const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation[]);
 const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
 const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
