@@ -487,7 +487,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                  <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase font-bold tracking-wider">
                     <th className="pb-2.5 pl-2">POS</th>
                     <th className="pb-2.5">TEAM</th>
                     <th className="pb-2.5 text-center">P</th>
@@ -501,7 +501,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                     <th className="pb-2.5 pr-2 text-right">FORM</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                <tbody className="divide-y divide-slate-800/60 font-mono text-[12px]">
                   {room.leagueTable.map((row, idx) => {
                     const isUserTeam = row.managerId === managerId;
                     const isPlayingNow =
@@ -521,8 +521,8 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
                         }`}
                       >
                         <td className="py-2.5 pl-2 font-black">{idx + 1}</td>
-                        <td className="py-2.5 font-sans font-bold truncate max-w-[110px]">
-                          {row.managerName} {isUserTeam && <span className="text-[10px] text-emerald-400 ml-1 font-mono">(You)</span>}
+                        <td className="py-2.5 font-sans font-bold truncate max-w-[150px]">
+                          {row.managerName} {isUserTeam && <span className="text-[11px] text-emerald-400 ml-1 font-mono">(You)</span>}
                         </td>
                         <td className="py-2.5 text-center text-slate-400">{row.played}</td>
                         <td className="py-2.5 text-center text-slate-300">{row.won}</td>
