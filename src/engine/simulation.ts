@@ -766,7 +766,7 @@ export function simulateMatch(
       yellowCard: false,
       redCard: false,
       fouls: 0,
-      rating: 6.0,
+      rating: 5.5,
     });
   }
 
@@ -2173,6 +2173,8 @@ export function simulateMatch(
   awayStats.score = awayScore;
 
   // Final player ratings: contributions in both directions, with a 3.0 floor.
+  // Start from a neutral match baseline below 6.0 so poor performances can be
+  // represented instead of every player being pinned at 6.0 or higher.
   for (const stat of playerStatsMap.values()) {
     if (!stat.redCard) stat.minutes = wentToExtraTime ? 120 : 90;
     const conceded = stat.team === 'home' ? awayScore : homeScore;
