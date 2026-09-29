@@ -201,8 +201,9 @@ jobs:
           sudo nginx -t
           sudo systemctl reload nginx
 
-          # Verify the public HTTPS origin from the VM itself.
-          curl -fsS https://$DOMAIN/api/health
+          # Verify HTTPS locally on the VM. Resolving the hostname to loopback avoids
+          # NAT/hairpin routing failures when the public IP is not reachable from itself.
+          curl -fsS --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health"
           echo
 
           echo "Deployment successful: https://$DOMAIN"
