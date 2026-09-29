@@ -232,52 +232,19 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 void cleanupOldRoomSnapshots().catch(error => console.error('[persistence] initial cleanup failed:', error));
 
-function sendSocketError(ws: WebSocket, message: string) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'ERROR', message }));
-  }
-}
-
-function authorizeSocket(ws: WebSocket, roomCode: string, managerId?: string) {
-  const session = socketToRoom.get(ws);
-  const normalizedCode = String(roomCode || '').toUpperCase();
-  if (!session || session.roomCode !== normalizedCode) return null;
-  if (managerId && session.managerId !== managerId) return null;
-  const room = rooms.get(normalizedCode);
-  if (!room) return null;
-  return { room, session };
-}
-
-function isRoomHost(room: GameRoom, managerId: string) {
-  return room.hostId === managerId;
-}
-
-function newId(prefix: string) {
-  return prefix + '-' + crypto.randomUUID();
-}
-
-function createReconnectToken(): string {
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-function hashReconnectToken(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-function setReconnectCredential(manager: Manager): string {
-  const token = createReconnectToken();
-  manager.reconnectTokenHash = hashReconnectToken(token);
-  return token;
-}
-
-function matchesReconnectCredential(manager: Manager, token: unknown): boolean {
-  const supplied = String(token || '');
-  if (!supplied || !manager.reconnectTokenHash) return false;
-  const expected = Buffer.from(manager.reconnectTokenHash, 'hex');
-  const actual = Buffer.from(hashReconnectToken(supplied), 'hex');
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
-}
-
+import {
+  authorizeSocket,
+  createReconnectToken,
+  hashReconnectToken,
+  isRoomHost,
+  matchesReconnectCredential,
+  newId,
+  publicManagerRef,
+  resolveManagerId,
+  sanitizeRoomForViewer,
+  sendSocketError,
+  setReconnectCredential,
+} from './server/security.js';
 const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation[]);
 const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
 const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
