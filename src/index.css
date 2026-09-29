@@ -348,10 +348,10 @@ table tbody tr:hover {
 
 
 /* Mobile Safari/Chrome viewport stability.
-   Inputs smaller than 16px can trigger automatic page zoom on iOS, which
-   looks like the whole game suddenly shrinking/growing while typing.
-   Keep form controls at a stable size and prevent horizontal layout shifts. */
-@media (max-width: 640px) {
+   iPad portrait is wider than 640px, so a width-only media query does not
+   protect it from iOS form-control auto-zoom. Touch devices need the 16px
+   control size regardless of screen width. */
+@media (hover: none) and (pointer: coarse) {
   input:not([type="range"]),
   select,
   textarea {
@@ -365,10 +365,19 @@ table tbody tr:hover {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
+    overscroll-behavior-x: none;
   }
 
   body {
     min-height: 100%;
     -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  button,
+  select,
+  input,
+  textarea {
+    touch-action: manipulation;
   }
 }
