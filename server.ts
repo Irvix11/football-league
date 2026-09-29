@@ -2385,10 +2385,6 @@ wss.on('connection', (ws, request) => {
 
           const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
-          if ((room.phaseReadyIds || []).includes(actorId)) {
-            sendSocketError(ws, 'You marked the auction done and cannot bid again.');
-            return;
-          }
 
           const bidAmount = Number(amount);
           if (room.auction.isSold || !room.auction.currentPlayer || room.auction.secondsRemaining <= 0) {
