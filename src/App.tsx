@@ -274,6 +274,7 @@ function AppContent() {
         <LeagueDashboardView
           room={room}
           managerId={managerId}
+          reconnectToken={savedSession?.reconnectToken}
           onRunMatchday={runMatchday}
           onMatchComplete={handleLeagueMatchComplete}
           onProceedNextMatchday={proceedToNextMatchday}
