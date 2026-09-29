@@ -3193,13 +3193,19 @@ wss.on('connection', (ws, request) => {
   });
 });
 
+function authenticateHttpManager(req: express.Request, room: GameRoom): Manager | null {
+  const authHeader = String(req.headers.authorization || '');
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) return null;
+  return room.managers.find(manager => matchesReconnectCredential(manager, token)) || null;
+}
+
 // REST simulation controls are the reliable fallback for production deployments.
 // They also let the match start when the browser's WebSocket connection is temporarily
 // unavailable. The mutation is still authoritative on the server and is persisted.
 app.post('/api/room/:code/run-matchday', async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase();
-    const managerId = String(req.body?.managerId || '');
     const requestedMatchday = Number(req.body?.matchday);
 
     let room = rooms.get(code);
@@ -3209,7 +3215,9 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     }
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'league') return res.status(409).json({ error: 'League is not active.' });
-    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const viewer = authenticateHttpManager(req, room);
+    if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const managerId = viewer.id;
     if (!isRoomHost(room, managerId)) return res.status(403).json({ error: 'Only the host can run the matchday fallback.' });
     if (room.transferWindowOpen) return res.status(409).json({ error: 'Mid-season management window is open.' });
 
@@ -3263,7 +3271,6 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
 app.post('/api/room/:code/run-knockout-match', async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase();
-    const managerId = String(req.body?.managerId || '');
     const fixtureId = String(req.body?.fixtureId || '');
 
     let room = rooms.get(code);
@@ -3273,7 +3280,9 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
     }
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'knockout') return res.status(409).json({ error: 'Knockout phase is not active.' });
-    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const viewer = authenticateHttpManager(req, room);
+    if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const managerId = viewer.id;
 
     const stage = room.knockoutStage;
     if (!stage) return res.status(409).json({ error: 'Knockout stage is unavailable.' });
@@ -3314,7 +3323,6 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
 app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase();
-    const managerId = String(req.body?.managerId || '');
     const fixtureId = String(req.body?.fixtureId || '');
 
     let room = rooms.get(code);
@@ -3324,7 +3332,9 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
     }
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'knockout') return res.status(409).json({ error: 'Knockout phase is not active.' });
-    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const viewer = authenticateHttpManager(req, room);
+    if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const managerId = viewer.id;
 
     const stage = room.knockoutStage;
     if (!stage) return res.status(409).json({ error: 'Knockout stage is unavailable.' });
