@@ -48,6 +48,7 @@ import {
   matchSimulationLocks,
   socketAlive,
 } from './server/room-state.js';
+import { allManagersReady, allFormationReady, auctionIntervals, clearPhaseReadyTimer, phaseReadyTimers, PHASE_READY_SECONDS } from './server/timers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -255,29 +256,6 @@ import {
 // Secret bids for blind auction: roomCode -> Record<managerId, number>
 const blindSecretBids = new Map<string, Record<string, number>>();
 
-// Active countdown intervals: roomCode -> NodeJS.Timeout
-const auctionIntervals = new Map<string, NodeJS.Timeout>();
-
-// 30-second readiness timers are persisted as absolute deadlines so a Vercel
-// instance hop can resume the same countdown instead of resetting it.
-const phaseReadyTimers = new Map<string, NodeJS.Timeout>();
-const PHASE_READY_SECONDS = 30;
-
-function clearPhaseReadyTimer(room: GameRoom) {
-  const timer = phaseReadyTimers.get(room.code);
-  if (timer) clearTimeout(timer);
-  phaseReadyTimers.delete(room.code);
-  room.phaseReadyDeadline = undefined;
-}
-
-function allManagersReady(room: GameRoom) {
-  return room.managers.length >= 2 && room.managers.every(m => m.isReady || m.isBot);
-}
-
-function allFormationReady(room: GameRoom) {
-  const ready = new Set(room.phaseReadyIds || []);
-  return room.managers.length >= 2 && room.managers.every(m => m.isBot || ready.has(m.id));
-}
 
 function allTeamsConfirmed(room: GameRoom) {
   return room.managers.length >= 2 && room.managers.every(m => m.confirmedTeam || m.isBot);
