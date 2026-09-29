@@ -1,8 +1,11 @@
+import { gzipSync, gunzipSync } from 'node:zlib';
 import type { GameRoom, MatchEvent } from '../src/types/football.js';
 
 interface PersistedRoomSnapshot {
   room: GameRoom;
-  fixtureEvents: Record<string, MatchEvent[]>;
+  fixtureEventsCompressed: string;
+  /** Legacy uncompressed snapshots written before P1 compression. */
+  fixtureEvents?: Record<string, MatchEvent[]>;
 }
 
 function toPersistedSnapshot(room: GameRoom): PersistedRoomSnapshot {
@@ -12,16 +15,26 @@ function toPersistedSnapshot(room: GameRoom): PersistedRoomSnapshot {
     if (fixture.events?.length) fixtureEvents[fixture.id] = fixture.events;
     delete fixture.events;
   }
-  return { room: roomWithoutEvents, fixtureEvents };
+  const fixtureEventsCompressed = gzipSync(Buffer.from(JSON.stringify(fixtureEvents), 'utf8')).toString('base64');
+  return { room: roomWithoutEvents, fixtureEventsCompressed };
 }
 
 function fromPersistedSnapshot(snapshot: unknown): GameRoom | null {
   if (!snapshot || typeof snapshot !== 'object') return null;
   const value = snapshot as Partial<PersistedRoomSnapshot> & Partial<GameRoom>;
-  if (value.room && value.fixtureEvents) {
+  if (value.room && (value.fixtureEventsCompressed || value.fixtureEvents)) {
     const room = value.room as GameRoom;
+    let fixtureEvents: Record<string, MatchEvent[]> = value.fixtureEvents || {};
+    if (value.fixtureEventsCompressed) {
+      try {
+        fixtureEvents = JSON.parse(gunzipSync(Buffer.from(value.fixtureEventsCompressed, 'base64')).toString('utf8')) as Record<string, MatchEvent[]>;
+      } catch (error) {
+        console.error('[persistence] invalid compressed fixture events:', error);
+        fixtureEvents = {};
+      }
+    }
     for (const fixture of room.fixtures || []) {
-      const events = value.fixtureEvents[fixture.id];
+      const events = fixtureEvents[fixture.id];
       if (events?.length) fixture.events = events;
     }
     return room;
