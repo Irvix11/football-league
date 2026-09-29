@@ -82,11 +82,17 @@ export function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string):
   sanitized.leagueTable = sanitized.leagueTable.map(row => ({ ...row, managerId: ref(row.managerId) as string }));
   sanitized.fixtures = sanitized.fixtures.map(f => {
     const { events: _events, ...fixtureWithoutEvents } = f;
+    const isLiveFixture = room.liveFixtureId === f.id;
+    const canViewLiveTimeline = Boolean(
+      isLiveFixture &&
+      (viewerManagerId === room.hostId || viewerManagerId === f.homeManagerId || viewerManagerId === f.awayManagerId)
+    );
     return {
       ...fixtureWithoutEvents,
       homeManagerId: ref(f.homeManagerId) as string,
       awayManagerId: ref(f.awayManagerId) as string,
       winnerManagerId: ref(f.winnerManagerId) as string | undefined,
+      ...(canViewLiveTimeline ? { events: f.events || [] } : {}),
     };
   });
   sanitized.phaseReadyIds = sanitized.phaseReadyIds?.map(id => ref(id) as string);
