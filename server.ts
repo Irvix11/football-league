@@ -3440,10 +3440,9 @@ app.get('/api/room/:code/fixture/:fixtureId/events', async (req, res) => {
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
 
-  const viewer = room.managers.find(m =>
-    (reconnectToken && matchesReconnectCredential(m, reconnectToken)) ||
-    (!reconnectToken && viewerId && m.id === viewerId)
-  );
+  // Fixture timelines contain private event/player details. Require the
+  // cryptographic reconnect credential; a manager id alone is not an authority.
+  const viewer = room.managers.find(m => reconnectToken && matchesReconnectCredential(m, reconnectToken));
   if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
 
   const fixture = room.fixtures.find(item => item.id === fixtureId);
