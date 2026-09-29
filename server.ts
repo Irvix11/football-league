@@ -410,99 +410,6 @@ async function deletePersistedRoomSnapshot(code: string) {
   await deleteRoomSnapshot(code);
 }
 
-function publicManagerRef(managerId: string): string {
-  // Opaque client-facing reference. Never expose the server's manager UUID/ID.
-  return 'p-' + crypto.createHash('sha256').update(managerId).digest('hex').slice(0, 12);
-}
-
-function resolveManagerId(room: GameRoom | undefined, suppliedId: unknown): string | null {
-  const value = String(suppliedId || '');
-  if (!room || !value) return null;
-  if (room.managers.some(m => m.id === value)) return value;
-  const match = room.managers.find(m => publicManagerRef(m.id) === value);
-  return match?.id || null;
-}
-
-function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRoom {
-  const sanitized = JSON.parse(JSON.stringify(room)) as GameRoom;
-  sanitized.serverNow = Date.now();
-  const ref = (id: string | null | undefined) => {
-    if (!id) return id;
-    return id === viewerManagerId ? id : publicManagerRef(id);
-  };
-
-  sanitized.hostId = ref(sanitized.hostId) as string;
-  sanitized.managers = sanitized.managers.map(m => {
-    const { reconnectTokenHash: _reconnectTokenHash, ...publicManager } = m;
-    return {
-      ...publicManager,
-      id: ref(m.id) as string,
-    };
-  });
-  sanitized.leagueTable = sanitized.leagueTable.map(row => ({
-    ...row,
-    managerId: ref(row.managerId) as string,
-  }));
-  sanitized.fixtures = sanitized.fixtures.map(f => {
-    const { events: _events, ...fixtureWithoutEvents } = f;
-    return {
-      ...fixtureWithoutEvents,
-      homeManagerId: ref(f.homeManagerId) as string,
-      awayManagerId: ref(f.awayManagerId) as string,
-      winnerManagerId: ref(f.winnerManagerId) as string | undefined,
-    };
-  });
-  sanitized.phaseReadyIds = sanitized.phaseReadyIds?.map(id => ref(id) as string);
-  sanitized.transferWindowReadyIds = sanitized.transferWindowReadyIds?.map(id => ref(id) as string);
-
-  if (sanitized.auction) {
-    sanitized.auction.highestBidderId = ref(sanitized.auction.highestBidderId) as string | null;
-    sanitized.auction.winnerId = ref(sanitized.auction.winnerId) as string | null;
-    sanitized.auction.forcedWinnerId = ref(sanitized.auction.forcedWinnerId) as string | null;
-    sanitized.auction.auctionHistory = sanitized.auction.auctionHistory.map(item => ({
-      ...item,
-      winnerId: ref(item.winnerId) as string,
-    }));
-    if (sanitized.auction.hasSubmittedSecretBid) {
-      sanitized.auction.hasSubmittedSecretBid = Object.fromEntries(
-        Object.entries(sanitized.auction.hasSubmittedSecretBid).map(([id, value]) => [ref(id) as string, value])
-      );
-    }
-  }
-
-  if (sanitized.transferOffers) {
-    sanitized.transferOffers = sanitized.transferOffers.map(offer => ({
-      ...offer,
-      fromManagerId: ref(offer.fromManagerId) as string,
-      toManagerId: ref(offer.toManagerId) as string,
-    }));
-  }
-
-  if (sanitized.knockoutStage) {
-    sanitized.knockoutStage.championId = ref(sanitized.knockoutStage.championId) as string | undefined;
-    sanitized.knockoutStage.rounds = sanitized.knockoutStage.rounds.map(round => ({
-      ...round,
-      fixtures: round.fixtures.map(f => ({
-        ...f,
-        homeManagerId: ref(f.homeManagerId) as string,
-        awayManagerId: ref(f.awayManagerId) as string,
-        winnerManagerId: ref(f.winnerManagerId) as string | undefined,
-      })),
-    }));
-  }
-
-  if (sanitized.awards) {
-    const awards: any = sanitized.awards;
-    for (const key of Object.keys(awards)) {
-      if (awards[key] && typeof awards[key] === 'object' && 'managerId' in awards[key]) {
-        awards[key].managerId = ref(awards[key].managerId) as string;
-      }
-    }
-  }
-
-  return sanitized;
-}
-
 function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = true) {
   const room = rooms.get(roomCode);
   if (!room) return;
@@ -2384,7 +2291,7 @@ wss.on('connection', (ws, request) => {
         // --- 3. LOBBY SETTINGS UPDATE ---
         case 'UPDATE_SETTINGS': {
           const { roomCode, settings } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'lobby') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -2408,7 +2315,7 @@ wss.on('connection', (ws, request) => {
         // --- 4. READY TOGGLE ---
         case 'TOGGLE_READY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (room.phase !== 'lobby') return;
@@ -2424,7 +2331,7 @@ wss.on('connection', (ws, request) => {
         // --- 5. DELETE LOBBY (HOST ONLY) ---
         case 'DELETE_LOBBY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) {
             sendSocketError(ws, 'Unauthorized lobby deletion.');
             return;
@@ -2461,7 +2368,7 @@ wss.on('connection', (ws, request) => {
         // --- 5. KICK PLAYER ---
         case 'KICK_PLAYER': {
           const { roomCode, targetManagerId } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const resolvedTargetId = resolveManagerId(room, targetManagerId);
@@ -2544,7 +2451,7 @@ wss.on('connection', (ws, request) => {
         // --- 6. START GAME (Move to formation select or auction) ---
         case 'START_GAME': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -2574,7 +2481,7 @@ wss.on('connection', (ws, request) => {
           const { roomCode, formation } = payload;
           // The socket session is the source of truth for identity. Do not trust
           // a stale managerId from the browser after a reconnect.
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (room.phase !== 'formation_select') return;
@@ -2601,7 +2508,7 @@ wss.on('connection', (ws, request) => {
         // --- 8. FORMATION READY / BEGIN AUCTION ---
         case 'FORMATION_READY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'formation_select') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -2619,7 +2526,7 @@ wss.on('connection', (ws, request) => {
 
         case 'BEGIN_AUCTION': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId) || room.phase !== 'formation_select') {
@@ -2649,7 +2556,7 @@ wss.on('connection', (ws, request) => {
         // --- 9. SKIP AUCTION (Solo Play only) ---
         case 'SKIP_AUCTION_SOLO': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const isSolo = room.managers.length === 2 && room.managers.some(m => m.isBot);
@@ -2686,7 +2593,7 @@ wss.on('connection', (ws, request) => {
         // --- 10. AUCTION BID (Classic & Quick) ---
         case 'AUCTION_BID': {
           const { roomCode, amount } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -2780,7 +2687,7 @@ wss.on('connection', (ws, request) => {
         // --- 11. BLIND AUCTION SECRET BID SUBMISSION ---
         case 'SUBMIT_BLIND_BID': {
           const { roomCode, amount } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -2844,7 +2751,7 @@ wss.on('connection', (ws, request) => {
         // --- 12. AUCTION READY / TEAM MANAGEMENT ---
         case 'AUCTION_READY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -2868,7 +2775,7 @@ wss.on('connection', (ws, request) => {
         // --- 13. TEAM MANAGEMENT & TACTICS ---
         case 'UPDATE_LINEUP': {
           const { roomCode, squad, formation, tactics, roles } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (!['team_management', 'league', 'knockout'].includes(room.phase)) return;
@@ -2905,7 +2812,7 @@ wss.on('connection', (ws, request) => {
         // --- 13. CONFIRM TEAM ---
         case 'CONFIRM_TEAM': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
 
@@ -2943,7 +2850,7 @@ wss.on('connection', (ws, request) => {
         case 'RUN_KNOCKOUT_MATCH': {
           try {
             const { roomCode, managerId, fixtureId } = payload;
-            const auth = authorizeSocket(ws, roomCode, managerId);
+            const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
             if (!auth || auth.room.phase !== 'knockout') {
               sendSocketError(ws, 'Knockout phase is not active for this manager session.');
               return;
@@ -2993,7 +2900,7 @@ wss.on('connection', (ws, request) => {
         case 'COMPLETE_KNOCKOUT_MATCH': {
           try {
             const { roomCode, managerId, fixtureId } = payload;
-            const auth = authorizeSocket(ws, roomCode, managerId);
+            const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
             if (!auth || auth.room.phase !== 'knockout') {
               sendSocketError(ws, 'Knockout phase is not active for this manager session.');
               return;
@@ -3051,7 +2958,7 @@ wss.on('connection', (ws, request) => {
         case 'RUN_MATCHDAY': {
           try {
             const { roomCode, matchday } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'league') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -3134,7 +3041,7 @@ wss.on('connection', (ws, request) => {
         case 'COMPLETE_LEAGUE_MATCH': {
           try {
             const { roomCode, fixtureId } = payload;
-            const auth = authorizeSocket(ws, roomCode);
+            const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
             if (!auth || auth.room.phase !== 'league') return;
             const { room, session } = auth;
             if (!isRoomHost(room, session.managerId)) {
@@ -3173,7 +3080,7 @@ wss.on('connection', (ws, request) => {
         // --- 14b. NEXT MATCHDAY ---
         case 'NEXT_MATCHDAY': {
           const { roomCode, nextMatchday } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'league') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -3204,7 +3111,7 @@ wss.on('connection', (ws, request) => {
         // --- 14c. FINISH SEASON ---
         case 'FINISH_SEASON': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'league') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -3233,7 +3140,7 @@ wss.on('connection', (ws, request) => {
         // --- 15. TRANSFERS ---
         case 'PROPOSE_TRANSFER': {
           const { roomCode, offer } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const suppliedToManagerId = resolveManagerId(room, offer?.toManagerId);
@@ -3295,7 +3202,7 @@ wss.on('connection', (ws, request) => {
 
         case 'RESPOND_TRANSFER': {
           const { roomCode, managerId, offerId, accept } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
            const actorId = session.managerId;
@@ -3319,7 +3226,7 @@ wss.on('connection', (ws, request) => {
         // --- MID-SEASON MANAGEMENT WINDOW ---
         case 'CLOSE_TRANSFER_WINDOW': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -3347,7 +3254,7 @@ wss.on('connection', (ws, request) => {
         // --- LEAVE ROOM / MATCH ---
         case 'LEAVE_ROOM': {
           const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const leavingId = session.managerId;
@@ -3409,7 +3316,7 @@ wss.on('connection', (ws, request) => {
         // --- 16. REMATCH / RESET ---
         case 'REMATCH': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (room.phase !== 'season_end') {
