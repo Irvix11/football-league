@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GameRoom, Formation, TacticalStyle, TacticalMentality, SquadPlayerEntry, TeamTactics, TeamRoles, Player, Position } from '../types/football';
 import { FORMATIONS_CONFIG, validateSquadFormation, calculatePositionFit } from '../constants/formations';
 import { PitchGraphic } from './PitchGraphic';
@@ -138,6 +138,12 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     isStarter: boolean;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Every phase can replace this view without a full browser navigation.
+  // Reset Safari/iPad scroll so Team Management always opens at its header.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [managerId, room.phase]);
 
   const formationConfig = FORMATIONS_CONFIG[currentManager.formation] || FORMATIONS_CONFIG['4-3-3'];
 
@@ -301,7 +307,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
   const totalCount = room.managers.length;
 
   return (
-    <div className="min-h-screen bg-[#02050b] text-slate-100 p-3 sm:p-5 md:p-6 pb-20 flex flex-col justify-between max-w-7xl mx-auto select-none">
+    <div className="min-h-screen bg-[#02050b] text-slate-100 p-3 sm:p-5 md:p-6 pb-20 flex flex-col justify-between w-full max-w-7xl mx-auto select-none">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-900 gap-3">
         <div>
