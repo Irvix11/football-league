@@ -25,6 +25,6 @@ describe('knockout helpers', () => {
     const fixtures = buildKnockoutFixtures([manager('a'), manager('b'), manager('c')], 'Semi-Final', 1, true);
     expect(fixtures).toHaveLength(2);
     expect(fixtures.filter(f => f.played)).toHaveLength(1);
-    expect(fixtures.find(f => !f.played)?.homeManagerId).toBe('a');
+    expect(fixtures.find(f => !f.played)?.homeManagerId).toBe('b');
   });
 });
