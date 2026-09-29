@@ -93,3 +93,5 @@ Before shipping a release, verify:
 - Semi-Finals are followed by a Third-Place match, then the Final.
 
 <!-- release deployment trigger: 2026-09-29 -->
+
+<!-- oracle deployment verification trigger: 1790664897349 -->
