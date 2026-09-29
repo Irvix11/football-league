@@ -1239,7 +1239,9 @@ export function simulateMatch(
               ballCoordinates: { x: ballX, y: ballY },
               ballStartCoordinates: { x: ballX, y: ballY },
               playerCoordinates: generate22PlayerCoordinates(
-                homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
+                homeStarters.filter(s => !sentOffIds.has(s.player.id) || s.player.id === defender.player.id),
+                awayStarters.filter(s => !sentOffIds.has(s.player.id) || s.player.id === defender.player.id),
+                homeManager.formation, awayManager.formation,
                 homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
               ),
               momentum: isHome ? momentum - 5 : momentum + 5,
