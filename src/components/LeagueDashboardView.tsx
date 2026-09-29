@@ -10,6 +10,7 @@ import {
 interface LeagueDashboardViewProps {
   room: GameRoom;
   managerId: string;
+  reconnectToken?: string;
   onRunMatchday: (matchday: number) => Promise<void> | void;
   onMatchComplete?: (fixtureId: string) => Promise<void> | void;
   onProceedNextMatchday?: (nextMatchday: number) => Promise<void> | void;
@@ -25,6 +26,7 @@ interface LeagueDashboardViewProps {
 export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   room,
   managerId,
+  reconnectToken,
   onRunMatchday,
   onMatchComplete,
   onProceedNextMatchday,
@@ -363,6 +365,7 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
             (activeFixture.played || room.liveFixtureId === activeFixture.id) ? (
               /* LIVE 2D MATCH ENGINE: Renders broadcast pitch with compact scoreboard, possession, 22 players */
               <LiveMatchEngine
+                  reconnectToken={reconnectToken}
                 fixture={activeFixture}
                 userTeamId={managerId}
                 onMatchComplete={room.hostId === managerId ? handleMatchComplete : undefined}
