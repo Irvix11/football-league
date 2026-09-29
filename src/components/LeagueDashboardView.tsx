@@ -80,6 +80,13 @@ export const LeagueDashboardView: React.FC<LeagueDashboardViewProps> = ({
   const readyIds = room.transferWindowReadyIds || [];
   const alreadyFinishedManagement = readyIds.includes(managerId);
 
+  // Reset the dashboard viewport when a new matchday/live fixture takes over.
+  // Safari can preserve the previous scroll position across the large view
+  // transition, which can leave MATCHDAY headings visually clipped.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+  }, [currentMatchday, room.liveFixtureId]);
+
   // Synchronize selected fixture when matchday changes
   useEffect(() => {
     if (matchdayFixtures.length > 0) {
