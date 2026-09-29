@@ -51,6 +51,9 @@ jobs:
           cd "$APP"
           git fetch origin main
           git reset --hard origin/main
+          # Dependencies are disposable on the authoritative VM. Remove the
+          # previous tree to avoid npm ENOTEMPTY after interrupted installs.
+          rm -rf node_modules
           npm ci
           npm run lint
           npm audit --audit-level=high
