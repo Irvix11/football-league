@@ -47,6 +47,7 @@ import {
   socketToRoom,
   matchSimulationLocks,
   socketAlive,
+  blindSecretBids,
 } from './server/room-state.js';
 import { allManagersReady, allFormationReady, auctionIntervals, clearPhaseReadyTimer, phaseReadyTimers, PHASE_READY_SECONDS } from './server/timers.js';
 import { generateLeagueFixtures, calculateInitialTable, updateLeagueTable } from './server/league.js';
@@ -256,9 +257,6 @@ import {
   createBotManager,
   BOT_NAMES,
 } from './server/lobby.js';
-// Secret bids for blind auction: roomCode -> Record<managerId, number>
-const blindSecretBids = new Map<string, Record<string, number>>();
-
 
 function allTeamsConfirmed(room: GameRoom) {
   return room.managers.length >= 2 && room.managers.every(m => m.confirmedTeam || m.isBot);
