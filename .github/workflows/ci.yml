@@ -46,11 +46,15 @@ jobs:
             git checkout -B ${{ github.ref_name }} origin/${{ github.ref_name }}
             npm ci
             npm run build:full
-            if command -v pm2 >/dev/null 2>&1; then
+            if command -v pm2 >/dev/null 2>&1 && pm2 describe football-auction-league >/dev/null 2>&1; then
               pm2 restart football-auction-league --update-env
               pm2 status football-auction-league
-            else
+            elif command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^football-league\.service'; then
               sudo systemctl restart football-league
               sudo systemctl is-active --quiet football-league
+            else
+              echo "No supported Football Auction League process manager was found."
+              echo "Expected PM2 process 'football-auction-league' or systemd unit 'football-league.service'."
+              exit 1
             fi
             sleep 3
