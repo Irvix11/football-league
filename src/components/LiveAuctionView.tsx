@@ -40,6 +40,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const prevBidRef = useRef(auction.currentBid);
   const prevBidderRef = useRef(auction.highestBidderId);
   const prevLotRef = useRef(auction.currentPlayer?.id || null);
+  const prevDisplayedSecondsRef = useRef<number | null>(null);
   const serverOffsetRef = useRef(0);
   const [bidUpdated, setBidUpdated] = useState(false);
   const [wasOutbid, setWasOutbid] = useState(false);
@@ -103,10 +104,16 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
 
   // Audio tick on the displayed countdown, not the stale server integer.
   useEffect(() => {
-    if (displaySecondsRemaining > 0 && displaySecondsRemaining <= 3 && !auction.isSold) {
+    const previous = prevDisplayedSecondsRef.current;
+    if (displaySecondsRemaining !== previous && displaySecondsRemaining > 0 && displaySecondsRemaining <= 3 && !auction.isSold) {
       sound.playTick();
     }
+    prevDisplayedSecondsRef.current = displaySecondsRemaining;
   }, [displaySecondsRemaining, auction.isSold]);
+
+  useEffect(() => {
+    prevDisplayedSecondsRef.current = null;
+  }, [auction.currentPlayer?.id]);
 
 
 
