@@ -3362,7 +3362,6 @@ app.get('/api/room/:code', async (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
   const authHeader = String(req.headers.authorization || '');
   const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  const viewerId = String(req.headers['x-manager-id'] || '');
   const effectiveReconnectToken = reconnectToken;
   const effectiveViewerId = viewerId;
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
