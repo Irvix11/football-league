@@ -13,11 +13,6 @@ function getRoomRequestOptions(session: SavedSession | null): RequestInit {
   const headers: Record<string, string> = {};
   if (session?.reconnectToken) headers.Authorization = `Bearer ${session.reconnectToken}`;
   if (session?.managerId) headers['X-Manager-Id'] = session.managerId;
-  if (import.meta.env.DEV && session?.reconnectToken) {
-    return {
-      headers,
-    };
-  }
   return { headers };
 }
 
@@ -255,7 +250,8 @@ export function useGameSocket() {
       setIsConnected(false);
       socketRef.current = null;
       if (!intentionalCloseRef.current) {
-        setIsReconnecting(Boolean(room));
+        const savedSession = getSavedSession();
+        setIsReconnecting(Boolean(room || savedSession?.roomCode));
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         const attempt = reconnectAttemptRef.current++;
         const base = Math.min(15000, 1000 * (2 ** Math.min(attempt, 4)));
