@@ -77,7 +77,12 @@ function getAvailableGoalkeeper(
 }
 
 function calculateTeamPower(manager: Manager): TeamPower {
-  const starters = manager.squad.filter(s => s.isStarting);
+  // Injured/suspended players are unavailable for selection. Do not let their
+  // reduced-condition multiplier merely weaken the XI: they must be replaced
+  // by an available squad player when one exists.
+  const starters = manager.squad.filter(
+    s => s.isStarting && s.condition.state !== 'INJURED' && s.condition.state !== 'SUSPENDED'
+  );
   // Use the manager's assigned position when determining the tactical unit.
   // This makes manual positional switches (e.g. CM -> CAM, LB -> LWB,
   // ST -> CF) affect the simulation rather than leaving players in their
