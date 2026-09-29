@@ -26,12 +26,6 @@ export interface FormationConfig {
 
 
 // Every manager builds exactly an 11-player squad: the starting XI only.
-export const BENCH_CATEGORY_ALLOCATION: Record<PositionCategory, number> = {
-  GK: 0,
-  DEF: 0,
-  MID: 0,
-  ATT: 0,
-};
 
 export function getFormationStarterCategoryCounts(formation: Formation): Record<PositionCategory, number> {
   const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
