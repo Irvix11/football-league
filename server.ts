@@ -40,6 +40,14 @@ import {
   sendSocketError,
   setReconnectCredential,
 } from './server/security.js';
+import {
+  rooms,
+  roomSockets,
+  roomDisconnectedAt,
+  socketToRoom,
+  matchSimulationLocks,
+  socketAlive,
+} from './server/room-state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -179,14 +187,6 @@ app.post('/api/ai/chat', async (req, res) => {
 });
 
 
-import {
-  rooms,
-  roomSockets,
-  roomDisconnectedAt,
-  socketToRoom,
-  matchSimulationLocks,
-  socketAlive,
-} from './server/room-state.js';
 const roomEvictionTicker = setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
