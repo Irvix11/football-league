@@ -3372,8 +3372,7 @@ app.get('/api/room/:code', async (req, res) => {
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
   const viewer = room.managers.find(m =>
-    (effectiveReconnectToken && matchesReconnectCredential(m, effectiveReconnectToken)) ||
-    (!effectiveReconnectToken && effectiveViewerId && m.id === effectiveViewerId)
+    effectiveReconnectToken && matchesReconnectCredential(m, effectiveReconnectToken)
   );
   if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
   const since = Number(req.query?.since);
