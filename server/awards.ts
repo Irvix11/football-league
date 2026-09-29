@@ -1,7 +1,7 @@
 import type { GameRoom, SeasonAwards } from '../src/types/football.js';
 import { getPlayersForLobby } from '../src/data/players.js';
 
-function calculateSeasonAwards(room: GameRoom): SeasonAwards {
+export function calculateSeasonAwards(room: GameRoom): SeasonAwards {
   type Aggregate = {
     playerId: string;
     playerName: string;
