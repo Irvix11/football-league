@@ -3353,10 +3353,8 @@ app.get('/api/room/:code', async (req, res) => {
   const authHeader = String(req.headers.authorization || '');
   const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   const viewerId = String(req.headers['x-manager-id'] || '');
-  const legacyReconnectToken = process.env.NODE_ENV !== 'production' ? String(req.query?.reconnectToken || '') : '';
-  const legacyViewerId = process.env.NODE_ENV !== 'production' ? String(req.query?.managerId || '') : '';
-  const effectiveReconnectToken = reconnectToken || legacyReconnectToken;
-  const effectiveViewerId = viewerId || legacyViewerId;
+  const effectiveReconnectToken = reconnectToken;
+  const effectiveViewerId = viewerId;
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
   if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   let room = rooms.get(code);
@@ -3572,8 +3570,6 @@ async function gracefulShutdown(signal: string) {
   });
 }
 
-if (!process.env.VERCEL) {
-  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM').catch(error => console.error('[shutdown] failed:', error)));
-  process.on('SIGINT', () => void gracefulShutdown('SIGINT').catch(error => console.error('[shutdown] failed:', error)));
-  startServer();
-}
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM').catch(error => console.error('[shutdown] failed:', error)));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT').catch(error => console.error('[shutdown] failed:', error)));
+startServer();
