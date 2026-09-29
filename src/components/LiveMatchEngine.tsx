@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Fixture, MatchEvent, LivePlayerPosition, PenaltyKickResult } from '../types/football';
 import { sound } from '../utils/audio';
-import { separatePlayerPositions } from '../utils/pitch';
 import { 
   Play, Pause, SkipForward, RotateCcw, 
   Volume2, VolumeX, Activity, ChevronRight,
@@ -170,7 +169,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
     const firstEvent = events[0];
     if (firstEvent) {
-      const initialSeparated = separatePlayerPositions(firstEvent.playerCoordinates || []);
+      const initialSeparated = firstEvent.playerCoordinates || [];
       startPlayersRef.current = initialSeparated;
       targetPlayersRef.current = initialSeparated;
       setAnimatedPlayers(initialSeparated);
@@ -252,7 +251,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
     // The target players are separated to guarantee ZERO overlap
     const targetSeparated = currentEvent.playerCoordinates?.length
-      ? separatePlayerPositions(currentEvent.playerCoordinates)
+      ? currentEvent.playerCoordinates
       : (targetPlayersRef.current.length ? targetPlayersRef.current : animatedPlayers);
 
     // Start from the exact last rendered positions so the next event never teleports.
