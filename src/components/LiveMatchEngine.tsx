@@ -11,6 +11,7 @@ interface LiveMatchEngineProps {
   fixture: Fixture;
   roomCode?: string;
   userTeamId?: string;
+  reconnectToken?: string;
   onMatchComplete?: (fixtureId: string) => void;
   className?: string;
 }
@@ -44,6 +45,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   fixture,
   roomCode,
   userTeamId,
+  reconnectToken,
   onMatchComplete,
   className = '',
 }) => {
@@ -57,7 +59,10 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     if (fixture.events?.length || !roomCode || !userTeamId) return;
     const base = (import.meta.env.VITE_GAME_SERVER_URL?.trim() || window.location.origin).replace(/\/$/, '');
     fetch(`${base}/api/room/${encodeURIComponent(roomCode)}/fixture/${encodeURIComponent(fixture.id)}/events`, {
-      headers: { 'X-Manager-Id': userTeamId },
+      headers: {
+        'X-Manager-Id': userTeamId,
+        ...(reconnectToken ? { Authorization: `Bearer ${reconnectToken}` } : {}),
+      },
       cache: 'no-store',
     })
       .then(response => response.ok ? response.json() : null)
@@ -66,7 +71,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [fixture.id, fixture.events, roomCode, userTeamId]);
+  }, [fixture.id, fixture.events, roomCode, userTeamId, reconnectToken]);
 
   const events = useMemo(() => loadedEvents || fixture.events || [], [loadedEvents, fixture.events]);
   const [currentEventIndex, setCurrentEventIndex] = useState<number>(0);
