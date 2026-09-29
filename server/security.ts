@@ -1,9 +1,9 @@
 import crypto from 'crypto';
-import type { WebSocket } from 'ws';
+import { WebSocket } from 'ws';
 import type { GameRoom, Manager } from '../src/types/football.js';
 
 export function sendSocketError(ws: WebSocket, message: string) {
-  if (ws.readyState === ws.OPEN) {
+  if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'ERROR', message }));
   }
 }
