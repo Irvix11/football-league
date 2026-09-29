@@ -290,6 +290,7 @@ function AppContent() {
         <KnockoutDashboardView
           room={room}
           managerId={managerId}
+          reconnectToken={savedSession?.reconnectToken}
           onRunMatch={runKnockoutMatch}
           onMatchComplete={completeKnockoutMatch}
           isSimulating={isSimulating}
