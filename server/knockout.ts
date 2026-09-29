@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { Fixture, Manager } from '../src/types/football.js';
 
 export function playoffQualifierCount(teamCount: number): 2 | 4 | 8 {
