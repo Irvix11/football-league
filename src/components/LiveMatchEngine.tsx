@@ -276,17 +276,10 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     const targetClockSecs = (currentEvent.minute || 0) * 60 + (currentEvent.second || 0);
     targetClockSecsRef.current = Math.max(startClockSecsRef.current, targetClockSecs);
 
-    // Subtle Broadcast Camera Focus (Requirement 14)
-    if (currentEvent.type === 'goal' || currentEvent.type === 'shot' || currentEvent.type === 'shot_saved') {
-      const isHomeAttacking = currentEvent.team === 'home';
-      setCameraOffset({
-        x: isHomeAttacking ? -1.5 : 1.5,
-        y: 0,
-        scale: 1.025,
-      });
-    } else {
-      setCameraOffset({ x: 0, y: 0, scale: 1 });
-    }
+      // Keep the pitch at a fixed viewport scale. The old broadcast camera
+    // briefly changed the entire pitch to 1.025x during shots/goals, which
+    // looked like the iPad screen itself was zooming in and out.
+    setCameraOffset({ x: 0, y: 0, scale: 1 });
 
     phaseStartTimeRef.current = performance.now();
 
@@ -664,9 +657,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       {/* 2. THE 2D LIVE FOOTBALL PITCH (Broadcast Arena)                           */}
       {/* ========================================================================= */}
       <div 
-        className="relative w-full rounded-2xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.38)] border border-white/10 bg-emerald-950 select-none transition-transform duration-700 ease-out"
+        className="relative w-full rounded-2xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.38)] border border-white/10 bg-emerald-950 select-none"
         style={{
-          transform: `scale(${cameraOffset.scale}) translate(${cameraOffset.x}%, ${cameraOffset.y}%)`,
+          transform: `translate(${cameraOffset.x}%, ${cameraOffset.y}%)`,
         }}
       >
         <div
