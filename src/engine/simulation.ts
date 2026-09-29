@@ -1050,6 +1050,83 @@ export function simulateMatch(
       momentum,
     });
 
+    // Progressive passes can be intercepted or flagged offside. These are real
+    // possession-ending events, so they stop the attacking sequence instead of
+    // merely adding commentary/stat padding.
+    const interceptionChance = clamp(
+      0.045 + (defTactics.pressingIntensity - 50) * 0.0007 - (atkTactics.tempo - 50) * 0.0002,
+      0.025,
+      0.095,
+    );
+    const offsideChance = receiver.player.category === 'ATT' && newBallX > (isHome ? 72 : 28)
+      ? clamp(0.035 + (atkTactics.tempo - 50) * 0.00035, 0.02, 0.07)
+      : 0;
+
+    if (defDefs.length > 0 && rand() < interceptionChance) {
+      const interceptor = pick(defDefs, 'interception defenders');
+      const interceptorStat = playerStatsMap.get(interceptor.player.id);
+      if (interceptorStat) {
+        interceptorStat.interceptions++;
+        interceptorStat.rating += 0.10;
+      }
+      currentTotalSeconds += 2;
+      pushEvent({
+        minute: Math.floor(currentTotalSeconds / 60),
+        second: currentTotalSeconds % 60,
+        type: 'interception',
+        team: isHome ? 'away' : 'home',
+        playerId: interceptor.player.id,
+        playerName: interceptor.player.name,
+        targetPlayerId: receiver.player.id,
+        targetPlayerName: receiver.player.name,
+        commentary: `${interceptor.player.name} reads the pass and makes a clean interception before ${receiver.player.name} can collect it.`,
+        ballCoordinates: { x: newBallX, y: newBallY },
+        ballStartCoordinates: { x: startX, y: startY },
+        playerCoordinates: generate22PlayerCoordinates(
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)),
+          awayStarters.filter(s => !sentOffIds.has(s.player.id)),
+          homeManager.formation, awayManager.formation,
+          homeTactics, awayTactics, newBallX, newBallY,
+          isHome ? 'away' : 'home', interceptor.player.id, undefined, 'tackling'
+        ),
+        momentum: isHome ? momentum - 4 : momentum + 4,
+      });
+      ballX = newBallX;
+      ballY = newBallY;
+      currentPossession = isHome ? 'away' : 'home';
+      isCounterAttacking = false;
+      continue;
+    }
+
+    if (offsideChance > 0 && rand() < offsideChance) {
+      atkStats.offsides++;
+      currentTotalSeconds += 2;
+      pushEvent({
+        minute: Math.floor(currentTotalSeconds / 60),
+        second: currentTotalSeconds % 60,
+        type: 'offside',
+        team: isHome ? 'home' : 'away',
+        playerId: receiver.player.id,
+        playerName: receiver.player.name,
+        commentary: `Offside against ${receiver.player.name} as the forward run starts too early.`,
+        ballCoordinates: { x: newBallX, y: newBallY },
+        ballStartCoordinates: { x: startX, y: startY },
+        playerCoordinates: generate22PlayerCoordinates(
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)),
+          awayStarters.filter(s => !sentOffIds.has(s.player.id)),
+          homeManager.formation, awayManager.formation,
+          homeTactics, awayTactics, newBallX, newBallY,
+          isHome ? 'away' : 'home', receiver.player.id, undefined, 'running'
+        ),
+        momentum: isHome ? momentum - 2 : momentum + 2,
+      });
+      ballX = newBallX;
+      ballY = newBallY;
+      currentPossession = isHome ? 'away' : 'home';
+      isCounterAttacking = false;
+      continue;
+    }
+
     ballX = newBallX;
     ballY = newBallY;
     const wasCounter = isCounterAttacking;
