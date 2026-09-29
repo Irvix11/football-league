@@ -179,19 +179,14 @@ app.post('/api/ai/chat', async (req, res) => {
 });
 
 
-// In-Memory Storage for Active Rooms
-const rooms = new Map<string, GameRoom>();
-const roomSockets = new Map<string, Set<WebSocket>>();
-const roomDisconnectedAt = new Map<string, number>();
-const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
-// Prevent double-clicks / concurrent websocket messages from simulating the same
-// fixture twice before the first simulation has committed its result.
-const matchSimulationLocks = new Set<string>();
-
-// Terminate dead WebSocket connections so abandoned mobile/browser tabs do not
-// accumulate forever. The client does not need any special code: ws pong frames
-// are handled at the protocol level.
-const socketAlive = new WeakMap<WebSocket, boolean>();
+import {
+  rooms,
+  roomSockets,
+  roomDisconnectedAt,
+  socketToRoom,
+  matchSimulationLocks,
+  socketAlive,
+} from './server/room-state.js';
 const roomEvictionTicker = setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
