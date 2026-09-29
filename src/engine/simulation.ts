@@ -786,7 +786,7 @@ export function simulateMatch(
       yellowCard: false,
       redCard: false,
       fouls: 0,
-      rating: 6.0,
+      rating: 5.5,
     });
   }
 
