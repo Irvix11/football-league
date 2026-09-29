@@ -83,13 +83,18 @@ describe('simulation invariants', () => {
       const playerGoals = (result.playerStats || []).reduce((sum, stat) => sum + stat.goals, 0);
       expect(playerGoals).toBe((result.homeScore || 0) + (result.awayScore || 0));
 
+      let redCardsBeforeEvent = 0;
       for (const event of events) {
         const playerCoordinates = event.playerCoordinates || [];
+        const expectedPlayers = 22 - redCardsBeforeEvent;
+        expect(playerCoordinates).toHaveLength(expectedPlayers);
+        if (event.type === 'red_card') {
+          expect(playerCoordinates.some(player => player.id === event.playerId)).toBe(true);
+        }
         expect(event.ballCoordinates.x).toBeGreaterThanOrEqual(0);
         expect(event.ballCoordinates.x).toBeLessThanOrEqual(100);
         expect(event.ballCoordinates.y).toBeGreaterThanOrEqual(0);
         expect(event.ballCoordinates.y).toBeLessThanOrEqual(100);
-        expect(playerCoordinates).toHaveLength(22);
         for (const p of playerCoordinates) {
           expect(Number.isFinite(p.x)).toBe(true);
           expect(Number.isFinite(p.y)).toBe(true);
@@ -98,6 +103,7 @@ describe('simulation invariants', () => {
           expect(p.y).toBeGreaterThanOrEqual(0);
           expect(p.y).toBeLessThanOrEqual(100);
         }
+        if (event.type === 'red_card') redCardsBeforeEvent++;
       }
 
       const repeat = simulateMatch(structuredClone(homeInput), structuredClone(awayInput), `test-${i}`, i + 1, 100000 + i, knockout, knockout ? 'Final' : undefined, knockout && i % 8 === 0);
