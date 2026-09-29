@@ -15,13 +15,12 @@ import {
   LeagueTableRow, 
   TransferOffer, 
   SeasonAwards,
-  TeamRoles,
   PositionCategory,
   Position,
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football.js';
-import { getBidStep, getMinNextBid } from './src/constants/auction.js';
+import { getMinNextBid } from './src/constants/auction.js';
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
@@ -1055,7 +1054,6 @@ function simulateBotBids(room: GameRoom) {
     if (room.auction.highestBidderId === bot.id) continue;
 
     // Check if bot can afford
-    const bidStep = getBidStep(room.auction.currentBid);
     const minNextBid = getMinNextBid(room.auction.currentBid, Boolean(room.auction.highestBidderId));
     if (bot.budget < minNextBid) continue;
 
