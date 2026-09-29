@@ -3363,7 +3363,6 @@ app.get('/api/room/:code', async (req, res) => {
   const authHeader = String(req.headers.authorization || '');
   const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   const effectiveReconnectToken = reconnectToken;
-  const effectiveViewerId = viewerId;
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
   if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   let room = rooms.get(code);
