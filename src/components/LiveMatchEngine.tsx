@@ -657,7 +657,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       {/* 2. THE 2D LIVE FOOTBALL PITCH (Broadcast Arena)                           */}
       {/* ========================================================================= */}
       <div 
-        className="relative w-full rounded-2xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.38)] border border-white/10 bg-emerald-950 select-none"
+        className="relative w-full rounded-2xl overflow-hidden shadow-[0_24px_70px_rgba(0,0,0,0.38)] border border-white/10 bg-emerald-950 select-none live-match-pitch-enter"
         style={{
           transform: `translate(${cameraOffset.x}%, ${cameraOffset.y}%)`,
         }}
@@ -762,7 +762,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   if (node) playerNodesRef.current.set(player.id, node);
                   else playerNodesRef.current.delete(player.id);
                 }}
-                className="absolute z-10 min-w-11 min-h-11 cursor-pointer will-change-transform flex items-center justify-center"
+                className="absolute z-10 min-w-10 min-h-10 cursor-pointer will-change-transform flex items-center justify-center"
                 style={{
                   left: `${player.x}%`,
                   top: `${player.y}%`,
