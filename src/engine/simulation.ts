@@ -1420,13 +1420,18 @@ export function simulateMatch(
         recordShot(atkStats, strikerStat, isCorner, false);
         if (isCorner) {
           atkStats.corners++;
+          const cornerStarters = isHome ? homeStarters : awayStarters;
+          const requestedCornerTakerId = isHome ? homeRoles.cornerTakerId : awayRoles.cornerTakerId;
+          const cornerTaker = cornerStarters.find(p => p.player.id === requestedCornerTakerId && !sentOffIds.has(p.player.id)) ||
+            cornerStarters.find(p => p.player.id === winger.player.id && !sentOffIds.has(p.player.id)) ||
+            pick(cornerStarters.filter(p => !sentOffIds.has(p.player.id)), 'corner takers');
           pushEvent({
             minute: finishMin,
             second: finishSec,
             type: 'corner',
             team: isHome ? 'home' : 'away',
-            playerId: isHome ? homeRoles.cornerTakerId || winger.player.id : awayRoles.cornerTakerId || winger.player.id,
-            playerName: (isHome ? homeStarters : awayStarters).find(p => p.player.id === (isHome ? homeRoles.cornerTakerId : awayRoles.cornerTakerId))?.player.name || winger.player.name,
+            playerId: cornerTaker.player.id,
+            playerName: cornerTaker.player.name,
             commentary: `Pushed over the crossbar! Fantastic reaction save by ${defGK.player.name} concedes a corner kick.`,
             ballCoordinates: { x: isHome ? 98 : 2, y: rand() < 0.5 ? 4 : 96 },
             ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
