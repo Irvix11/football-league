@@ -1204,6 +1204,11 @@ function finalizeAuctionItem(room: GameRoom) {
     }
   }
 
+  // Secret bids are per-lot state. Clear them immediately after resolution so
+  // a SOLD screen cannot expose stale submission indicators and the next lot
+  // always starts with a clean bid map.
+  blindSecretBids.delete(room.code);
+
   broadcastRoom(room.code);
 
   // IMPORTANT: the Oracle VM process owns the live auction timer. Persisted
@@ -2609,7 +2614,6 @@ wss.on('connection', (ws, request) => {
           // The increment is based on the current auction price, not the
           // submitted amount. This keeps client and server validation identical
           // around £100M/£250M thresholds.
-          const bidStep = getBidStep(room.auction.currentBid);
           const minNextBid = getMinNextBid(room.auction.currentBid, Boolean(room.auction.highestBidderId));
           if (room.auction.highestBidderId && bidAmount < minNextBid) {
             ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${minNextBid}M.` }));
@@ -2650,6 +2654,11 @@ wss.on('connection', (ws, request) => {
 
           const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
+
+          if (room.settings.auctionMode !== 'Blind') {
+            sendSocketError(ws, 'Secret bids are only available in Blind Auction mode.');
+            return;
+          }
 
           if (room.auction.isSold || room.auction.secondsRemaining <= 0) {
             sendSocketError(ws, 'This auction has already closed.');
