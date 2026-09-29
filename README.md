@@ -65,7 +65,7 @@ Before shipping a release, verify:
 
 1. `npm run build:full`
 2. `npm run smoke`
-3. Vercel deployment is **READY**
+3. Oracle VM deployment is running the release commit
 4. Production runtime logs show no new errors
 5. A fresh browser can create/join a lobby, reconnect, run an auction, confirm an 11-player XI, simulate a match, and complete a knockout match
 
@@ -92,13 +92,3 @@ Before shipping a release, verify:
 - Knockout draws are decided by extra time and then a visual penalty shootout.
 - Semi-Finals are followed by a Third-Place match, then the Final.
 
-<!-- vercel-force-deploy: 2026-09-27T19:58 -->
-
-<!-- force-vercel: 1790519815791 -->
-
-<!-- harmless production deployment trigger: 2026-09-27 -->
-
-<!-- production deploy trigger 2026-09-28 -->
-<!-- production deploy trigger 2026-09-28 hybrid-sim -->
-
-<!-- force production deployment 2026-09-28-fix -->
