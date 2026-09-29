@@ -249,6 +249,24 @@ table tbody tr:hover {
   contain: layout paint;
 }
 
+/* Enter the live pitch with opacity/vertical motion only. Never scale the
+   pitch during phase transitions: scaling is perceived as browser zoom on
+   touch devices. */
+.live-match-pitch-enter {
+  animation: falLivePitchEnter 260ms cubic-bezier(.22,1,.36,1) both;
+}
+
+@keyframes falLivePitchEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 /* Live match / pitch surfaces retain their own visual identity. */
 .pitch-pattern {
   background:
