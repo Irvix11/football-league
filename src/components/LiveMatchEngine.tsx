@@ -531,8 +531,13 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const clockSec = displaySeconds % 60;
   const formattedTime = `${String(clockMin).padStart(2, '0')}:${String(clockSec).padStart(2, '0')}`;
   const isHalfTime = currentEvent?.type === 'halftime' || (clockMin === 45 && clockSec === 0 && halfTimeOverlay);
-  const isFullTime = Boolean(currentEvent && (currentEvent.type === 'fulltime' || currentEventIndex >= events.length - 1));
-  const clockLabel = fixture.wentToExtraTime && clockMin > 90 && !isFullTime ? `ET ${formattedTime}` : isFullTime ? `FT ${formattedTime}` : formattedTime;
+  // Only a real full-time timeline event is full time. Extra-time events can
+  // legitimately reach 120:xx without disabling the full-time control early.
+  const isFullTime = currentEvent?.type === 'fulltime' || (
+    currentEventIndex >= events.length - 1 && currentEvent?.type !== 'halftime'
+  );
+  const isExtraTime = fixture.wentToExtraTime && clockMin > 90 && !isFullTime;
+  const clockLabel = isExtraTime ? `ET ${formattedTime}` : isFullTime ? `FT ${formattedTime}` : formattedTime;
 
   // Active ball carrier identification for glowing possession ring
   const activeCarrierId = useMemo(() => {
@@ -862,7 +867,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Possession</div>
-                    <div className="font-bold text-slate-100">{liveStats.home.possession}% - {fixture.awayStats?.possession || 50}%</div>
+                    <div className="font-bold text-slate-100">{liveStats.home.possession}% - {liveStats.away.possession}%</div>
                   </div>
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Shots (On Target)</div>
@@ -1304,7 +1309,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="space-y-3 text-xs font-mono">
               {[
                 { label: 'Score', home: currentScore.home, away: currentScore.away },
-                { label: 'Possession', home: `${liveStats.home.possession}%`, away: `${fixture.awayStats?.possession || 50}%` },
+                { label: 'Possession', home: `${liveStats.home.possession}%`, away: `${liveStats.away.possession}%` },
                 { label: 'Total Shots', home: liveStats.home.shots, away: liveStats.away.shots },
                 { label: 'Shots on Target', home: liveStats.home.shotsOnTarget, away: liveStats.away.shotsOnTarget },
                 { label: 'Passes Completed', home: fixture.homeStats?.passes || 0, away: fixture.awayStats?.passes || 0 },
