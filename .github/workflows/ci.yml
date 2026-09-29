@@ -44,6 +44,9 @@ jobs:
             git reset --hard
             git clean -fd -e .env -e '.env.*'
             git checkout -B ${{ github.ref_name }} origin/${{ github.ref_name }}
+            # Dependencies are disposable on the authoritative VM. Removing the
+            # previous tree avoids npm ENOTEMPTY failures after interrupted installs.
+            rm -rf node_modules
             npm ci
             npm run build:full
             if command -v pm2 >/dev/null 2>&1 && pm2 describe football-auction-league >/dev/null 2>&1; then
