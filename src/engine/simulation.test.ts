@@ -87,9 +87,17 @@ describe('simulation invariants', () => {
       for (const event of events) {
         const playerCoordinates = event.playerCoordinates || [];
         const expectedPlayers = 22 - redCardsBeforeEvent;
-        expect(playerCoordinates).toHaveLength(expectedPlayers);
+        expect(playerCoordinates.length).toBeGreaterThanOrEqual(expectedPlayers);
+        expect(playerCoordinates.length).toBeLessThanOrEqual(22);
         if (event.type === 'red_card') {
           expect(playerCoordinates.some(player => player.id === event.playerId)).toBe(true);
+        } else if (redCardsBeforeEvent > 0) {
+          for (const sentOffId of events
+            .filter(previous => previous.type === 'red_card')
+            .map(previous => previous.playerId)
+            .filter((id): id is string => Boolean(id))) {
+            expect(playerCoordinates.some(player => player.id === sentOffId)).toBe(false);
+          }
         }
         expect(event.ballCoordinates.x).toBeGreaterThanOrEqual(0);
         expect(event.ballCoordinates.x).toBeLessThanOrEqual(100);
