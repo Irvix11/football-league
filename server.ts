@@ -50,6 +50,7 @@ import {
 } from './server/room-state.js';
 import { allManagersReady, allFormationReady, auctionIntervals, clearPhaseReadyTimer, phaseReadyTimers, PHASE_READY_SECONDS } from './server/timers.js';
 import { generateLeagueFixtures, calculateInitialTable, updateLeagueTable } from './server/league.js';
+import { playoffQualifierCount, knockoutRoundForTeamCount, nextKnockoutRound, buildKnockoutFixtures } from './server/knockout.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1571,88 +1572,6 @@ function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
     freeKickTakerId: fkTaker,
     cornerTakerId: ckTaker,
   };
-}
-
-function playoffQualifierCount(teamCount: number): 2 | 4 | 8 {
-  // League playoffs:
-  // 2-5 teams -> top 2 straight to the Final
-  // 6-9 teams -> top 4 to Semi-Finals
-  // 10-16 teams -> top 8 to Quarter-Finals
-  if (teamCount >= 10) return 8;
-  if (teamCount >= 6) return 4;
-  return 2;
-}
-
-function knockoutRoundForTeamCount(teamCount: number): 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final' {
-  const qualifiers = playoffQualifierCount(teamCount);
-  if (qualifiers === 8) return 'Quarter-Final';
-  if (qualifiers === 4) return 'Semi-Final';
-  return 'Final';
-}
-
-function nextKnockoutRound(round: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final') {
-  if (round === 'Round of 16') return 'Quarter-Final';
-  if (round === 'Quarter-Final') return 'Semi-Final';
-  if (round === 'Semi-Final') return 'Third-Place';
-  if (round === 'Third-Place') return 'Final';
-  return null;
-}
-
-function buildKnockoutFixtures(
-  managers: Manager[],
-  roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final',
-  matchday: number,
-  initialSeeding = false
-): Fixture[] {
-  // The input order is authoritative: league playoffs pass teams in league-table
-  // order, and later rounds pass winners/losers in bracket order. Never reseed by OVR.
-  const bracketSize = roundName === 'Round of 16' ? 16 : roundName === 'Quarter-Final' ? 8 : roundName === 'Semi-Final' ? 4 : 2;
-  const slots: (Manager | null)[] = Array(bracketSize).fill(null);
-  managers.slice(0, bracketSize).forEach((manager, index) => {
-    slots[index] = manager;
-  });
-
-  const fixtures: Fixture[] = [];
-  for (let i = 0; i < bracketSize / 2; i++) {
-    const home = slots[i];
-    const awayIndex = initialSeeding
-      ? bracketSize - 1 - i
-      : i * 2 + 1;
-    const away = slots[awayIndex];
-    if (!home && !away) continue;
-
-    const id = `ko-${matchday}-${i + 1}-${crypto.randomUUID()}`;
-    if (home && away) {
-      fixtures.push({
-        id,
-        matchday,
-        homeManagerId: home.id,
-        homeManagerName: home.name,
-        awayManagerId: away.id,
-        awayManagerName: away.name,
-        played: false,
-        isKnockout: true,
-        roundName,
-      });
-    } else if (home || away) {
-      const winner = home || away!;
-      fixtures.push({
-        id,
-        matchday,
-        homeManagerId: winner.id,
-        homeManagerName: winner.name,
-        awayManagerId: winner.id,
-        awayManagerName: winner.name,
-        played: true,
-        homeScore: 0,
-        awayScore: 0,
-        isKnockout: true,
-        roundName,
-        winnerManagerId: winner.id,
-      });
-    }
-  }
-  return fixtures;
 }
 
 function initializeKnockout(room: GameRoom) {
