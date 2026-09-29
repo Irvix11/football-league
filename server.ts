@@ -598,53 +598,6 @@ function generateLobbyCode(): string {
   return code;
 }
 
-// Bot Names
-const BOT_NAMES = [
-  'Pep AI Tactical', 
-  'Ancelotti Prime', 
-  'Klopp Heavy Metal', 
-  'Mourinho Special', 
-  'Zidane Masterclass',
-  'Arteta Process', 
-  'Xabi Invicto', 
-  'Flick Blitz'
-];
-
-function createBotManager(nameIndex = 0, initialBudget = 500): Manager {
-  const botFormations: Formation[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2'];
-  const chosenFormation = botFormations[nameIndex % botFormations.length];
-  const botName = BOT_NAMES[nameIndex % BOT_NAMES.length] || `Tactical Bot ${nameIndex + 1}`;
-
-  return {
-    id: newId(`bot-${nameIndex}`),
-    name: botName,
-    isHost: false,
-    isBot: true,
-    isReady: true,
-    budget: initialBudget,
-    initialBudget,
-    formation: chosenFormation,
-    tactics: {
-      style: 'Balanced',
-      mentality: 'Balanced',
-      defensiveLine: 55,
-      pressingIntensity: 65,
-      attackWidth: 60,
-      tempo: 65,
-      risk: 50,
-    },
-    roles: {
-      captainId: '',
-      penaltyTakerId: '',
-      freeKickTakerId: '',
-      cornerTakerId: '',
-    },
-    squad: [],
-    confirmedTeam: false,
-    teamOverall: 0,
-  };
-}
-
 // Generate Fixtures (Round Robin or Double Round Robin)
 function generateLeagueFixtures(managers: Manager[]): Fixture[] {
   const fixtures: Fixture[] = [];
