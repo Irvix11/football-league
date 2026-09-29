@@ -254,6 +254,7 @@ import {
   sanitizeManagerName,
   sanitizeLobbySettings,
   createBotManager,
+  BOT_NAMES,
 } from './server/lobby.js';
 // Secret bids for blind auction: roomCode -> Record<managerId, number>
 const blindSecretBids = new Map<string, Record<string, number>>();
