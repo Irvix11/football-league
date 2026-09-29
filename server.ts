@@ -49,6 +49,7 @@ import {
   socketAlive,
 } from './server/room-state.js';
 import { allManagersReady, allFormationReady, auctionIntervals, clearPhaseReadyTimer, phaseReadyTimers, PHASE_READY_SECONDS } from './server/timers.js';
+import { generateLeagueFixtures, calculateInitialTable, updateLeagueTable } from './server/league.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -572,84 +573,6 @@ function generateLobbyCode(): string {
 }
 
 // Generate Fixtures (Round Robin or Double Round Robin)
-function generateLeagueFixtures(managers: Manager[]): Fixture[] {
-  const fixtures: Fixture[] = [];
-  const teamIds = managers.map(m => m.id);
-  const n = teamIds.length;
-  if (n < 2) return [];
-
-  // Round Robin scheduling algorithm
-  const teams = [...teamIds];
-  if (teams.length % 2 !== 0) {
-    teams.push('BYE');
-  }
-
-  const numTeams = teams.length;
-  const numRounds = numTeams - 1;
-  const half = numTeams / 2;
-
-  let matchday = 1;
-  for (let round = 0; round < numRounds; round++) {
-    for (let i = 0; i < half; i++) {
-      const home = teams[i];
-      const away = teams[numTeams - 1 - i];
-
-      if (home !== 'BYE' && away !== 'BYE') {
-        const homeManager = managers.find(m => m.id === home)!;
-        const awayManager = managers.find(m => m.id === away)!;
-        fixtures.push({
-          id: newId('fix'),
-          matchday,
-          homeManagerId: home,
-          homeManagerName: homeManager.name,
-          awayManagerId: away,
-          awayManagerName: awayManager.name,
-          played: false,
-        });
-      }
-    }
-
-    // Rotate teams array keeping first element fixed
-    teams.splice(1, 0, teams.pop()!);
-    matchday++;
-  }
-
-  // Every manager plays every other manager twice:
-  // once at home and once away. No alternate league format exists.
-  const firstLegCount = fixtures.length;
-  for (let i = 0; i < firstLegCount; i++) {
-    const firstFix = fixtures[i];
-    fixtures.push({
-      id: newId('fix-rev'),
-      matchday: firstFix.matchday + numRounds,
-      homeManagerId: firstFix.awayManagerId,
-      homeManagerName: firstFix.awayManagerName,
-      awayManagerId: firstFix.homeManagerId,
-      awayManagerName: firstFix.homeManagerName,
-      played: false,
-    });
-  }
-
-  return fixtures;
-}
-
-function calculateInitialTable(managers: Manager[]): LeagueTableRow[] {
-  return managers.map(m => ({
-    managerId: m.id,
-    managerName: m.name,
-    isBot: m.isBot,
-    played: 0,
-    won: 0,
-    drawn: 0,
-    lost: 0,
-    goalsFor: 0,
-    goalsAgainst: 0,
-    goalDifference: 0,
-    points: 0,
-    form: [],
-  }));
-}
-
 function removeManagerFromRoom(room: GameRoom, managerId: string) {
   room.managers = room.managers.filter(manager => manager.id !== managerId);
   room.phaseReadyIds = (room.phaseReadyIds || []).filter(id => id !== managerId);
