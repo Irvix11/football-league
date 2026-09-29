@@ -32,7 +32,6 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           port: 22
-          script_stop: true
           script: |
             set -e
             APP_DIR="$(find "$HOME" -maxdepth 5 -type d -name football-league -print -quit)"
@@ -42,8 +41,9 @@ jobs:
             fi
             cd "$APP_DIR"
             git fetch origin
-            git checkout ${{ github.ref_name }}
-            git reset --hard origin/${{ github.ref_name }}
+            git reset --hard
+            git clean -fd -e .env -e '.env.*'
+            git checkout -B ${{ github.ref_name }} origin/${{ github.ref_name }}
             npm ci
             npm run build:full
             if command -v pm2 >/dev/null 2>&1; then
