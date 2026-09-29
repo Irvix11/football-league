@@ -29,7 +29,7 @@ export function sanitizeLobbySettings(raw: Partial<LobbySettings> | null | undef
   return { maxManagers, startingBudget, playerPool, era, auctionMode, transfersEnabled: typeof raw?.transfersEnabled === 'boolean' ? raw.transfersEnabled : fallback.transfersEnabled, leagueType: 'Double Round Robin', competitionFormat: 'League' };
 }
 
-const BOT_NAMES = ['Pep AI Tactical','Ancelotti Prime','Klopp Heavy Metal','Mourinho Special','Zidane Masterclass','Arteta Process','Xabi Invicto','Flick Blitz'];
+export const BOT_NAMES = ['Pep AI Tactical','Ancelotti Prime','Klopp Heavy Metal','Mourinho Special','Zidane Masterclass','Arteta Process','Xabi Invicto','Flick Blitz'];
 export function createBotManager(nameIndex = 0, initialBudget = 500): Manager {
   const botFormations: Formation[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2'];
   const chosenFormation = botFormations[nameIndex % botFormations.length];
