@@ -53,6 +53,7 @@ import { allManagersReady, allFormationReady, auctionIntervals, clearPhaseReadyT
 import { generateLeagueFixtures, calculateInitialTable, updateLeagueTable } from './server/league.js';
 import { playoffQualifierCount, knockoutRoundForTeamCount, nextKnockoutRound, buildKnockoutFixtures } from './server/knockout.js';
 import { calculateSeasonAwards } from './server/awards.js';
+import { setupManagerRoles } from './server/lineup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1254,28 +1255,6 @@ function finalizeAuctionItem(room: GameRoom) {
 
 // Calculate season awards from recorded fixture stats
 // Helper to configure default team roles (Captain, PK, FK, CK) based on player attributes
-function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
-  if (starters.length === 0) {
-    return { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
-  }
-  const sortedByOvr = [...starters].sort((a, b) => b.player.overall - a.player.overall);
-  const captain = sortedByOvr[0]?.player.id || starters[0].player.id;
-
-  const sortedBySho = [...starters].sort((a, b) => b.player.attributes.sho - a.player.attributes.sho);
-  const pkTaker = sortedBySho[0]?.player.id || captain;
-
-  const sortedByPas = [...starters].sort((a, b) => b.player.attributes.pas - a.player.attributes.pas);
-  const fkTaker = sortedByPas[0]?.player.id || captain;
-  const ckTaker = sortedByPas[1]?.player.id || sortedByPas[0]?.player.id || captain;
-
-  return {
-    captainId: captain,
-    penaltyTakerId: pkTaker,
-    freeKickTakerId: fkTaker,
-    cornerTakerId: ckTaker,
-  };
-}
-
 function initializeKnockout(room: GameRoom) {
   // Used by explicitly selected non-league knockout formats.
   const seeded = [...room.managers].sort((a, b) => b.teamOverall - a.teamOverall || a.name.localeCompare(b.name));
