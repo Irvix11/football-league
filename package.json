@@ -23,7 +23,6 @@
     "calibrate": "tsx scripts/calibrate.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "canvas-confetti": "^1.9.4",
@@ -35,8 +34,7 @@
     "react-dom": "^19.0.1",
     "vite": "^8.3.0",
     "ws": "^8.21.3",
-    "tsx": "^4.21.0",
-    "openai": "^4.104.0"
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
