@@ -6,7 +6,7 @@ A production-focused real-time football auction and league game with multiplayer
 
 - **Frontend:** React + Vite
 - **Realtime:** Node/Express + WebSocket
-- **Hosting:** Vercel Fluid Compute
+- **Hosting:** Oracle Cloud VM (GitHub-linked deployment)
 - **Persistence:** Supabase room snapshots
 - **Runtime:** Node 24
 - **Player database:** 510 FC27 players rated 80+ in the checked-in generated dataset, plus 200 curated all-time players
@@ -24,17 +24,23 @@ npm start
 
 Open the address printed by the server. The Node/Express server hosts the React build and WebSocket game server from the same origin.
 
-## Vercel deployment
+## Oracle VM deployment
 
-Push to the `main` branch and let the Vercel project deploy the repository using `vercel.json`.
-
-The production build command is:
+The production runtime is the Node/Express process running on an Oracle Cloud VM, linked to this GitHub repository. The VM should run the same production command used by the application:
 
 ```bash
-npm run build
+npm ci
+npm run build:full
+NODE_ENV=production npm start
 ```
 
-The realtime WebSocket endpoint is served from `/api/ws`. Durable room snapshots are written to Supabase so reconnects can recover across function instances.
+The server hosts the React build, HTTP API, and WebSocket endpoint from the same Node process. Put a TLS reverse proxy such as Nginx in front of the Node process and forward WebSocket upgrades to the same origin.
+
+Durable room snapshots are written to Supabase so reconnects and VM/process restarts can recover persisted room state.
+
+### Realtime scaling
+
+A single Oracle VM is authoritative for live in-memory room state. If the game is later scaled to multiple Node instances, shared Redis pub/sub and distributed locking must be enabled before traffic is split across instances. Do not treat `REDIS_URL` as configured until the Redis adapter is actually implemented and tested.
 
 ## Development
 
@@ -59,7 +65,7 @@ Before shipping a release, verify:
 
 1. `npm run build:full`
 2. `npm run smoke`
-3. Vercel deployment is **READY**
+3. Oracle VM deployment is running the release commit
 4. Production runtime logs show no new errors
 5. A fresh browser can create/join a lobby, reconnect, run an auction, confirm an 11-player XI, simulate a match, and complete a knockout match
 
@@ -86,13 +92,6 @@ Before shipping a release, verify:
 - Knockout draws are decided by extra time and then a visual penalty shootout.
 - Semi-Finals are followed by a Third-Place match, then the Final.
 
-<!-- vercel-force-deploy: 2026-09-27T19:58 -->
+<!-- release deployment trigger: 2026-09-29 -->
 
-<!-- force-vercel: 1790519815791 -->
-
-<!-- harmless production deployment trigger: 2026-09-27 -->
-
-<!-- production deploy trigger 2026-09-28 -->
-<!-- production deploy trigger 2026-09-28 hybrid-sim -->
-
-<!-- force production deployment 2026-09-28-fix -->
+<!-- oracle deployment verification trigger: 1790664897349 -->

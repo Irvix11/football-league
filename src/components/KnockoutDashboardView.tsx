@@ -6,6 +6,7 @@ import { Trophy, Play, CheckCircle2, Clock3 } from 'lucide-react';
 interface KnockoutDashboardViewProps {
   room: GameRoom;
   managerId: string;
+  reconnectToken?: string;
   onRunMatch: (fixtureId: string) => void;
   onMatchComplete?: (fixtureId: string) => void;
   isSimulating?: boolean;
@@ -15,6 +16,7 @@ interface KnockoutDashboardViewProps {
 export const KnockoutDashboardView: React.FC<KnockoutDashboardViewProps> = ({
   room,
   managerId,
+  reconnectToken,
   onRunMatch,
   onMatchComplete,
   isSimulating = false,
@@ -117,6 +119,7 @@ export const KnockoutDashboardView: React.FC<KnockoutDashboardViewProps> = ({
         <main className="lg:col-span-8 space-y-4">
           {selectedFixture?.played ? (
             <LiveMatchEngine
+              reconnectToken={reconnectToken}
               fixture={selectedFixture}
               userTeamId={managerId}
               onMatchComplete={onMatchComplete}

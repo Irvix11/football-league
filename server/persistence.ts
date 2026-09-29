@@ -1,4 +1,49 @@
-import type { GameRoom } from '../src/types/football.js';
+import { gzipSync, gunzipSync } from 'node:zlib';
+import type { GameRoom, MatchEvent } from '../src/types/football.js';
+
+interface PersistedRoomSnapshot {
+  room: GameRoom;
+  fixtureEventsCompressed: string;
+  /** Legacy uncompressed snapshots written before P1 compression. */
+  fixtureEvents?: Record<string, MatchEvent[]>;
+}
+
+function toPersistedSnapshot(room: GameRoom): PersistedRoomSnapshot {
+  const fixtureEvents: Record<string, MatchEvent[]> = {};
+  const roomWithoutEvents = structuredClone(room);
+  for (const fixture of roomWithoutEvents.fixtures || []) {
+    if (fixture.events?.length) fixtureEvents[fixture.id] = fixture.events;
+    delete fixture.events;
+  }
+  const fixtureEventsCompressed = gzipSync(Buffer.from(JSON.stringify(fixtureEvents), 'utf8')).toString('base64');
+  return { room: roomWithoutEvents, fixtureEventsCompressed };
+}
+
+function fromPersistedSnapshot(snapshot: unknown): GameRoom | null {
+  if (!snapshot || typeof snapshot !== 'object') return null;
+  const value = snapshot as Partial<PersistedRoomSnapshot> & Partial<GameRoom>;
+  if (value.room && (value.fixtureEventsCompressed || value.fixtureEvents)) {
+    const room = value.room as GameRoom;
+    let fixtureEvents: Record<string, MatchEvent[]> = value.fixtureEvents || {};
+    if (value.fixtureEventsCompressed) {
+      try {
+        fixtureEvents = JSON.parse(gunzipSync(Buffer.from(value.fixtureEventsCompressed, 'base64')).toString('utf8')) as Record<string, MatchEvent[]>;
+      } catch (error) {
+        console.error('[persistence] invalid compressed fixture events:', error);
+        fixtureEvents = {};
+      }
+    }
+    for (const fixture of room.fixtures || []) {
+      const events = fixtureEvents[fixture.id];
+      if (events?.length) fixture.events = events;
+    }
+    return room;
+  }
+  return snapshot as GameRoom;
+}
+
+export const persistenceQueues = new Map<string, Promise<void>>();
+export const persistenceTimers = new Map<string, NodeJS.Timeout>();
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 
@@ -31,7 +76,7 @@ export async function saveRoomSnapshot(room: GameRoom): Promise<void> {
       headers: headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify({
         room_code: room.code,
-        snapshot: room,
+        snapshot: toPersistedSnapshot(room),
         updated_at: new Date().toISOString(),
       }),
     });
@@ -56,7 +101,7 @@ export async function loadRoomSnapshot(roomCode: string): Promise<GameRoom | nul
       return null;
     }
     const rows = await response.json() as Array<{ snapshot?: GameRoom }>;
-    const snapshot = rows[0]?.snapshot || null;
+    const snapshot = fromPersistedSnapshot(rows[0]?.snapshot || null);
 
     // Completed games are intentionally not recoverable. If an old server
     // instance left a finished season behind, remove it on the next access.

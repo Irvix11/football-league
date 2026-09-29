@@ -9,14 +9,24 @@ export interface SavedSession {
   reconnectToken?: string;
 }
 
+function getRoomRequestOptions(session: SavedSession | null): RequestInit {
+  const headers: Record<string, string> = {};
+  if (session?.reconnectToken) headers.Authorization = `Bearer ${session.reconnectToken}`;
+  if (session?.managerId) headers['X-Manager-Id'] = session.managerId;
+  return { headers };
+}
+
+function getRoomRequestUrl(roomCode: string): string {
+  return `${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}`;
+}
+
 function getGameServerBaseUrl(): string {
   const configured = import.meta.env.VITE_GAME_SERVER_URL?.trim();
   if (configured) return configured.replace(/\/$/, '');
 
   // In production the VM serves both the frontend and realtime backend through
   // the same Nginx origin. Keep an explicit override for local development or
-  // a separately hosted backend, but never silently fall back to the old Render
-  // instance after a deployment migration.
+  // a separately hosted backend, but never silently fall back to a stale deployment.
   return window.location.origin;
 }
 
@@ -29,31 +39,32 @@ function getWebSocketBaseUrl(): string {
   return url.toString().replace(/\/$/, '');
 }
 
-function restoreViewerIdentity(snapshot: GameRoom, _viewerId: string | null, _viewerName: string | null): GameRoom {
-  // The server already returns the viewer's real manager ID and public references
-  // for every other manager. Never reconstruct identity from manager names:
-  // duplicate names or stale localStorage can otherwise make multiple cards appear
-  // to belong to the current user.
-  return snapshot;
-}
-
 export function useGameSocket() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [managerId, setManagerId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationError, setSimulationError] = useState<string | null>(null);
   const [secretBidSubmitted, setSecretBidSubmitted] = useState<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptRef = useRef(0);
   const managerIdRef = useRef<string | null>(null);
+  const roomRef = useRef<GameRoom | null>(null);
   const intentionalCloseRef = useRef(false);
   const isSimulatingRef = useRef(false);
+  const simulatedFixtureIdRef = useRef<string | null>(null);
+  const simulationSafetyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     managerIdRef.current = managerId;
   }, [managerId]);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   // Load saved session
   const getSavedSession = useCallback((): SavedSession | null => {
@@ -76,6 +87,16 @@ export function useGameSocket() {
     } catch {}
   }, []);
 
+  const clearSimulationState = useCallback(() => {
+    if (simulationSafetyTimerRef.current !== null) {
+      window.clearTimeout(simulationSafetyTimerRef.current);
+      simulationSafetyTimerRef.current = null;
+    }
+    simulatedFixtureIdRef.current = null;
+    isSimulatingRef.current = false;
+    setIsSimulating(false);
+  }, []);
+
   const connect = useCallback(() => {
     if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
       return;
@@ -86,11 +107,26 @@ export function useGameSocket() {
 
     ws.onopen = () => {
       setIsConnected(true);
+      setIsReconnecting(false);
       setErrorMessage(null);
+      reconnectAttemptRef.current = 0;
 
-      // Reconnect is intentionally user-confirmed. A stale saved credential must
-      // never silently re-enter a lobby, especially after the manager was kicked.
-      // The main menu exposes an explicit "Rejoin" action instead.
+      const saved = getSavedSession();
+      const liveRoom = roomRef.current;
+      const liveManagerId = managerIdRef.current;
+      const reconnectRoomCode = liveRoom?.code || saved?.roomCode;
+      const reconnectManagerId = liveManagerId || saved?.managerId;
+      if (saved?.reconnectToken && reconnectRoomCode && reconnectManagerId) {
+        ws.send(JSON.stringify({
+          type: 'JOIN_LOBBY',
+          payload: {
+            roomCode: reconnectRoomCode,
+            managerName: saved.managerName,
+            reconnectId: reconnectManagerId,
+            reconnectToken: saved.reconnectToken,
+          },
+        }));
+      }
     };
 
     ws.onmessage = (event) => {
@@ -122,7 +158,7 @@ export function useGameSocket() {
 
           case 'LOBBY_CREATED':
           case 'LOBBY_JOINED': {
-            setRoom(restoreViewerIdentity(newRoom, assignedId, null));
+            setRoom(newRoom);
             setManagerId(assignedId);
             managerIdRef.current = assignedId;
             setSecretBidSubmitted(null);
@@ -139,10 +175,15 @@ export function useGameSocket() {
           }
 
           case 'ROOM_UPDATE': {
-            const saved = getSavedSession();
-            setRoom(restoreViewerIdentity(newRoom, managerIdRef.current, saved?.managerName || null));
-            isSimulatingRef.current = false;
-            setIsSimulating(false);
+            const current = roomRef.current;
+            if (isSimulatingRef.current && simulatedFixtureIdRef.current) {
+              const fixture = newRoom?.fixtures?.find((f: GameRoom['fixtures'][number]) => f.id === simulatedFixtureIdRef.current);
+              const completed = Boolean(fixture?.played);
+              const liveFixtureChanged = current?.liveFixtureId !== newRoom?.liveFixtureId &&
+                newRoom?.liveFixtureId !== simulatedFixtureIdRef.current;
+              if (completed || liveFixtureChanged) clearSimulationState();
+            }
+            setRoom(newRoom);
             break;
           }
 
@@ -153,22 +194,20 @@ export function useGameSocket() {
 
           case 'ERROR':
             if (isSimulatingRef.current) {
-              isSimulatingRef.current = false;
-              setIsSimulating(false);
+              clearSimulationState();
               setSimulationError(typeof message === 'string' ? message : 'Knockout match failed to start.');
             }
-            // Reconnects can land on a different Vercel Function instance. Give the
-            // durable snapshot one HTTP retry before deciding that a saved room is gone.
+            // Give the durable snapshot one HTTP retry before deciding that a saved room is gone.
             if (typeof message === 'string' && message.toLowerCase().includes('lobby not found')) {
               const saved = getSavedSession();
               if (saved) {
-                fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(saved.roomCode)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
+                fetch(getRoomRequestUrl(saved.roomCode), { ...getRoomRequestOptions(saved), cache: 'no-store' })
                   .then((response) => {
                     if (response.ok) {
                       setErrorMessage(null);
                       // Restore the server snapshot into the UI before retrying the
-                      // WebSocket join. This prevents the home screen from flashing
-                      // a false "lobby not found" state during a Vercel cold start.
+                      // WebSocket join so a transient reconnect does not flash a
+                      // false "lobby not found" state.
                       response.json().then((snapshot) => {
                         if (snapshot?.code) setRoom(snapshot as GameRoom);
                       }).catch(() => {});
@@ -207,13 +246,19 @@ export function useGameSocket() {
     };
 
     ws.onclose = () => {
+      if (socketRef.current !== ws) return;
       setIsConnected(false);
       socketRef.current = null;
       if (!intentionalCloseRef.current) {
+        const savedSession = getSavedSession();
+        setIsReconnecting(Boolean(room || savedSession?.roomCode));
         if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        const attempt = reconnectAttemptRef.current++;
+        const base = Math.min(15000, 1000 * (2 ** Math.min(attempt, 4)));
+        const jitter = Math.floor(Math.random() * Math.max(250, base * 0.25));
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
-        }, 2000);
+        }, Math.min(15000, base + jitter));
       }
     };
 
@@ -223,7 +268,7 @@ export function useGameSocket() {
     };
 
     socketRef.current = ws;
-  }, [getSavedSession, saveSession]);
+  }, [clearSimulationState, getSavedSession, saveSession]);
 
   useEffect(() => {
     connect();
@@ -243,20 +288,36 @@ export function useGameSocket() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const response = await fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(room.code)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' });
+        const session = getSavedSession();
+        const url = getRoomRequestUrl(room.code);
+        const separator = url.includes('?') ? '&' : '?';
+        const response = await fetch(`${url}${separator}since=${encodeURIComponent(String(room.updatedAt || 0))}`, { ...getRoomRequestOptions(session), cache: 'no-store' });
+        if (response.status === 304) return;
+        if (response.status === 404) {
+          saveSession(null);
+          managerIdRef.current = null;
+          setManagerId(null);
+          setRoom(null);
+          setErrorMessage('This lobby no longer exists.');
+          return;
+        }
         if (!response.ok) return;
         const snapshot = await response.json() as GameRoom;
         if (cancelled) return;
         setRoom(current => {
-          if (!current || snapshot.updatedAt >= current.updatedAt) {
+          if (!current || snapshot.updatedAt > current.updatedAt) {
             const saved = getSavedSession();
-            return restoreViewerIdentity(snapshot, managerIdRef.current, saved?.managerName || null);
+            return snapshot;
           }
           return current;
         });
       } catch {}
     };
-    const timer = window.setInterval(sync, 3000);
+    const timer = window.setInterval(() => {
+      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+        if (document.visibilityState === 'visible') sync();
+      }
+    }, 3000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [room?.code]);
 
@@ -273,7 +334,7 @@ export function useGameSocket() {
     try {
       setErrorMessage(null);
 
-      // Give the Vercel realtime function a short window to cold-start and complete
+      // Give the realtime server a short window to complete
       // the WebSocket handshake before reporting the connection as unavailable.
       const deadline = Date.now() + 8000;
       while ((!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) && Date.now() < deadline) {
@@ -318,11 +379,23 @@ export function useGameSocket() {
   }, [getSavedSession, send]);
 
   const resumeLobby = useCallback((session: SavedSession) => {
-    if (!session?.roomCode || !session?.managerId) return;
-    const roomCode = session.roomCode.trim().toUpperCase();
-    saveSession(session);
+    const stored = getSavedSession();
+    const merged: SavedSession = {
+      ...stored,
+      ...session,
+      roomCode: session.roomCode?.trim().toUpperCase() || stored?.roomCode || '',
+      managerId: session.managerId || stored?.managerId || '',
+      managerName: session.managerName || stored?.managerName || '',
+      reconnectToken: session.reconnectToken || stored?.reconnectToken,
+    };
+    if (!merged.roomCode || !merged.managerId || !merged.reconnectToken) {
+      setErrorMessage('No valid reconnect session is saved. Join the lobby again.');
+      return;
+    }
+    saveSession(merged);
+    const roomCode = merged.roomCode;
 
-      fetch(`${getGameServerBaseUrl()}/api/room/${encodeURIComponent(roomCode)}?reconnectToken=${encodeURIComponent(getSavedSession()?.reconnectToken || '')}&managerId=${encodeURIComponent(managerIdRef.current || getSavedSession()?.managerId || '')}`, { cache: 'no-store' })
+      fetch(getRoomRequestUrl(roomCode), { ...getRoomRequestOptions(merged), cache: 'no-store' })
       .then((response) => {
         if (response.status === 404) {
           saveSession(null);
@@ -336,9 +409,9 @@ export function useGameSocket() {
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           send('JOIN_LOBBY', {
             roomCode,
-            managerName: session.managerName,
-            reconnectId: session.managerId,
-            reconnectToken: session.reconnectToken,
+            managerName: merged.managerName,
+            reconnectId: merged.managerId,
+            reconnectToken: merged.reconnectToken,
           });
         } else {
           setErrorMessage('Connecting to game server...');
@@ -350,15 +423,15 @@ export function useGameSocket() {
         if (socketRef.current?.readyState === WebSocket.OPEN) {
           send('JOIN_LOBBY', {
             roomCode,
-            managerName: session.managerName,
-            reconnectId: session.managerId,
-            reconnectToken: session.reconnectToken,
+            managerName: merged.managerName,
+            reconnectId: merged.managerId,
+            reconnectToken: merged.reconnectToken,
           });
         } else {
           setErrorMessage('Connecting to game server...');
         }
       });
-  }, [saveSession, send]);
+  }, [getSavedSession, saveSession, send]);
 
   const updateSettings = useCallback((settings: Partial<LobbySettings>) => {
     if (!room) return;
@@ -413,20 +486,20 @@ export function useGameSocket() {
 
   const placeBid = useCallback((amount: number) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     sound.playBid();
     send('AUCTION_BID', { roomCode: room.code, managerId: currentManagerId, amount });
   }, [room, managerId, send]);
 
   const submitBlindBid = useCallback((amount: number) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     send('SUBMIT_BLIND_BID', { roomCode: room.code, managerId: currentManagerId, amount });
   }, [room, managerId, send]);
 
   const updateLineup = useCallback((squad: SquadPlayerEntry[], formation?: Formation, tactics?: TeamTactics, roles?: TeamRoles) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       send('UPDATE_LINEUP', { roomCode: room.code, managerId: currentManagerId, squad, formation, tactics, roles });
     } else {
@@ -436,7 +509,7 @@ export function useGameSocket() {
 
   const confirmTeam = useCallback(async () => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
+    if (!room || !currentManagerId || !isConnected) return;
     sound.playWhistle();
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       send('CONFIRM_TEAM', { roomCode: room.code, managerId: currentManagerId });
@@ -447,27 +520,27 @@ export function useGameSocket() {
 
   const runKnockoutMatch = useCallback((fixtureId: string) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before starting the knockout match.');
       return;
     }
     setSimulationError(null);
     isSimulatingRef.current = true;
+    simulatedFixtureIdRef.current = fixtureId;
     setIsSimulating(true);
+    if (simulationSafetyTimerRef.current !== null) window.clearTimeout(simulationSafetyTimerRef.current);
+    simulationSafetyTimerRef.current = window.setTimeout(clearSimulationState, 30000);
     send('RUN_KNOCKOUT_MATCH', { roomCode: room.code, managerId: currentManagerId, fixtureId });
   }, [room, managerId, send]);
   const completeKnockoutMatch = useCallback((fixtureId: string) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before continuing the knockout round.');
       return;
     }
 
-    // Keep bracket advancement on the same authoritative WebSocket instance that
-    // simulated the match. Using a REST request here can hit a different Vercel
-    // function instance before the just-finished fixture has been persisted.
+    // Keep bracket advancement on the same authoritative WebSocket session that
+    // simulated the match.
     setSimulationError(null);
     isSimulatingRef.current = true;
     setIsSimulating(true);
@@ -476,26 +549,26 @@ export function useGameSocket() {
 
   const runMatchday = useCallback((matchday: number) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before starting the match.');
       return;
     }
 
-    // Matchday simulation now uses the same authoritative WebSocket instance as
-    // knockout matches. This prevents a Vercel REST request from landing on a
-    // different serverless instance with a stale room snapshot.
+    // Matchday simulation uses the same authoritative WebSocket session.
     setSimulationError(null);
     isSimulatingRef.current = true;
+    const fixture = room.fixtures.find(f => f.matchday === matchday && !f.played);
+    simulatedFixtureIdRef.current = fixture?.id || null;
     setIsSimulating(true);
+    if (simulationSafetyTimerRef.current !== null) window.clearTimeout(simulationSafetyTimerRef.current);
+    simulationSafetyTimerRef.current = window.setTimeout(clearSimulationState, 30000);
     sound.playWhistle();
     send('RUN_MATCHDAY', { roomCode: room.code, managerId: currentManagerId, matchday });
   }, [room, managerId, send]);
 
   const completeLeagueMatch = useCallback((fixtureId: string) => {
     const currentManagerId = managerIdRef.current;
-    if (!room || !currentManagerId) return;
-    if (socketRef.current?.readyState !== WebSocket.OPEN) {
+    if (!room || !currentManagerId || !isConnected) {
       setSimulationError('Connection lost. Reconnect before completing the match.');
       return;
     }
@@ -583,6 +656,7 @@ export function useGameSocket() {
     isConnected,
     errorMessage,
     isSimulating,
+    isReconnecting,
     simulationError,
     secretBidSubmitted,
     startSoloGame,

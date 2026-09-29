@@ -14,17 +14,44 @@ import {
   Fixture, 
   LeagueTableRow, 
   TransferOffer, 
-  SeasonAwards,
-  TeamRoles,
   PositionCategory,
   Position,
   KnockoutRound,
   KnockoutStageState
 } from './src/types/football.js';
+import { getMinNextBid } from './src/constants/auction.js';
 import { FORMATIONS_CONFIG, calculateTeamOverall, validateSquadFormation, calculatePositionFit, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from './src/constants/formations.js';
 import { DEVELOPMENT_PLAYERS, getPlayersForLobby } from './src/data/players.js';
 import { simulateMatch } from './src/engine/simulation.js';
-import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots } from './server/persistence.js';
+import { saveRoomSnapshot, loadRoomSnapshot, deleteRoomSnapshot, cleanupOldRoomSnapshots, persistenceQueues, persistenceTimers } from './server/persistence.js';
+import { aiRequestWindows, soloRequestWindows, apiRequestWindows, wsConnectionCounts, MAX_WS_CONNECTIONS_PER_IP, allowRateLimit, checkAiRateLimit } from './server/rate-limit.js';
+import {
+  authorizeSocket,
+  createReconnectToken,
+  hashReconnectToken,
+  isRoomHost,
+  matchesReconnectCredential,
+  newId,
+  publicManagerRef,
+  resolveManagerId,
+  sanitizeRoomForViewer,
+  sendSocketError,
+  setReconnectCredential,
+} from './server/security.js';
+import {
+  rooms,
+  roomSockets,
+  roomDisconnectedAt,
+  socketToRoom,
+  matchSimulationLocks,
+  socketAlive,
+  blindSecretBids,
+} from './server/room-state.js';
+import { allManagersReady, allFormationReady, auctionIntervals, clearPhaseReadyTimer, phaseReadyTimers, PHASE_READY_SECONDS } from './server/timers.js';
+import { generateLeagueFixtures, calculateInitialTable, updateLeagueTable } from './server/league.js';
+import { playoffQualifierCount, knockoutRoundForTeamCount, nextKnockoutRound, buildKnockoutFixtures } from './server/knockout.js';
+import { calculateSeasonAwards } from './server/awards.js';
+import { setupManagerRoles } from './server/lineup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +74,10 @@ app.use((req, res, next) => {
 });
 
 const server = http.createServer(app);
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] unhandledRejection:', reason);
+});
 const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
@@ -55,13 +86,7 @@ const configuredOrigins = (process.env.ALLOWED_WS_ORIGINS || '')
 // The production frontend may be hosted separately from the realtime Node server.
 // Keep explicit origins by default, while allowing additional deployments through
 // ALLOWED_WS_ORIGINS on the backend.
-const allowedWsOrigins = Array.from(new Set([
-  ...configuredOrigins,
-  'https://football-league-nine.vercel.app',
-  'https://football-league-irvix1.vercel.app',
-  'https://football-league-git-main-irvix1.vercel.app',
-  'https://footballleague.runs-on.dev',
-]));
+const allowedWsOrigins = Array.from(new Set(configuredOrigins));
 
 app.use((req, res, next) => {
   const origin = String(req.headers.origin || '');
@@ -85,7 +110,7 @@ const wss = new WebSocketServer({
     // Non-browser clients (no Origin) are only allowed outside production.
     if (!origin) return process.env.NODE_ENV !== 'production';
 
-    // Explicit allowlist (your Vercel URLs + ALLOWED_WS_ORIGINS).
+    // Explicit allowlist from ALLOWED_WS_ORIGINS.
     if (allowedWsOrigins.includes(origin)) return true;
 
     // Same-origin: works for local `npm start` and any host serving its own frontend.
@@ -140,17 +165,7 @@ const AI_SYSTEM_PROMPT =
 
 app.post('/api/ai/chat', async (req, res) => {
   try {
-    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
-    const now = Date.now();
-    const window = aiRequestWindows.get(clientKey);
-    if (!window || now - window.startedAt >= 60_000) {
-      aiRequestWindows.set(clientKey, { startedAt: now, count: 1 });
-    } else {
-      window.count++;
-      if (window.count > 20) {
-        return res.status(429).json({ error: 'AI chat rate limit reached. Try again in a minute.' });
-      }
-    }
+    if (!checkAiRateLimit(req, res)) return;
 
     const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
     if (!messages.length || messages.length > 20) {
@@ -176,43 +191,39 @@ app.post('/api/ai/chat', async (req, res) => {
 });
 
 
-// In-Memory Storage for Active Rooms
-const rooms = new Map<string, GameRoom>();
-const roomSockets = new Map<string, Set<WebSocket>>();
-const socketToRoom = new Map<WebSocket, { roomCode: string; managerId: string }>();
-const aiRequestWindows = new Map<string, { startedAt: number; count: number }>();
-const soloRequestWindows = new Map<string, { startedAt: number; count: number }>();
-const aiAdviceWindows = new Map<string, { startedAt: number; count: number }>();
-const apiRequestWindows = new Map<string, { startedAt: number; count: number }>();
-const wsConnectionCounts = new Map<string, number>();
-const MAX_WS_CONNECTIONS_PER_IP = 25;
-
-function allowRateLimit(map: Map<string, { startedAt: number; count: number }>, key: string, max: number, windowMs = 60_000) {
+const roomEvictionTicker = setInterval(() => {
   const now = Date.now();
-  const current = map.get(key);
-  if (!current || now - current.startedAt >= windowMs) {
-    map.set(key, { startedAt: now, count: 1 });
-    return true;
+  for (const [code, room] of rooms) {
+    const sockets = roomSockets.get(code);
+    if (sockets && sockets.size > 0) {
+      roomDisconnectedAt.delete(code);
+      continue;
+    }
+    const disconnectedAt = roomDisconnectedAt.get(code) || room.updatedAt || now;
+    if (room.phase === 'season_end' && now - room.updatedAt > 24 * 60 * 60 * 1000) {
+      rooms.delete(code);
+      roomSockets.delete(code);
+      roomDisconnectedAt.delete(code);
+      blindSecretBids.delete(code);
+      const auctionTimer = auctionIntervals.get(code);
+      if (auctionTimer) clearInterval(auctionTimer);
+      auctionIntervals.delete(code);
+      clearPhaseReadyTimer(room);
+      void deletePersistedRoomSnapshot(code).catch(error => console.error('[rooms] season snapshot eviction failed:', error));
+    } else if (now - disconnectedAt > 30 * 60 * 1000) {
+      rooms.delete(code);
+      roomSockets.delete(code);
+      roomDisconnectedAt.delete(code);
+      blindSecretBids.delete(code);
+      const auctionTimer = auctionIntervals.get(code);
+      if (auctionTimer) clearInterval(auctionTimer);
+      auctionIntervals.delete(code);
+      clearPhaseReadyTimer(room);
+      void deletePersistedRoomSnapshot(code).catch(error => console.error('[rooms] inactive room eviction failed:', error));
+    }
   }
-  current.count++;
-  return current.count <= max;
-}
+}, 5 * 60 * 1000).unref();
 
-setInterval(() => {
-  const cutoff = Date.now() - 60_000;
-  for (const map of [aiRequestWindows, soloRequestWindows, aiAdviceWindows, apiRequestWindows]) {
-    for (const [key, w] of map) if (w.startedAt < cutoff) map.delete(key);
-  }
-}, 60_000).unref();
-
-// Prevent double-clicks / concurrent websocket messages from simulating the same
-// fixture twice before the first simulation has committed its result.
-const matchSimulationLocks = new Set<string>();
-
-// Terminate dead WebSocket connections so abandoned mobile/browser tabs do not
-// accumulate forever. The client does not need any special code: ws pong frames
-// are handled at the protocol level.
-const socketAlive = new WeakMap<WebSocket, boolean>();
 const websocketHeartbeat = setInterval(() => {
   for (const ws of wss.clients) {
     if (socketAlive.get(ws) === false) {
@@ -224,142 +235,28 @@ const websocketHeartbeat = setInterval(() => {
   }
 }, 30_000).unref();
 
-server.on('close', () => clearInterval(websocketHeartbeat));
+server.on('close', () => { clearInterval(websocketHeartbeat); clearInterval(roomEvictionTicker); });
 
 // Remove abandoned persisted rooms periodically. Active rooms refresh their
 // snapshot timestamp whenever authoritative state is broadcast.
 setInterval(() => {
   cleanupOldRoomSnapshots().catch(() => undefined);
 }, 10 * 60 * 1000).unref();
-void cleanupOldRoomSnapshots();
+void cleanupOldRoomSnapshots().catch(error => console.error('[persistence] initial cleanup failed:', error));
 
-function sendSocketError(ws: WebSocket, message: string) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'ERROR', message }));
-  }
-}
-
-function authorizeSocket(ws: WebSocket, roomCode: string, managerId?: string) {
-  const session = socketToRoom.get(ws);
-  const normalizedCode = String(roomCode || '').toUpperCase();
-  if (!session || session.roomCode !== normalizedCode) return null;
-  if (managerId && session.managerId !== managerId) return null;
-  const room = rooms.get(normalizedCode);
-  if (!room) return null;
-  return { room, session };
-}
-
-function isRoomHost(room: GameRoom, managerId: string) {
-  return room.hostId === managerId;
-}
-
-function newId(prefix: string) {
-  return prefix + '-' + crypto.randomUUID();
-}
-
-function createReconnectToken(): string {
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-function hashReconnectToken(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-function setReconnectCredential(manager: Manager): string {
-  const token = createReconnectToken();
-  manager.reconnectTokenHash = hashReconnectToken(token);
-  return token;
-}
-
-function matchesReconnectCredential(manager: Manager, token: unknown): boolean {
-  const supplied = String(token || '');
-  if (!supplied || !manager.reconnectTokenHash) return false;
-  const expected = Buffer.from(manager.reconnectTokenHash, 'hex');
-  const actual = Buffer.from(hashReconnectToken(supplied), 'hex');
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
-}
-
-const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation[]);
-const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
-const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
-const SUPPORTED_AUCTION_MODES = new Set(['Classic', 'Blind', 'Quick'] as const);
-const SUPPORTED_LEAGUE_TYPES = new Set(['Double Round Robin'] as const);
-const SUPPORTED_COMPETITIONS = new Set(['League'] as const);
-
-function clampFiniteNumber(value: unknown, fallback: number, min: number, max: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
-}
-
-function sanitizeManagerName(value: unknown, fallback = 'Manager') {
-  const clean = String(value ?? '')
-    .replace(/[\u0000-\u001F\u007F]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 24);
-  return clean || fallback;
-}
-
-function sanitizeLobbySettings(raw: Partial<LobbySettings> | null | undefined, base?: LobbySettings): LobbySettings {
-  const fallback: LobbySettings = base || {
-    maxManagers: 8,
-    startingBudget: 500,
-    playerPool: 'Global',
-    era: 'Current',
-    auctionMode: 'Classic',
-    transfersEnabled: true,
-    leagueType: 'Double Round Robin',
-    competitionFormat: 'League',
-  };
-
-  const maxManagers = Math.round(clampFiniteNumber(raw?.maxManagers, fallback.maxManagers, 2, 16));
-  const startingBudget = Math.round(clampFiniteNumber(raw?.startingBudget, fallback.startingBudget, 100, 5000));
-  const playerPool = SUPPORTED_PLAYER_POOLS.has(raw?.playerPool as any) ? raw!.playerPool! : fallback.playerPool;
-  const era = SUPPORTED_ERAS.has(raw?.era as any) ? raw!.era! : fallback.era;
-  const auctionMode = SUPPORTED_AUCTION_MODES.has(raw?.auctionMode as any) ? raw!.auctionMode! : fallback.auctionMode;
-  // There is only one competition now: a double round-robin league.
-  // Keep accepting legacy room snapshots, but normalize them immediately.
-  const competitionFormat = 'League' as const;
-  const leagueType = 'Double Round Robin' as const;
-
-  return {
-    maxManagers,
-    startingBudget,
-    playerPool,
-    era,
-    auctionMode,
-    transfersEnabled: typeof raw?.transfersEnabled === 'boolean' ? raw.transfersEnabled : fallback.transfersEnabled,
-    leagueType,
-    competitionFormat,
-  };
-}
-
-// Secret bids for blind auction: roomCode -> Record<managerId, number>
-const blindSecretBids = new Map<string, Record<string, number>>();
-
-// Active countdown intervals: roomCode -> NodeJS.Timeout
-const auctionIntervals = new Map<string, NodeJS.Timeout>();
-
-// 30-second readiness timers are persisted as absolute deadlines so a Vercel
-// instance hop can resume the same countdown instead of resetting it.
-const phaseReadyTimers = new Map<string, NodeJS.Timeout>();
-const PHASE_READY_SECONDS = 30;
-
-function clearPhaseReadyTimer(room: GameRoom) {
-  const timer = phaseReadyTimers.get(room.code);
-  if (timer) clearTimeout(timer);
-  phaseReadyTimers.delete(room.code);
-  room.phaseReadyDeadline = undefined;
-}
-
-function allManagersReady(room: GameRoom) {
-  return room.managers.length >= 2 && room.managers.every(m => m.isReady || m.isBot);
-}
-
-function allFormationReady(room: GameRoom) {
-  const ready = new Set(room.phaseReadyIds || []);
-  return room.managers.length >= 2 && room.managers.every(m => m.isBot || ready.has(m.id));
-}
+import {
+  SUPPORTED_FORMATIONS,
+  SUPPORTED_PLAYER_POOLS,
+  SUPPORTED_ERAS,
+  SUPPORTED_AUCTION_MODES,
+  SUPPORTED_LEAGUE_TYPES,
+  SUPPORTED_COMPETITIONS,
+  clampFiniteNumber,
+  sanitizeManagerName,
+  sanitizeLobbySettings,
+  createBotManager,
+  BOT_NAMES,
+} from './server/lobby.js';
 
 function allTeamsConfirmed(room: GameRoom) {
   return room.managers.length >= 2 && room.managers.every(m => m.confirmedTeam || m.isBot);
@@ -476,8 +373,6 @@ function ensurePhaseReadyTicker(room: GameRoom) {
 // write storm. Broadcasts can be frequent; durable state only needs the latest
 // snapshot a few times per second. The timer always captures the newest room state
 // when it fires, so reconnects never overwrite a fresh snapshot with an older one.
-const persistenceQueues = new Map<string, Promise<void>>();
-const persistenceTimers = new Map<string, NodeJS.Timeout>();
 
 function queueRoomSnapshot(room: GameRoom) {
   const code = room.code;
@@ -512,95 +407,6 @@ async function deletePersistedRoomSnapshot(code: string) {
   persistenceQueues.delete(code);
   if (pendingSave) await pendingSave.catch(() => {});
   await deleteRoomSnapshot(code);
-}
-
-function publicManagerRef(managerId: string): string {
-  // Opaque client-facing reference. Never expose the server's manager UUID/ID.
-  return 'p-' + crypto.createHash('sha256').update(managerId).digest('hex').slice(0, 12);
-}
-
-function resolveManagerId(room: GameRoom | undefined, suppliedId: unknown): string | null {
-  const value = String(suppliedId || '');
-  if (!room || !value) return null;
-  if (room.managers.some(m => m.id === value)) return value;
-  const match = room.managers.find(m => publicManagerRef(m.id) === value);
-  return match?.id || null;
-}
-
-function sanitizeRoomForViewer(room: GameRoom, viewerManagerId?: string): GameRoom {
-  const sanitized = JSON.parse(JSON.stringify(room)) as GameRoom;
-  const ref = (id: string | null | undefined) => {
-    if (!id) return id;
-    return id === viewerManagerId ? id : publicManagerRef(id);
-  };
-
-  sanitized.hostId = ref(sanitized.hostId) as string;
-  sanitized.managers = sanitized.managers.map(m => {
-    const { reconnectTokenHash: _reconnectTokenHash, ...publicManager } = m;
-    return {
-      ...publicManager,
-      id: ref(m.id) as string,
-    };
-  });
-  sanitized.leagueTable = sanitized.leagueTable.map(row => ({
-    ...row,
-    managerId: ref(row.managerId) as string,
-  }));
-  sanitized.fixtures = sanitized.fixtures.map(f => ({
-    ...f,
-    homeManagerId: ref(f.homeManagerId) as string,
-    awayManagerId: ref(f.awayManagerId) as string,
-    winnerManagerId: ref(f.winnerManagerId) as string | undefined,
-  }));
-  sanitized.phaseReadyIds = sanitized.phaseReadyIds?.map(id => ref(id) as string);
-  sanitized.transferWindowReadyIds = sanitized.transferWindowReadyIds?.map(id => ref(id) as string);
-
-  if (sanitized.auction) {
-    sanitized.auction.highestBidderId = ref(sanitized.auction.highestBidderId) as string | null;
-    sanitized.auction.winnerId = ref(sanitized.auction.winnerId) as string | null;
-    sanitized.auction.forcedWinnerId = ref(sanitized.auction.forcedWinnerId) as string | null;
-    sanitized.auction.auctionHistory = sanitized.auction.auctionHistory.map(item => ({
-      ...item,
-      winnerId: ref(item.winnerId) as string,
-    }));
-    if (sanitized.auction.hasSubmittedSecretBid) {
-      sanitized.auction.hasSubmittedSecretBid = Object.fromEntries(
-        Object.entries(sanitized.auction.hasSubmittedSecretBid).map(([id, value]) => [ref(id) as string, value])
-      );
-    }
-  }
-
-  if (sanitized.transferOffers) {
-    sanitized.transferOffers = sanitized.transferOffers.map(offer => ({
-      ...offer,
-      fromManagerId: ref(offer.fromManagerId) as string,
-      toManagerId: ref(offer.toManagerId) as string,
-    }));
-  }
-
-  if (sanitized.knockoutStage) {
-    sanitized.knockoutStage.championId = ref(sanitized.knockoutStage.championId) as string | undefined;
-    sanitized.knockoutStage.rounds = sanitized.knockoutStage.rounds.map(round => ({
-      ...round,
-      fixtures: round.fixtures.map(f => ({
-        ...f,
-        homeManagerId: ref(f.homeManagerId) as string,
-        awayManagerId: ref(f.awayManagerId) as string,
-        winnerManagerId: ref(f.winnerManagerId) as string | undefined,
-      })),
-    }));
-  }
-
-  if (sanitized.awards) {
-    const awards: any = sanitized.awards;
-    for (const key of Object.keys(awards)) {
-      if (awards[key] && typeof awards[key] === 'object' && 'managerId' in awards[key]) {
-        awards[key].managerId = ref(awards[key].managerId) as string;
-      }
-    }
-  }
-
-  return sanitized;
 }
 
 function broadcastRoom(roomCode: string, excludeSocket?: WebSocket, persist = true) {
@@ -673,132 +479,7 @@ function generateLobbyCode(): string {
   return code;
 }
 
-// Bot Names
-const BOT_NAMES = [
-  'Pep AI Tactical', 
-  'Ancelotti Prime', 
-  'Klopp Heavy Metal', 
-  'Mourinho Special', 
-  'Zidane Masterclass',
-  'Arteta Process', 
-  'Xabi Invicto', 
-  'Flick Blitz'
-];
-
-function createBotManager(nameIndex = 0, initialBudget = 500): Manager {
-  const botFormations: Formation[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2'];
-  const chosenFormation = botFormations[nameIndex % botFormations.length];
-  const botName = BOT_NAMES[nameIndex % BOT_NAMES.length] || `Tactical Bot ${nameIndex + 1}`;
-
-  return {
-    id: newId(`bot-${nameIndex}`),
-    name: botName,
-    isHost: false,
-    isBot: true,
-    isReady: true,
-    budget: initialBudget,
-    initialBudget,
-    formation: chosenFormation,
-    tactics: {
-      style: 'Balanced',
-      mentality: 'Balanced',
-      defensiveLine: 55,
-      pressingIntensity: 65,
-      attackWidth: 60,
-      tempo: 65,
-      risk: 50,
-    },
-    roles: {
-      captainId: '',
-      penaltyTakerId: '',
-      freeKickTakerId: '',
-      cornerTakerId: '',
-    },
-    squad: [],
-    confirmedTeam: false,
-    teamOverall: 0,
-  };
-}
-
 // Generate Fixtures (Round Robin or Double Round Robin)
-function generateLeagueFixtures(managers: Manager[]): Fixture[] {
-  const fixtures: Fixture[] = [];
-  const teamIds = managers.map(m => m.id);
-  const n = teamIds.length;
-  if (n < 2) return [];
-
-  // Round Robin scheduling algorithm
-  const teams = [...teamIds];
-  if (teams.length % 2 !== 0) {
-    teams.push('BYE');
-  }
-
-  const numTeams = teams.length;
-  const numRounds = numTeams - 1;
-  const half = numTeams / 2;
-
-  let matchday = 1;
-  for (let round = 0; round < numRounds; round++) {
-    for (let i = 0; i < half; i++) {
-      const home = teams[i];
-      const away = teams[numTeams - 1 - i];
-
-      if (home !== 'BYE' && away !== 'BYE') {
-        const homeManager = managers.find(m => m.id === home)!;
-        const awayManager = managers.find(m => m.id === away)!;
-        fixtures.push({
-          id: newId('fix'),
-          matchday,
-          homeManagerId: home,
-          homeManagerName: homeManager.name,
-          awayManagerId: away,
-          awayManagerName: awayManager.name,
-          played: false,
-        });
-      }
-    }
-
-    // Rotate teams array keeping first element fixed
-    teams.splice(1, 0, teams.pop()!);
-    matchday++;
-  }
-
-  // Every manager plays every other manager twice:
-  // once at home and once away. No alternate league format exists.
-  const firstLegCount = fixtures.length;
-  for (let i = 0; i < firstLegCount; i++) {
-    const firstFix = fixtures[i];
-    fixtures.push({
-      id: newId('fix-rev'),
-      matchday: firstFix.matchday + numRounds,
-      homeManagerId: firstFix.awayManagerId,
-      homeManagerName: firstFix.awayManagerName,
-      awayManagerId: firstFix.homeManagerId,
-      awayManagerName: firstFix.homeManagerName,
-      played: false,
-    });
-  }
-
-  return fixtures;
-}
-
-function calculateInitialTable(managers: Manager[]): LeagueTableRow[] {
-  return managers.map(m => ({
-    managerId: m.id,
-    managerName: m.name,
-    isBot: m.isBot,
-    played: 0,
-    won: 0,
-    drawn: 0,
-    lost: 0,
-    goalsFor: 0,
-    goalsAgainst: 0,
-    goalDifference: 0,
-    points: 0,
-    form: [],
-  }));
-}
-
 function removeManagerFromRoom(room: GameRoom, managerId: string) {
   room.managers = room.managers.filter(manager => manager.id !== managerId);
   room.phaseReadyIds = (room.phaseReadyIds || []).filter(id => id !== managerId);
@@ -831,57 +512,6 @@ function removeManagerFromRoom(room: GameRoom, managerId: string) {
   if (room.fixtures.length) {
     room.totalMatchdays = Math.max(...room.fixtures.map(f => f.matchday), 1);
   }
-}
-
-function updateLeagueTable(table: LeagueTableRow[], fixture: Fixture): LeagueTableRow[] {
-  if (!fixture.played || fixture.homeScore === undefined || fixture.awayScore === undefined) return table;
-
-  const newTable = table.map(row => {
-    if (row.managerId === fixture.homeManagerId) {
-      const isWin = fixture.homeScore! > fixture.awayScore!;
-      const isDraw = fixture.homeScore! === fixture.awayScore!;
-      const result: 'W' | 'D' | 'L' = isWin ? 'W' : (isDraw ? 'D' : 'L');
-      return {
-        ...row,
-        played: row.played + 1,
-        won: row.won + (isWin ? 1 : 0),
-        drawn: row.drawn + (isDraw ? 1 : 0),
-        lost: row.lost + (!isWin && !isDraw ? 1 : 0),
-        goalsFor: row.goalsFor + fixture.homeScore!,
-        goalsAgainst: row.goalsAgainst + fixture.awayScore!,
-        goalDifference: row.goalDifference + (fixture.homeScore! - fixture.awayScore!),
-        points: row.points + (isWin ? 3 : (isDraw ? 1 : 0)),
-        form: [...row.form.slice(-4), result],
-      };
-    }
-    if (row.managerId === fixture.awayManagerId) {
-      const isWin = fixture.awayScore! > fixture.homeScore!;
-      const isDraw = fixture.homeScore! === fixture.awayScore!;
-      const result: 'W' | 'D' | 'L' = isWin ? 'W' : (isDraw ? 'D' : 'L');
-      return {
-        ...row,
-        played: row.played + 1,
-        won: row.won + (isWin ? 1 : 0),
-        drawn: row.drawn + (isDraw ? 1 : 0),
-        lost: row.lost + (!isWin && !isDraw ? 1 : 0),
-        goalsFor: row.goalsFor + fixture.awayScore!,
-        goalsAgainst: row.goalsAgainst + fixture.homeScore!,
-        goalDifference: row.goalDifference + (fixture.awayScore! - fixture.homeScore!),
-        points: row.points + (isWin ? 3 : (isDraw ? 1 : 0)),
-        form: [...row.form.slice(-4), result],
-      };
-    }
-    return row;
-  });
-
-  // Sort table by Points DESC, Goal Difference DESC, Goals For DESC
-  newTable.sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-    return b.goalsFor - a.goalsFor;
-  });
-
-  return newTable;
 }
 
 // Automatic 11-player XI generator for Skip Auction or Bot Setup
@@ -1423,8 +1053,7 @@ function simulateBotBids(room: GameRoom) {
     if (room.auction.highestBidderId === bot.id) continue;
 
     // Check if bot can afford
-    const bidStep = room.auction.currentBid >= 250 ? 10 : room.auction.currentBid >= 100 ? 5 : 2;
-    const minNextBid = room.auction.highestBidderId ? room.auction.currentBid + bidStep : room.auction.currentBid;
+    const minNextBid = getMinNextBid(room.auction.currentBid, Boolean(room.auction.highestBidderId));
     if (bot.budget < minNextBid) continue;
 
     // Formation slots are flexible, but category limits still protect the squad shape.
@@ -1574,11 +1203,15 @@ function finalizeAuctionItem(room: GameRoom) {
     }
   }
 
+  // Secret bids are per-lot state. Clear them immediately after resolution so
+  // a SOLD screen cannot expose stale submission indicators and the next lot
+  // always starts with a clean bid map.
+  blindSecretBids.delete(room.code);
+
   broadcastRoom(room.code);
 
-  // IMPORTANT: do not rely on a long-lived serverless timer to move the auction.
-  // Vercel can suspend the function after the response, which previously left
-  // rooms permanently stuck on the SOLD / NO VALID BIDS screen.
+  // IMPORTANT: the Oracle VM process owns the live auction timer. Persisted
+  // absolute deadlines still let reconnects recover after process restarts.
   const finishedPlayerId = player.id;
   setTimeout(() => {
     try {
@@ -1618,269 +1251,7 @@ function finalizeAuctionItem(room: GameRoom) {
 }
 
 // Calculate season awards from recorded fixture stats
-function calculateSeasonAwards(room: GameRoom): SeasonAwards {
-  type Aggregate = {
-    playerId: string;
-    playerName: string;
-    teamName: string;
-    goals: number;
-    assists: number;
-    saves: number;
-    tackles: number;
-    passes: number;
-    sumRating: number;
-    matches: number;
-    cleanSheets: number;
-  };
-
-  const aggregates = new Map<string, Aggregate>();
-
-  for (const fix of room.fixtures) {
-    if (!fix.played || !fix.playerStats) continue;
-
-    for (const stat of fix.playerStats) {
-      const managerId = stat.team === 'home' ? fix.homeManagerId : fix.awayManagerId;
-      const manager = room.managers.find(m => m.id === managerId);
-      const aggregate = aggregates.get(stat.playerId) || {
-        playerId: stat.playerId,
-        playerName: stat.playerName,
-        teamName: manager?.name || 'FC',
-        goals: 0,
-        assists: 0,
-        saves: 0,
-        tackles: 0,
-        passes: 0,
-        sumRating: 0,
-        matches: 0,
-        cleanSheets: 0,
-      };
-
-      aggregate.goals += stat.goals;
-      aggregate.assists += stat.assists;
-      aggregate.saves += stat.saves;
-      aggregate.tackles += stat.tackles;
-      aggregate.passes += stat.passes;
-      aggregate.sumRating += stat.rating;
-      aggregate.matches += 1;
-
-      if (stat.team === 'home' && (fix.awayScore ?? 0) === 0) aggregate.cleanSheets += 1;
-      if (stat.team === 'away' && (fix.homeScore ?? 0) === 0) aggregate.cleanSheets += 1;
-
-      aggregates.set(stat.playerId, aggregate);
-    }
-  }
-
-  const all = Array.from(aggregates.values());
-  // Use the same player source as the room. The previous lookup only searched
-  // DEVELOPMENT_PLAYERS, so imported FC27 and All-Time players were invisible
-  // to positional/age awards.
-  const awardPlayers = getPlayersForLobby('Global', room.settings.era);
-  const playerData = (id: string) => awardPlayers.find(p => p.id === id);
-
-  const topScorer = [...all].sort((a, b) => b.goals - a.goals || b.sumRating - a.sumRating)[0] || {
-    playerId: 'none', playerName: 'No scorer yet', teamName: '—', goals: 0, assists: 0, saves: 0, tackles: 0, passes: 0, sumRating: 0, matches: 0, cleanSheets: 0
-  };
-  const topAssist = [...all].sort((a, b) => b.assists - a.assists || b.sumRating - a.sumRating)[0] || topScorer;
-  const topRated = [...all].sort((a, b) =>
-    (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches))
-  )[0] || topScorer;
-
-  const bestGK = [...all]
-    .filter(a => playerData(a.playerId)?.category === 'GK')
-    .sort((a, b) => b.cleanSheets - a.cleanSheets || b.saves - a.saves || b.sumRating - a.sumRating)[0] || topScorer;
-
-  const bestDefender = [...all]
-    .filter(a => playerData(a.playerId)?.category === 'DEF')
-    .sort((a, b) => (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches)) || b.tackles - a.tackles)[0] || topScorer;
-
-  const bestMidfielder = [...all]
-    .filter(a => playerData(a.playerId)?.category === 'MID')
-    .sort((a, b) => (b.sumRating / Math.max(1, b.matches)) - (a.sumRating / Math.max(1, a.matches)) || b.passes - a.passes)[0] || topScorer;
-
-  const bestYoung = [...all]
-    .filter(a => {
-      const p = playerData(a.playerId);
-      return p && p.age <= 21;
-    })
-    .sort((a, b) => {
-      const ar = a.sumRating / Math.max(1, a.matches);
-      const br = b.sumRating / Math.max(1, b.matches);
-      return br - ar || b.goals - a.goals || b.assists - a.assists;
-    })[0] || topScorer;
-
-  const championId = room.knockoutStage?.championId || room.leagueTable[0]?.managerId;
-  const champion = championId ? room.managers.find(m => m.id === championId) : undefined;
-
-  const played = room.leagueTable.find(r => r.managerId === championId)?.played || room.fixtures.filter(f =>
-    f.played && (f.homeManagerId === championId || f.awayManagerId === championId)
-  ).length;
-
-  const won = room.leagueTable.find(r => r.managerId === championId)?.won || 0;
-
-  return {
-    goldenBoot: {
-      playerId: topScorer.playerId,
-      playerName: topScorer.playerName,
-      teamName: topScorer.teamName,
-      goals: topScorer.goals,
-    },
-    topAssists: {
-      playerId: topAssist.playerId,
-      playerName: topAssist.playerName,
-      teamName: topAssist.teamName,
-      assists: topAssist.assists,
-    },
-    bestGK: {
-      playerId: bestGK.playerId,
-      playerName: bestGK.playerName,
-      teamName: bestGK.teamName,
-      cleanSheets: bestGK.cleanSheets,
-      saves: bestGK.saves,
-    },
-    playerOfTheSeason: {
-      playerId: topRated.playerId,
-      playerName: topRated.playerName,
-      teamName: topRated.teamName,
-      avgRating: Number((topRated.sumRating / Math.max(1, topRated.matches)).toFixed(2)),
-      goals: topRated.goals,
-      assists: topRated.assists,
-    },
-    bestDefender: {
-      playerId: bestDefender.playerId,
-      playerName: bestDefender.playerName,
-      teamName: bestDefender.teamName,
-      avgRating: Number((bestDefender.sumRating / Math.max(1, bestDefender.matches)).toFixed(2)),
-      tackles: bestDefender.tackles,
-    },
-    bestMidfielder: {
-      playerId: bestMidfielder.playerId,
-      playerName: bestMidfielder.playerName,
-      teamName: bestMidfielder.teamName,
-      avgRating: Number((bestMidfielder.sumRating / Math.max(1, bestMidfielder.matches)).toFixed(2)),
-      passes: bestMidfielder.passes,
-    },
-    bestYoungPlayer: {
-      playerId: bestYoung.playerId,
-      playerName: bestYoung.playerName,
-      teamName: bestYoung.teamName,
-      age: playerData(bestYoung.playerId)?.age || 0,
-      goals: bestYoung.goals,
-      assists: bestYoung.assists,
-    },
-    managerOfTheSeason: {
-      managerId: champion?.id || room.hostId,
-      managerName: champion?.name || 'Champion',
-      points: room.leagueTable.find(r => r.managerId === champion?.id)?.points || (champion ? 1 : 0),
-      winRate: Math.round((won / Math.max(1, played)) * 100),
-    },
-  };
-}
-
 // Helper to configure default team roles (Captain, PK, FK, CK) based on player attributes
-function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
-  if (starters.length === 0) {
-    return { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
-  }
-  const sortedByOvr = [...starters].sort((a, b) => b.player.overall - a.player.overall);
-  const captain = sortedByOvr[0]?.player.id || starters[0].player.id;
-
-  const sortedBySho = [...starters].sort((a, b) => b.player.attributes.sho - a.player.attributes.sho);
-  const pkTaker = sortedBySho[0]?.player.id || captain;
-
-  const sortedByPas = [...starters].sort((a, b) => b.player.attributes.pas - a.player.attributes.pas);
-  const fkTaker = sortedByPas[0]?.player.id || captain;
-  const ckTaker = sortedByPas[1]?.player.id || sortedByPas[0]?.player.id || captain;
-
-  return {
-    captainId: captain,
-    penaltyTakerId: pkTaker,
-    freeKickTakerId: fkTaker,
-    cornerTakerId: ckTaker,
-  };
-}
-
-function playoffQualifierCount(teamCount: number): 2 | 4 | 8 {
-  // League playoffs:
-  // 2-5 teams -> top 2 straight to the Final
-  // 6-9 teams -> top 4 to Semi-Finals
-  // 10-16 teams -> top 8 to Quarter-Finals
-  if (teamCount >= 10) return 8;
-  if (teamCount >= 6) return 4;
-  return 2;
-}
-
-function knockoutRoundForTeamCount(teamCount: number): 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Final' {
-  const qualifiers = playoffQualifierCount(teamCount);
-  if (qualifiers === 8) return 'Quarter-Final';
-  if (qualifiers === 4) return 'Semi-Final';
-  return 'Final';
-}
-
-function nextKnockoutRound(round: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final') {
-  if (round === 'Round of 16') return 'Quarter-Final';
-  if (round === 'Quarter-Final') return 'Semi-Final';
-  if (round === 'Semi-Final') return 'Third-Place';
-  if (round === 'Third-Place') return 'Final';
-  return null;
-}
-
-function buildKnockoutFixtures(
-  managers: Manager[],
-  roundName: 'Round of 16' | 'Quarter-Final' | 'Semi-Final' | 'Third-Place' | 'Final',
-  matchday: number,
-  initialSeeding = false
-): Fixture[] {
-  // The input order is authoritative: league playoffs pass teams in league-table
-  // order, and later rounds pass winners/losers in bracket order. Never reseed by OVR.
-  const bracketSize = roundName === 'Round of 16' ? 16 : roundName === 'Quarter-Final' ? 8 : roundName === 'Semi-Final' ? 4 : 2;
-  const slots: (Manager | null)[] = Array(bracketSize).fill(null);
-  managers.slice(0, bracketSize).forEach((manager, index) => {
-    slots[index] = manager;
-  });
-
-  const fixtures: Fixture[] = [];
-  for (let i = 0; i < bracketSize / 2; i++) {
-    const home = slots[i];
-    const awayIndex = initialSeeding
-      ? bracketSize - 1 - i
-      : i * 2 + 1;
-    const away = slots[awayIndex];
-    if (!home && !away) continue;
-
-    const id = `ko-${matchday}-${i + 1}-${crypto.randomUUID()}`;
-    if (home && away) {
-      fixtures.push({
-        id,
-        matchday,
-        homeManagerId: home.id,
-        homeManagerName: home.name,
-        awayManagerId: away.id,
-        awayManagerName: away.name,
-        played: false,
-        isKnockout: true,
-        roundName,
-      });
-    } else if (home || away) {
-      const winner = home || away!;
-      fixtures.push({
-        id,
-        matchday,
-        homeManagerId: winner.id,
-        homeManagerName: winner.name,
-        awayManagerId: winner.id,
-        awayManagerName: winner.name,
-        played: true,
-        homeScore: 0,
-        awayScore: 0,
-        isKnockout: true,
-        roundName,
-        winnerManagerId: winner.id,
-      });
-    }
-  }
-  return fixtures;
-}
-
 function initializeKnockout(room: GameRoom) {
   // Used by explicitly selected non-league knockout formats.
   const seeded = [...room.managers].sort((a, b) => b.teamOverall - a.teamOverall || a.name.localeCompare(b.name));
@@ -1923,7 +1294,7 @@ function initializeLeaguePlayoffs(room: GameRoom) {
     room.awards = calculateSeasonAwards(room);
     // Keep the finished result available to currently connected clients, but
     // never retain completed games in durable storage.
-    void deletePersistedRoomSnapshot(room.code);
+    void deletePersistedRoomSnapshot(room.code).catch(error => console.error('[persistence] room deletion failed:', error));
     return;
   }
 
@@ -2296,9 +1667,8 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
     auctionMode: 'Classic',
     transfersEnabled: true,
     leagueType: 'Double Round Robin',
+    competitionFormat: 'League',
   };
-
-  const fixtures = generateLeagueFixtures(managers);
 
   const room: GameRoom = {
     code: roomCode,
@@ -2335,7 +1705,7 @@ function createSoloGameRoom(managerName: string, soloFormation?: Formation): { r
   };
 
   rooms.set(roomCode, room);
-  void saveRoomSnapshot(room);
+  void saveRoomSnapshot(room).catch(error => console.error('[persistence] room save failed:', error));
 
   return { roomCode, managerId: hostId, room };
 }
@@ -2402,6 +1772,8 @@ wss.on('connection', (ws, request) => {
     return;
   }
   wsConnectionCounts.set(clientIp, currentConnections + 1);
+  const initialSocketRoom = socketToRoom.get(ws);
+  if (initialSocketRoom) roomDisconnectedAt.delete(initialSocketRoom.roomCode);
 
   socketAlive.set(ws, true);
   ws.on('pong', () => socketAlive.set(ws, true));
@@ -2594,8 +1966,7 @@ wss.on('connection', (ws, request) => {
             const tokenForClient = reconnectToken && matchesReconnectCredential(existing, reconnectToken)
               ? reconnectToken
               : setReconnectCredential(existing);
-            // A reconnect may land on a fresh Vercel Function instance. Resume
-            // the in-memory ticker from the persisted absolute deadline.
+            // Resume the in-memory ticker from the persisted absolute deadline.
             ensureAuctionTicker(room);
             ensurePhaseReadyTicker(room);
             if (!roomSockets.has(room.code)) roomSockets.set(room.code, new Set());
@@ -2690,7 +2061,7 @@ wss.on('connection', (ws, request) => {
         // --- 3. LOBBY SETTINGS UPDATE ---
         case 'UPDATE_SETTINGS': {
           const { roomCode, settings } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'lobby') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -2714,7 +2085,7 @@ wss.on('connection', (ws, request) => {
         // --- 4. READY TOGGLE ---
         case 'TOGGLE_READY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (room.phase !== 'lobby') return;
@@ -2730,7 +2101,7 @@ wss.on('connection', (ws, request) => {
         // --- 5. DELETE LOBBY (HOST ONLY) ---
         case 'DELETE_LOBBY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) {
             sendSocketError(ws, 'Unauthorized lobby deletion.');
             return;
@@ -2767,7 +2138,7 @@ wss.on('connection', (ws, request) => {
         // --- 5. KICK PLAYER ---
         case 'KICK_PLAYER': {
           const { roomCode, targetManagerId } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const resolvedTargetId = resolveManagerId(room, targetManagerId);
@@ -2850,7 +2221,7 @@ wss.on('connection', (ws, request) => {
         // --- 6. START GAME (Move to formation select or auction) ---
         case 'START_GAME': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -2880,7 +2251,7 @@ wss.on('connection', (ws, request) => {
           const { roomCode, formation } = payload;
           // The socket session is the source of truth for identity. Do not trust
           // a stale managerId from the browser after a reconnect.
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (room.phase !== 'formation_select') return;
@@ -2907,7 +2278,7 @@ wss.on('connection', (ws, request) => {
         // --- 8. FORMATION READY / BEGIN AUCTION ---
         case 'FORMATION_READY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'formation_select') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -2925,7 +2296,7 @@ wss.on('connection', (ws, request) => {
 
         case 'BEGIN_AUCTION': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId) || room.phase !== 'formation_select') {
@@ -2955,7 +2326,7 @@ wss.on('connection', (ws, request) => {
         // --- 9. SKIP AUCTION (Solo Play only) ---
         case 'SKIP_AUCTION_SOLO': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const isSolo = room.managers.length === 2 && room.managers.some(m => m.isBot);
@@ -2992,7 +2363,7 @@ wss.on('connection', (ws, request) => {
         // --- 10. AUCTION BID (Classic & Quick) ---
         case 'AUCTION_BID': {
           const { roomCode, amount } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -3014,10 +2385,6 @@ wss.on('connection', (ws, request) => {
 
           const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
-          if ((room.phaseReadyIds || []).includes(actorId)) {
-            sendSocketError(ws, 'You marked the auction done and cannot bid again.');
-            return;
-          }
 
           const bidAmount = Number(amount);
           if (room.auction.isSold || !room.auction.currentPlayer || room.auction.secondsRemaining <= 0) {
@@ -3062,9 +2429,9 @@ wss.on('connection', (ws, request) => {
           // The increment is based on the current auction price, not the
           // submitted amount. This keeps client and server validation identical
           // around £100M/£250M thresholds.
-          const bidStep = room.auction.currentBid >= 250 ? 10 : room.auction.currentBid >= 100 ? 5 : 2;
-          if (room.auction.highestBidderId && bidAmount < room.auction.currentBid + bidStep) {
-            ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${room.auction.currentBid + bidStep}M.` }));
+          const minNextBid = getMinNextBid(room.auction.currentBid, Boolean(room.auction.highestBidderId));
+          if (room.auction.highestBidderId && bidAmount < minNextBid) {
+            ws.send(JSON.stringify({ type: 'ERROR', message: `Next bid must be at least £${minNextBid}M.` }));
             return;
           }
 
@@ -3085,7 +2452,7 @@ wss.on('connection', (ws, request) => {
         // --- 11. BLIND AUCTION SECRET BID SUBMISSION ---
         case 'SUBMIT_BLIND_BID': {
           const { roomCode, amount } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -3102,6 +2469,11 @@ wss.on('connection', (ws, request) => {
 
           const manager = room.managers.find(m => m.id === actorId);
           if (!manager) return;
+
+          if (room.settings.auctionMode !== 'Blind') {
+            sendSocketError(ws, 'Secret bids are only available in Blind Auction mode.');
+            return;
+          }
 
           if (room.auction.isSold || room.auction.secondsRemaining <= 0) {
             sendSocketError(ws, 'This auction has already closed.');
@@ -3149,7 +2521,7 @@ wss.on('connection', (ws, request) => {
         // --- 12. AUCTION READY / TEAM MANAGEMENT ---
         case 'AUCTION_READY': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'auction') return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -3173,7 +2545,7 @@ wss.on('connection', (ws, request) => {
         // --- 13. TEAM MANAGEMENT & TACTICS ---
         case 'UPDATE_LINEUP': {
           const { roomCode, squad, formation, tactics, roles } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           if (!['team_management', 'league', 'knockout'].includes(room.phase)) return;
@@ -3210,7 +2582,7 @@ wss.on('connection', (ws, request) => {
         // --- 13. CONFIRM TEAM ---
         case 'CONFIRM_TEAM': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
 
@@ -3248,7 +2620,7 @@ wss.on('connection', (ws, request) => {
         case 'RUN_KNOCKOUT_MATCH': {
           try {
             const { roomCode, managerId, fixtureId } = payload;
-            const auth = authorizeSocket(ws, roomCode, managerId);
+            const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
             if (!auth || auth.room.phase !== 'knockout') {
               sendSocketError(ws, 'Knockout phase is not active for this manager session.');
               return;
@@ -3298,7 +2670,7 @@ wss.on('connection', (ws, request) => {
         case 'COMPLETE_KNOCKOUT_MATCH': {
           try {
             const { roomCode, managerId, fixtureId } = payload;
-            const auth = authorizeSocket(ws, roomCode, managerId);
+            const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
             if (!auth || auth.room.phase !== 'knockout') {
               sendSocketError(ws, 'Knockout phase is not active for this manager session.');
               return;
@@ -3356,7 +2728,7 @@ wss.on('connection', (ws, request) => {
         case 'RUN_MATCHDAY': {
           try {
             const { roomCode, matchday } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'league') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -3412,6 +2784,13 @@ wss.on('connection', (ws, request) => {
             const result = simulateMatch(homeMgr, awayMgr, fix.id, targetMatchday, undefined, false, undefined, false);
             Object.assign(fix, result);
             fix.played = false;
+            if (targetMatchday === 5) {
+              const completedThroughFive = room.fixtures.filter(item => item.matchday <= 5).every(item => item.played);
+              if (completedThroughFive) {
+                console.info('[payload] room JSON bytes after matchday 5:', JSON.stringify(room).length);
+                console.info('[payload] sanitized room JSON bytes after matchday 5:', JSON.stringify(sanitizeRoomForViewer(room, room.hostId)).length);
+              }
+            }
             room.liveFixtureId = fix.id;
             room.currentMatchday = targetMatchday;
 
@@ -3425,13 +2804,14 @@ wss.on('connection', (ws, request) => {
             console.error('[WS] RUN_MATCHDAY failed:', error);
             sendSocketError(ws, 'Failed to simulate the match. Please retry.');
           }
+          break;
         }
 
         // --- 14b. COMPLETE CURRENT LEAGUE MATCH ---
         case 'COMPLETE_LEAGUE_MATCH': {
           try {
             const { roomCode, fixtureId } = payload;
-            const auth = authorizeSocket(ws, roomCode);
+            const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
             if (!auth || auth.room.phase !== 'league') return;
             const { room, session } = auth;
             if (!isRoomHost(room, session.managerId)) {
@@ -3470,7 +2850,7 @@ wss.on('connection', (ws, request) => {
         // --- 14b. NEXT MATCHDAY ---
         case 'NEXT_MATCHDAY': {
           const { roomCode, nextMatchday } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'league') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -3501,7 +2881,7 @@ wss.on('connection', (ws, request) => {
         // --- 14c. FINISH SEASON ---
         case 'FINISH_SEASON': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth || auth.room.phase !== 'league') return;
           const { room, session } = auth;
           if (!isRoomHost(room, session.managerId)) {
@@ -3523,14 +2903,14 @@ wss.on('connection', (ws, request) => {
           // to retain finished games and this also prevents stale rooms from
           // reappearing after a server restart.
           broadcastRoom(room.code, undefined, false);
-          void deletePersistedRoomSnapshot(room.code);
+          void deletePersistedRoomSnapshot(room.code).catch(error => console.error('[persistence] season snapshot deletion failed:', error));
           break;
         }
 
         // --- 15. TRANSFERS ---
         case 'PROPOSE_TRANSFER': {
           const { roomCode, offer } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const suppliedToManagerId = resolveManagerId(room, offer?.toManagerId);
@@ -3592,7 +2972,7 @@ wss.on('connection', (ws, request) => {
 
         case 'RESPOND_TRANSFER': {
           const { roomCode, managerId, offerId, accept } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
            const actorId = session.managerId;
@@ -3616,7 +2996,7 @@ wss.on('connection', (ws, request) => {
         // --- MID-SEASON MANAGEMENT WINDOW ---
         case 'CLOSE_TRANSFER_WINDOW': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const actorId = session.managerId;
@@ -3644,7 +3024,7 @@ wss.on('connection', (ws, request) => {
         // --- LEAVE ROOM / MATCH ---
         case 'LEAVE_ROOM': {
           const { roomCode, managerId } = payload;
-          const auth = authorizeSocket(ws, roomCode, managerId);
+          const auth = authorizeSocket(ws, roomCode, managerId, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
           const leavingId = session.managerId;
@@ -3706,22 +3086,71 @@ wss.on('connection', (ws, request) => {
         // --- 16. REMATCH / RESET ---
         case 'REMATCH': {
           const { roomCode } = payload;
-          const auth = authorizeSocket(ws, roomCode);
+          const auth = authorizeSocket(ws, roomCode, undefined, socketToRoom, rooms);
           if (!auth) return;
           const { room, session } = auth;
+          if (room.phase !== 'season_end') {
+            sendSocketError(ws, 'Rematch is only available after the season ends.');
+            return;
+          }
           if (!isRoomHost(room, session.managerId)) {
             sendSocketError(ws, 'Only the host can start a rematch.');
             return;
           }
 
           room.awards = null;
-          room.fixtures = generateLeagueFixtures(room.managers);
+          room.fixtures = [];
           room.currentMatchday = 1;
-          room.totalMatchdays = Math.max(...room.fixtures.map(f => f.matchday), 1);
+          room.totalMatchdays = 1;
           room.leagueTable = calculateInitialTable(room.managers);
           room.knockoutStage = undefined;
-          room.phase = 'league';
-
+          room.liveFixtureId = undefined;
+          room.transferOffers = [];
+          room.transferWindowOpen = false;
+          room.transferWindowReadyIds = [];
+          room.transferWindowMatchday = undefined;
+          room.phaseReadyIds = room.managers.filter(m => m.isBot).map(m => m.id);
+          room.managers.forEach(manager => {
+            manager.squad = [];
+            manager.budget = manager.initialBudget;
+            manager.confirmedTeam = false;
+            manager.isReady = manager.isBot;
+            manager.tactics = {
+              style: 'Balanced',
+              mentality: 'Balanced',
+              defensiveLine: 50,
+              pressingIntensity: 50,
+              attackWidth: 50,
+              tempo: 50,
+              risk: 50,
+            };
+            manager.roles = {
+              captainId: '',
+              penaltyTakerId: '',
+              freeKickTakerId: '',
+              cornerTakerId: '',
+            };
+            manager.teamOverall = 0;
+          });
+          room.auction = {
+            currentPlayerIndex: 0,
+            totalPlayersInPool: getPlayersForLobby(room.settings.playerPool, room.settings.era).length,
+            currentPlayer: null,
+            currentBid: 0,
+            highestBidderId: null,
+            highestBidderName: null,
+            secondsRemaining: 0,
+            isPaused: false,
+            isSold: false,
+            winnerId: null,
+            soldPrice: 0,
+            auctionHistory: [],
+          };
+          room.phase = 'lobby';
+          room.phaseReadyDeadline = Date.now() + PHASE_READY_SECONDS * 1000;
+          room.updatedAt = Date.now();
+          ensurePhaseReadyTicker(room);
+          await saveRoomSnapshot(room);
           broadcastRoom(room.code);
           break;
         }
@@ -3754,14 +3183,22 @@ wss.on('connection', (ws, request) => {
             if (auctionTimer) clearInterval(auctionTimer);
             auctionIntervals.delete(info.roomCode);
             clearPhaseReadyTimer(room);
-            void deletePersistedRoomSnapshot(info.roomCode);
+            void deletePersistedRoomSnapshot(info.roomCode).catch(error => console.error('[persistence] season-end cleanup failed:', error));
           }
         }
       }
+      if (sockets && sockets.size === 0) roomDisconnectedAt.set(info.roomCode, Date.now());
       socketToRoom.delete(ws);
     }
   });
 });
+
+function authenticateHttpManager(req: express.Request, room: GameRoom): Manager | null {
+  const authHeader = String(req.headers.authorization || '');
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) return null;
+  return room.managers.find(manager => matchesReconnectCredential(manager, token)) || null;
+}
 
 // REST simulation controls are the reliable fallback for production deployments.
 // They also let the match start when the browser's WebSocket connection is temporarily
@@ -3769,7 +3206,6 @@ wss.on('connection', (ws, request) => {
 app.post('/api/room/:code/run-matchday', async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase();
-    const managerId = String(req.body?.managerId || '');
     const requestedMatchday = Number(req.body?.matchday);
 
     let room = rooms.get(code);
@@ -3779,7 +3215,9 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
     }
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'league') return res.status(409).json({ error: 'League is not active.' });
-    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const viewer = authenticateHttpManager(req, room);
+    if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const managerId = viewer.id;
     if (!isRoomHost(room, managerId)) return res.status(403).json({ error: 'Only the host can run the matchday fallback.' });
     if (room.transferWindowOpen) return res.status(409).json({ error: 'Mid-season management window is open.' });
 
@@ -3833,7 +3271,6 @@ app.post('/api/room/:code/run-matchday', async (req, res) => {
 app.post('/api/room/:code/run-knockout-match', async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase();
-    const managerId = String(req.body?.managerId || '');
     const fixtureId = String(req.body?.fixtureId || '');
 
     let room = rooms.get(code);
@@ -3843,7 +3280,9 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
     }
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'knockout') return res.status(409).json({ error: 'Knockout phase is not active.' });
-    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const viewer = authenticateHttpManager(req, room);
+    if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const managerId = viewer.id;
 
     const stage = room.knockoutStage;
     if (!stage) return res.status(409).json({ error: 'Knockout stage is unavailable.' });
@@ -3884,7 +3323,6 @@ app.post('/api/room/:code/run-knockout-match', async (req, res) => {
 app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
   try {
     const code = String(req.params.code || '').toUpperCase();
-    const managerId = String(req.body?.managerId || '');
     const fixtureId = String(req.body?.fixtureId || '');
 
     let room = rooms.get(code);
@@ -3894,7 +3332,9 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
     }
     if (!room) return res.status(404).json({ error: 'Lobby not found' });
     if (room.phase !== 'knockout') return res.status(409).json({ error: 'Knockout phase is not active.' });
-    if (!room.managers.some(m => m.id === managerId)) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const viewer = authenticateHttpManager(req, room);
+    if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+    const managerId = viewer.id;
 
     const stage = room.knockoutStage;
     if (!stage) return res.status(409).json({ error: 'Knockout stage is unavailable.' });
@@ -3920,8 +3360,9 @@ app.post('/api/room/:code/complete-knockout-match', async (req, res) => {
 app.get('/api/room/:code', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const code = String(req.params.code || '').toUpperCase();
-  const viewerId = String(req.query?.managerId || '');
-  const reconnectToken = String(req.query?.reconnectToken || '');
+  const authHeader = String(req.headers.authorization || '');
+  const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const effectiveReconnectToken = reconnectToken;
   const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
   if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
   let room = rooms.get(code);
@@ -3931,10 +3372,15 @@ app.get('/api/room/:code', async (req, res) => {
   }
   if (!room) return res.status(404).json({ error: 'Lobby not found' });
   const viewer = room.managers.find(m =>
-    (reconnectToken && matchesReconnectCredential(m, reconnectToken)) ||
-    (!reconnectToken && viewerId && m.id === viewerId)
+    effectiveReconnectToken && matchesReconnectCredential(m, effectiveReconnectToken)
   );
   if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+  const since = Number(req.query?.since);
+  if (Number.isFinite(since) && room.updatedAt <= since) {
+    res.status(304).end();
+    return;
+  }
+
   // HTTP polling can be the first request after a serverless instance changes.
   // Resume absolute auction and phase-readiness clocks after a cold start.
   ensureAuctionTicker(room);
@@ -3970,7 +3416,39 @@ app.get('/api/room/:code', async (req, res) => {
     }
     snapshot.auction.hasSubmittedSecretBid = undefined;
   }
+  snapshot.serverNow = Date.now();
   return res.json(snapshot);
+});
+
+app.get('/api/room/:code/fixture/:fixtureId/events', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const code = String(req.params.code || '').toUpperCase();
+  const fixtureId = String(req.params.fixtureId || '');
+  const authHeader = String(req.headers.authorization || '');
+  const reconnectToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const viewerId = String(req.headers['x-manager-id'] || '');
+  const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!allowRateLimit(apiRequestWindows, clientKey, 120)) return res.status(429).json({ error: 'Too many requests. Try again shortly.' });
+
+  let room = rooms.get(code);
+  if (!room) {
+    room = await loadRoomSnapshot(code) || undefined;
+    if (room) rooms.set(code, room);
+  }
+  if (!room) return res.status(404).json({ error: 'Lobby not found' });
+
+  // Fixture timelines contain private event/player details. Require the
+  // cryptographic reconnect credential; a manager id alone is not an authority.
+  const viewer = room.managers.find(m => reconnectToken && matchesReconnectCredential(m, reconnectToken));
+  if (!viewer) return res.status(403).json({ error: 'Manager session is invalid.' });
+
+  const fixture = room.fixtures.find(item => item.id === fixtureId);
+  if (!fixture) return res.status(404).json({ error: 'Fixture not found' });
+  if (viewer.id !== fixture.homeManagerId && viewer.id !== fixture.awayManagerId && viewer.id !== room.hostId) {
+    return res.status(403).json({ error: 'Only a fixture participant or the host can view match events.' });
+  }
+
+  return res.json({ fixtureId, events: fixture.events || [] });
 });
 
 app.get('/api/health', (_req, res) => {
@@ -4024,9 +3502,8 @@ app.post('/api/solo-game', (req, res) => {
 // Server-side AI endpoint. The API key never reaches the browser.
 app.post('/api/ai/advice', async (req, res) => {
   try {
-    const clientKey = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!allowRateLimit(aiAdviceWindows, clientKey, 20)) return res.status(429).json({ error: 'AI advice rate limit reached. Try again in a minute.' });
-    const prompt = String(req.body?.prompt || '').trim().slice(0, 4000);
+    if (!checkAiRateLimit(req, res)) return;
+    const prompt = String(req.body?.prompt || '').trim().slice(0, 2000);
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
     const content = await callOpenRouter([
       { role: 'system', content: 'You are the tactical assistant for Football Auction League. Give concise, practical football-management advice. Do not invent player data that is not supplied by the user.' },
@@ -4099,8 +3576,6 @@ async function gracefulShutdown(signal: string) {
   });
 }
 
-if (!process.env.VERCEL) {
-  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
-  startServer();
-}
+process.on('SIGTERM', () => void gracefulShutdown('SIGTERM').catch(error => console.error('[shutdown] failed:', error)));
+process.on('SIGINT', () => void gracefulShutdown('SIGINT').catch(error => console.error('[shutdown] failed:', error)));
+startServer();

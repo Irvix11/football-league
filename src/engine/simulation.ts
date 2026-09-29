@@ -1,9 +1,7 @@
-import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult } from '../types/football.js';
+import { Manager, Fixture, MatchEvent, TeamMatchStats, PlayerMatchStat, LivePlayerPosition, SquadPlayerEntry, PenaltyKickResult, Position, PositionCategory } from '../types/football.js';
 import { FORMATIONS_CONFIG, calculateTeamOverall, getPositionCategory, calculatePositionFit } from '../constants/formations.js';
+import { separatePlayerPositions } from '../utils/pitch.js';
 
-/**
- * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
- */
 function average(values: number[], fallback = 70) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
 }
@@ -40,11 +38,15 @@ function estimateShotXg(ballX: number, ballY: number, isHome: boolean, shooter: 
   const goalX = isHome ? 105 : 0;
   const pitchY = (ballY / 100) * 68;
   const distance = Math.hypot((goalX - (ballX / 100) * 105), pitchY - 34);
-  const anglePenalty = Math.min(0.38, Math.abs(pitchY - 34) / 34 * 0.30);
-  const boxBonus = distance <= 16 ? 0.025 : 0;
-  const shotQuality = shooter.player.attributes.sho * 0.0015 + shooter.player.attributes.dri * 0.00035;
-  const raw = 0.025 + 0.22 * Math.exp(-distance / 17) * (0.98 - anglePenalty) + boxBonus + shotQuality;
-  return clamp(raw, 0.018, 0.42);
+  const anglePenalty = Math.min(0.42, Math.abs(pitchY - 34) / 34 * 0.34);
+  const locationXg = 0.010 + 0.65 * Math.exp(-distance / 6.5) * (1 - anglePenalty);
+  const boxBonus = distance <= 16 ? 0.018 : 0;
+  const shooterMultiplier = clamp(
+    0.85 + (shooter.player.attributes.sho - 70) * 0.0025 + (shooter.player.attributes.dri - 70) * 0.001,
+    0.85,
+    1.15
+  );
+  return clamp((locationXg + boxBonus) * shooterMultiplier, 0.01, 0.45);
 }
 
 interface TeamPower {
@@ -55,8 +57,32 @@ interface TeamPower {
   overall: number;
 }
 
+function getAvailableGoalkeeper(
+  preferred: SquadPlayerEntry,
+  starters: SquadPlayerEntry[],
+  sentOffIds: Set<string>,
+): SquadPlayerEntry {
+  if (!sentOffIds.has(preferred.player.id)) return preferred;
+  const replacement = starters.find(player => !sentOffIds.has(player.player.id));
+  if (!replacement) return preferred;
+  return {
+    ...replacement,
+    player: {
+      ...replacement.player,
+      position: 'GK',
+      category: 'GK',
+    },
+    assignedPosition: 'GK',
+  };
+}
+
 function calculateTeamPower(manager: Manager): TeamPower {
-  const starters = manager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
+  // Injured/suspended players are unavailable for selection. Do not let their
+  // reduced-condition multiplier merely weaken the XI: they must be replaced
+  // by an available squad player when one exists.
+  const starters = manager.squad.filter(
+    s => s.isStarting && s.condition.state !== 'INJURED' && s.condition.state !== 'SUSPENDED'
+  );
   // Use the manager's assigned position when determining the tactical unit.
   // This makes manual positional switches (e.g. CM -> CAM, LB -> LWB,
   // ST -> CF) affect the simulation rather than leaving players in their
@@ -93,7 +119,8 @@ function calculateTeamPower(manager: Manager): TeamPower {
         a.def * 0.15 + a.phy * 0.20;
     }
 
-    return raw * (0.70 + fit * 0.003);
+    const conditionMultiplier = s.condition.state === 'INJURED' || s.condition.state === 'SUSPENDED' ? 0.85 : 1;
+    return raw * (0.70 + fit * 0.003) * conditionMultiplier;
   };
 
   const attack = average(attackPlayers.map(rolePerformance), manager.teamOverall || 70);
@@ -188,6 +215,89 @@ function calculateTeamPower(manager: Manager): TeamPower {
   };
 }
 
+function normalizeEventTimeline(events: MatchEvent[], firstHalfEnd: number, secondHalfEnd: number): void {
+  const toSeconds = (event: MatchEvent) => (event.minute || 0) * 60 + (event.second || 0);
+  const setSeconds = (event: MatchEvent, total: number) => {
+    event.minute = Math.floor(total / 60);
+    event.second = total % 60;
+  };
+
+  const halftimeIndex = events.findIndex(event => event.type === 'halftime');
+  if (halftimeIndex >= 0) {
+    let cursor = 1;
+    for (let i = 0; i < halftimeIndex; i++) {
+      const maxBeforeWhistle = Math.max(cursor, firstHalfEnd - 1);
+      const next = Math.min(Math.max(toSeconds(events[i]), cursor), maxBeforeWhistle);
+      setSeconds(events[i], next);
+      cursor = next;
+    }
+    setSeconds(events[halftimeIndex], firstHalfEnd);
+    cursor = firstHalfEnd;
+    const secondKickoff = events.findIndex((event, index) => index > halftimeIndex && event.type === 'kickoff');
+    if (secondKickoff >= 0) {
+      setSeconds(events[secondKickoff], firstHalfEnd + 1);
+      cursor = firstHalfEnd + 1;
+    }
+    for (let i = halftimeIndex + 1; i < events.length; i++) {
+      if (i === secondKickoff) continue;
+      const event = events[i];
+      const current = toSeconds(event);
+      if (event.type === 'extra_time_start' || event.type === 'penalty_shootout_start') break;
+      const next = Math.max(cursor, Math.min(current, secondHalfEnd - 1));
+      setSeconds(event, next);
+      cursor = next;
+    }
+  }
+
+  const extraStart = events.findIndex(event => event.type === 'extra_time_start');
+  const extraHalf = events.findIndex(event => event.type === 'extra_time_half');
+  const extraEnd = events.findIndex(event => event.type === 'extra_time_end');
+  if (extraStart >= 0) {
+    setSeconds(events[extraStart], secondHalfEnd);
+    let cursor = secondHalfEnd;
+    const end = extraHalf >= 0 ? extraHalf : extraEnd >= 0 ? extraEnd : events.length;
+    for (let i = extraStart + 1; i < end; i++) {
+      const next = Math.max(cursor, Math.min(toSeconds(events[i]), 105 * 60 - 1));
+      setSeconds(events[i], next);
+      cursor = next;
+    }
+    if (extraHalf >= 0) {
+      setSeconds(events[extraHalf], 105 * 60);
+      cursor = 105 * 60;
+    }
+    if (extraEnd >= 0) {
+      for (let i = extraHalf >= 0 ? extraHalf + 1 : extraStart + 1; i < extraEnd; i++) {
+        const next = Math.max(cursor, Math.min(toSeconds(events[i]), 120 * 60 - 1));
+        setSeconds(events[i], next);
+        cursor = next;
+      }
+      setSeconds(events[extraEnd], 120 * 60);
+    }
+  }
+
+  const shootoutStart = events.findIndex(event => event.type === 'penalty_shootout_start');
+  if (shootoutStart >= 0) {
+    let cursor = extraEnd >= 0 ? toSeconds(events[extraEnd]) : secondHalfEnd;
+    for (let i = shootoutStart; i < events.length; i++) {
+      if (events[i].type === 'fulltime') continue;
+      const next = Math.max(cursor, toSeconds(events[i]));
+      setSeconds(events[i], next);
+      cursor = next;
+    }
+  }
+
+  let previous = 0;
+  for (const event of events) {
+    const current = toSeconds(event);
+    const next = Math.max(previous, current);
+    setSeconds(event, next);
+    previous = next;
+  }
+}
+
+/**
+ * Seeded PRNG (Mulberry32) for reproducible, deterministic match simulation.
+ */
 function createPrng(seed: number) {
   let s = seed >>> 0;
   return function () {
@@ -199,83 +309,36 @@ function createPrng(seed: number) {
 }
 
 function getPlayerNumber(starters: SquadPlayerEntry[], playerId: string): number {
-  const index = starters.findIndex(entry => entry.player.id === playerId);
+  const entry = starters.find(candidate => candidate.player.id === playerId);
+  if (!entry) return 9;
+  if (getPositionCategory(entry.assignedPosition || entry.player.position) === 'GK') return 1;
+  if (Number.isInteger(entry.startingSlotIndex)) return (entry.startingSlotIndex as number) + 1;
+  const index = starters.findIndex(candidate => candidate.player.id === playerId);
   return index >= 0 ? index + 1 : 9;
 }
 
-/**
- * Resolves overlapping players so they maintain visual distance while preserving tactical shape.
- * Enforces minimum visual distance so midfield and clustered zones remain completely readable.
- */
-function resolveCollisionSeparation(coords: LivePlayerPosition[], activePlayerId?: string): LivePlayerPosition[] {
-  const resolved = coords.map(p => ({ ...p }));
-  const MIN_DIST = 6.0; // Minimum distance in % coordinates on horizontal pitch
-  const PASSES = 8;     // 8 iterative relaxation passes for clean, organic spreading
-
-  for (let pass = 0; pass < PASSES; pass++) {
-    for (let i = 0; i < resolved.length; i++) {
-      for (let j = i + 1; j < resolved.length; j++) {
-        const p1 = resolved[i];
-        const p2 = resolved[j];
-
-        let dx = p2.x - p1.x;
-        let dy = p2.y - p1.y;
-        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-          dx = (j % 2 === 0 ? 1 : -1) * 0.5;
-          dy = (i % 2 === 0 ? 1 : -1) * 0.5;
-        }
-        // Pitch aspect ratio compensation (105 / 68 = ~1.54)
-        const dist = Math.hypot(dx, dy * 1.54);
-
-        if (dist < MIN_DIST) {
-          const overlap = (MIN_DIST - dist) / 2;
-          const nx = dx / (dist || 0.001);
-          const ny = dy / (dist || 0.001);
-
-          const p1IsActive = p1.id === activePlayerId || p1.hasBall;
-          const p2IsActive = p2.id === activePlayerId || p2.hasBall;
-
-          if (p1IsActive && !p2IsActive) {
-            // Keep active ball carrier pinned; push the other player away
-            p2.x += nx * overlap * 2.2;
-            p2.y += ny * overlap * 2.2;
-          } else if (p2IsActive && !p1IsActive) {
-            // Keep active ball carrier pinned; push p1 away
-            p1.x -= nx * overlap * 2.2;
-            p1.y -= ny * overlap * 2.2;
-          } else {
-            // Symmetrically push both players apart naturally
-            p1.x -= nx * overlap * 1.05;
-            p1.y -= ny * overlap * 1.05;
-            p2.x += nx * overlap * 1.05;
-            p2.y += ny * overlap * 1.05;
-          }
-
-          // Bound clamp
-          p1.x = Math.max(4.0, Math.min(96.0, p1.x));
-          p1.y = Math.max(7.0, Math.min(93.0, p1.y));
-          p2.x = Math.max(4.0, Math.min(96.0, p2.x));
-          p2.y = Math.max(7.0, Math.min(93.0, p2.y));
-        }
-      }
-    }
+function orderStartersForFormation(starters: SquadPlayerEntry[], slots: Array<{ index: number; position: Position; category: PositionCategory }>): SquadPlayerEntry[] {
+  const source = starters.filter(Boolean);
+  const used = new Set<string>();
+  const ordered: SquadPlayerEntry[] = [];
+  for (const slot of slots) {
+    const candidate = source.find(entry => entry.startingSlotIndex === slot.index && !used.has(entry.player.id)) ||
+      source
+        .filter(entry => !used.has(entry.player.id))
+        .sort((a, b) => {
+          const aFit = calculatePositionFit(a.player.position, a.player.alternatePositions || [], slot.position);
+          const bFit = calculatePositionFit(b.player.position, b.player.alternatePositions || [], slot.position);
+          const aCat = getPositionCategory(a.assignedPosition || a.player.position) === slot.category ? 1 : 0;
+          const bCat = getPositionCategory(b.assignedPosition || b.player.position) === slot.category ? 1 : 0;
+          return bCat - aCat || bFit - aFit;
+        })[0];
+    if (!candidate) continue;
+    used.add(candidate.player.id);
+    ordered.push(candidate);
   }
-
-  // Ensure starting goalkeepers stay firmly anchored inside their penalty areas
-  for (const p of resolved) {
-    if (p.number === 1) {
-      if (p.team === 'home') {
-        p.x = Math.max(4.5, Math.min(13.0, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      } else {
-        p.x = Math.max(87.0, Math.min(95.5, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      }
-    }
-  }
-
-  return resolved;
+  return ordered;
 }
+
 
 /**
  * Calculate dynamic 2D coordinates for all 22 players on the pitch based on:
@@ -321,11 +384,13 @@ function generate22PlayerCoordinates(
   const awayConfig = FORMATIONS_CONFIG[awayFormation as keyof typeof FORMATIONS_CONFIG] || FORMATIONS_CONFIG['4-3-3'];
 
   const coords: LivePlayerPosition[] = [];
+  const orderedHomeStarters = orderStartersForFormation(homeStarters, homeConfig.slots);
+  const orderedAwayStarters = orderStartersForFormation(awayStarters, awayConfig.slots);
 
   // Home Outfielders (defend left goal X=3, attack right goal X=97)
-  homeStarters.slice(0, 11).forEach((entry, idx) => {
-    const slot = homeConfig.slots[idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
-    const isGK = idx === 0;
+  orderedHomeStarters.forEach((entry, idx) => {
+    const slot = homeConfig.slots[entry.startingSlotIndex ?? idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
+    const isGK = slot.category === 'GK';
 
     let x = 0;
     let y = 0;
@@ -415,7 +480,7 @@ function generate22PlayerCoordinates(
     coords.push({
       id: entry.player.id,
       name: entry.player.name,
-      number: idx + 1,
+      number: getPlayerNumber(orderedHomeStarters, entry.player.id),
       position: (entry.assignedPosition || slot.position || entry.player.position) as any,
       category: entry.player.category,
       overall: entry.player.overall,
@@ -428,9 +493,9 @@ function generate22PlayerCoordinates(
   });
 
   // Away Outfielders (defend right goal X=97, attack left goal X=3)
-  awayStarters.slice(0, 11).forEach((entry, idx) => {
-    const slot = awayConfig.slots[idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
-    const isGK = idx === 0;
+  orderedAwayStarters.forEach((entry, idx) => {
+    const slot = awayConfig.slots[entry.startingSlotIndex ?? idx] || { x: 50, y: 50, position: entry.assignedPosition || 'CM', category: entry.player.category };
+    const isGK = slot.category === 'GK';
 
     let x = 0;
     let y = 0;
@@ -451,7 +516,7 @@ function generate22PlayerCoordinates(
     } else {
       const shape = tacticalShapeAdjustments(awayTactics, possession, false);
       let baseDepth = 100 - (15 + (slot.y / 100) * 65) - shape.depth;
-      const baseWidth = 12 + (slot.x / 100) * 76;
+      const baseWidth = 100 - (12 + (slot.x / 100) * 76);
 
       if (slot.position === 'CDM') baseDepth += 5;
       else if (slot.position === 'CAM') baseDepth -= 5;
@@ -513,7 +578,7 @@ function generate22PlayerCoordinates(
     coords.push({
       id: entry.player.id,
       name: entry.player.name,
-      number: idx + 1,
+      number: getPlayerNumber(orderedAwayStarters, entry.player.id),
       position: (entry.assignedPosition || slot.position || entry.player.position) as any,
       category: entry.player.category,
       overall: entry.player.overall,
@@ -525,7 +590,24 @@ function generate22PlayerCoordinates(
     });
   });
 
-  return resolveCollisionSeparation(coords, activeAction === 'passing' ? targetPlayerId : activePlayerId);
+  while (coords.length < 22) {
+    const fillerIndex = coords.length + 1;
+    coords.push({
+      id: `off-pitch-${fillerIndex}`,
+      name: 'Off pitch',
+      number: 0,
+      position: 'OFF' as any,
+      category: 'OFF' as any,
+      overall: 0,
+      team: fillerIndex % 2 === 0 ? 'home' : 'away',
+      x: fillerIndex % 2 === 0 ? 1 : 99,
+      y: 1 + (fillerIndex % 10) * 5,
+      hasBall: false,
+      action: 'idle',
+    });
+  }
+
+  return separatePlayerPositions(coords, activeAction === 'passing' ? targetPlayerId : activePlayerId);
 }
 
 const DEFAULT_MATCH_TACTICS = {
@@ -542,49 +624,80 @@ function normalizeManagerForMatch(manager: Manager): Manager {
   const squad = Array.isArray(manager.squad) ? manager.squad.filter(Boolean) : [];
   const normalizedSquad = squad
     .filter((entry) => entry?.player?.id && entry.player.overall !== undefined)
-    .map((entry) => ({
-      ...entry,
-      isStarting: Boolean(entry.isStarting),
-      condition: entry.condition || {
-        state: 'FIT' as const,
-        fatigue: 0,
-        injuryMatchesLeft: 0,
-        yellowCards: 0,
-        redCards: 0,
-        suspensionMatchesLeft: 0,
-      },
-      assignedPosition: entry.assignedPosition || entry.player?.position,
-      player: {
-        ...entry.player,
-        alternatePositions: Array.isArray(entry.player?.alternatePositions) ? entry.player.alternatePositions : [],
-        attributes: {
-          pac: Number(entry.player?.attributes?.pac ?? 50),
-          sho: Number(entry.player?.attributes?.sho ?? 50),
-          pas: Number(entry.player?.attributes?.pas ?? 50),
-          dri: Number(entry.player?.attributes?.dri ?? 50),
-          def: Number(entry.player?.attributes?.def ?? 50),
-          phy: Number(entry.player?.attributes?.phy ?? 50),
+    .map((entry) => {
+      const attributes = { ...entry.player.attributes };
+      for (const key of ['pac', 'sho', 'pas', 'dri', 'def', 'phy'] as const) {
+        if (!Number.isFinite(Number(attributes?.[key]))) {
+          console.warn(`[simulation] missing ${key} for player ${entry.player.id}; using 50`);
+          attributes[key] = 50;
+        }
+      }
+      return {
+        ...entry,
+        isStarting: Boolean(entry.isStarting),
+        condition: entry.condition || {
+          state: 'FIT' as const,
+          fatigue: 0,
+          injuryMatchesLeft: 0,
+          yellowCards: 0,
+          redCards: 0,
+          suspensionMatchesLeft: 0,
         },
-      },
-    }));
+        assignedPosition: entry.assignedPosition || entry.player?.position,
+        player: {
+          ...entry.player,
+          alternatePositions: Array.isArray(entry.player?.alternatePositions) ? entry.player.alternatePositions : [],
+          attributes,
+        },
+      };
+    });
 
-  const eligible = normalizedSquad.filter(
-    s => s.condition.state !== 'SUSPENDED' && s.condition.state !== 'INJURED'
-  );
-  const explicitStarters = eligible.filter(s => s.isStarting);
-  const starters = explicitStarters.length >= 11 ? explicitStarters.slice(0, 11) : eligible.slice(0, 11);
-  const starterIds = new Set(starters.map(s => s.player.id));
+  if (normalizedSquad.length < 11) {
+    throw new Error(`Cannot simulate ${manager.name || 'team'}: squad has ${normalizedSquad.length}/11 players. Finish the squad before playing.`);
+  }
+
+  const formation = manager.formation || '4-3-3';
+  const config = FORMATIONS_CONFIG[formation] || FORMATIONS_CONFIG['4-3-3'];
+  const explicitStarters = normalizedSquad.filter(s => s.isStarting);
+  // XI-only squads have no bench: if the saved starting flags are incomplete,
+  // use the complete 11-player squad rather than silently slicing arbitrary entries.
+  const source = explicitStarters.length === 11 ? explicitStarters : normalizedSquad;
+  if (explicitStarters.length !== 11) {
+    console.warn(`[simulation] ${manager.name || 'team'} has ${explicitStarters.length} explicit starters; using the complete 11-player squad and preserving saved slot indices where present.`);
+  }
+
+  const used = new Set<string>();
+  const ordered: SquadPlayerEntry[] = [];
+  for (const slot of config.slots) {
+    const exact = source.find(entry => entry.startingSlotIndex === slot.index && !used.has(entry.player.id));
+    const candidate = exact || source
+      .filter(entry => !used.has(entry.player.id))
+      .sort((a, b) => {
+        const aCat = getPositionCategory(a.assignedPosition || a.player.position) === slot.category ? 1 : 0;
+        const bCat = getPositionCategory(b.assignedPosition || b.player.position) === slot.category ? 1 : 0;
+        return bCat - aCat ||
+          calculatePositionFit(b.player.position, b.player.alternatePositions || [], slot.position) -
+          calculatePositionFit(a.player.position, a.player.alternatePositions || [], slot.position);
+      })[0];
+    if (!candidate) continue;
+    used.add(candidate.player.id);
+    ordered.push({
+      ...candidate,
+      isStarting: true,
+      startingSlotIndex: slot.index,
+      assignedPosition: candidate.assignedPosition || slot.position,
+    });
+  }
+
+  if (ordered.length < 11) {
+    throw new Error(`Cannot simulate ${manager.name || 'team'}: unable to map 11 players onto formation slots.`);
+  }
+
+  const starterIds = new Set(ordered.map(s => s.player.id));
   const repairedSquad = normalizedSquad.map(s => ({
     ...s,
     isStarting: starterIds.has(s.player.id),
   }));
-
-  if (repairedSquad.length < 11) {
-    throw new Error(`Cannot simulate ${manager.name || 'team'}: squad has ${repairedSquad.length}/11 valid players. Finish the squad before playing.`);
-  }
-  if (starters.length < 11) {
-    throw new Error(`Cannot simulate ${manager.name || 'team'}: only ${starters.length}/11 players are available.`);
-  }
 
   const safeTactics = {
     ...DEFAULT_MATCH_TACTICS,
@@ -593,15 +706,16 @@ function normalizeManagerForMatch(manager: Manager): Manager {
 
   return {
     ...manager,
-    formation: manager.formation || '4-3-3',
+    formation,
     tactics: safeTactics,
-    squad: repairedSquad,
+    squad: ordered.map(entry => ({ ...entry, isStarting: true })).concat(
+      repairedSquad.filter(s => !starterIds.has(s.player.id))
+    ),
     teamOverall: Number.isFinite(Number(manager.teamOverall))
       ? Number(manager.teamOverall)
-      : calculateTeamOverall(manager.formation || '4-3-3', repairedSquad),
+      : calculateTeamOverall(formation, repairedSquad),
   };
 }
-
 export function simulateMatch(
   homeManager: Manager,
   awayManager: Manager,
@@ -614,16 +728,16 @@ export function simulateMatch(
 ): Fixture {
   homeManager = normalizeManagerForMatch(homeManager);
   awayManager = normalizeManagerForMatch(awayManager);
-  const seed = customSeed || (Date.now() ^ (matchday * 1337));
+  const seed = customSeed ?? (Date.now() ^ (matchday * 1337));
   const rand = createPrng(seed);
 
-  const homeStarters = homeManager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
-  const awayStarters = awayManager.squad.filter(s => s.isStarting && s.condition.state !== 'SUSPENDED');
+  const homeStarters = homeManager.squad.filter(s => s.isStarting);
+  const awayStarters = awayManager.squad.filter(s => s.isStarting);
 
   const homeOvr = calculateTeamOverall(homeManager.formation, homeManager.squad);
   const awayOvr = calculateTeamOverall(awayManager.formation, awayManager.squad);
-  const homePower = calculateTeamPower(homeManager);
-  const awayPower = calculateTeamPower(awayManager);
+  let homePower = calculateTeamPower(homeManager);
+  let awayPower = calculateTeamPower(awayManager);
 
   // Home advantage affects possession, chance creation and defensive confidence,
   // rather than simply adding a large amount to player ratings.
@@ -651,7 +765,8 @@ export function simulateMatch(
       saves: 0,
       yellowCard: false,
       redCard: false,
-      rating: 6.0,
+      fouls: 0,
+      rating: 5.5,
     });
   }
 
@@ -670,9 +785,20 @@ export function simulateMatch(
       saves: 0,
       yellowCard: false,
       redCard: false,
-      rating: 6.0,
+      fouls: 0,
+      rating: 5.5,
     });
   }
+
+  const recordShot = (stats: TeamMatchStats, player: PlayerMatchStat | undefined, onTarget: boolean, goal: boolean) => {
+    stats.shots++;
+    if (onTarget) stats.shotsOnTarget++;
+    if (goal && player) {
+      player.goals++;
+      player.rating += 1.4;
+    }
+    if (player) player.shots++;
+  };
 
   const events: MatchEvent[] = [];
   const sentOffIds = new Set<string>();
@@ -763,6 +889,8 @@ export function simulateMatch(
 
   // Monotonically increasing match clock generator (Requirement 8)
   let currentTotalSeconds = 1; // 00:01 Kickoff
+  const firstHalfEnd = 2700 + 60 + Math.floor(rand() * 180);
+  const secondHalfEnd = 5400 + 60 + Math.floor(rand() * 300);
 
   // 1. First Half Kickoff (00:01)
   const homeKicker = pick(homeAtts.length > 0 ? homeAtts : homeStarters);
@@ -784,7 +912,7 @@ export function simulateMatch(
     ballCoordinates: { x: 50, y: 50 },
     ballStartCoordinates: { x: 50, y: 50 },
     playerCoordinates: generate22PlayerCoordinates(
-      homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+      homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
       homeTactics, awayTactics, 50, 50, 'home', homeKicker.player.id, homeMidReceiver.player.id, 'passing'
     ),
     momentum,
@@ -797,15 +925,15 @@ export function simulateMatch(
   let isCounterAttacking = false;
 
   // Simulate 90 minutes (up to 5350 seconds)
-  while (currentTotalSeconds < 5350) {
+  while (currentTotalSeconds < secondHalfEnd) {
     // Half Time check at 45:00 (2700s)
-    if (currentTotalSeconds >= 2700 && !halfTimeWhistled) {
+    if (currentTotalSeconds >= firstHalfEnd && !halfTimeWhistled) {
       halfTimeWhistled = true;
-      currentTotalSeconds = 2700; // Exact 45:00
+      currentTotalSeconds = firstHalfEnd;
 
       pushEvent({
-        minute: 45,
-        second: 0,
+        minute: Math.floor(firstHalfEnd / 60),
+        second: firstHalfEnd % 60,
         type: 'halftime',
         team: 'home',
         playerId: homeKicker.player.id,
@@ -814,19 +942,19 @@ export function simulateMatch(
         ballCoordinates: { x: 50, y: 50 },
         ballStartCoordinates: { x: 50, y: 50 },
         playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
           homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
         ),
         momentum,
       });
 
-      // Second half kickoff at 45:01 (2701s)
-      currentTotalSeconds = 2701;
+      // Second-half kickoff follows the actual first-half whistle.
+      currentTotalSeconds = firstHalfEnd + 1;
       const shAwayKicker = pick(awayAtts.length > 0 ? awayAtts : awayStarters);
       const shAwayMidRec = pick(awayMids.length > 0 ? awayMids : awayStarters);
       pushEvent({
-        minute: 45,
-        second: 1,
+        minute: Math.floor(currentTotalSeconds / 60),
+        second: currentTotalSeconds % 60,
         type: 'kickoff',
         team: 'away',
         playerId: shAwayKicker.player.id,
@@ -837,7 +965,7 @@ export function simulateMatch(
         ballCoordinates: { x: 50, y: 50 },
         ballStartCoordinates: { x: 50, y: 50 },
         playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
           homeTactics, awayTactics, 50, 50, 'away', shAwayKicker.player.id, shAwayMidRec.player.id, 'passing'
         ),
         momentum,
@@ -862,15 +990,16 @@ export function simulateMatch(
 
     const atkMids = (isHome ? homeMids : awayMids).filter(s => !sentOffIds.has(s.player.id));
     const atkAtts = (isHome ? homeAtts : awayAtts).filter(s => !sentOffIds.has(s.player.id));
+    const atkDefs = (isHome ? homeDefs : awayDefs).filter(s => !sentOffIds.has(s.player.id));
     const defDefs = (isHome ? awayDefs : homeDefs).filter(s => !sentOffIds.has(s.player.id));
-    const defGK = isHome ? awayGK : homeGK;
+    const defGK = getAvailableGoalkeeper(isHome ? awayGK : homeGK, defendingStarters, sentOffIds);
 
     // Step 1: Progression Pass / Buildup (Tactics Influence: Possession vs Counter vs Long Ball)
     const isPossessionStyle = atkTactics.style === 'Possession' || atkTactics.tempo < 45;
     const isLongBallStyle = atkTactics.style === 'Long Ball';
 
-    const passer = isLongBallStyle && defDefs.length > 0 
-      ? pick(defDefs) 
+    const passer = isLongBallStyle && atkDefs.length > 0 
+      ? pick(atkDefs) 
       : pick(atkMids.length > 0 ? atkMids : attackingStarters);
     
     const receiverPool = (atkAtts.length > 0 ? atkAtts : attackingStarters)
@@ -920,14 +1049,92 @@ export function simulateMatch(
       ballCoordinates: { x: Number(newBallX.toFixed(1)), y: Number(newBallY.toFixed(1)) },
       ballStartCoordinates: { x: Number(startX.toFixed(1)), y: Number(startY.toFixed(1)) },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, newBallX, newBallY, currentPossession, passer.player.id, receiver.player.id, 'passing'
       ),
       momentum,
     });
 
+    // Progressive passes can be intercepted or flagged offside. These are real
+    // possession-ending events, so they stop the attacking sequence instead of
+    // merely adding commentary/stat padding.
+    const interceptionChance = clamp(
+      0.045 + (defTactics.pressingIntensity - 50) * 0.0007 - (atkTactics.tempo - 50) * 0.0002,
+      0.025,
+      0.095,
+    );
+    const offsideChance = receiver.player.category === 'ATT' && newBallX > (isHome ? 72 : 28)
+      ? clamp(0.035 + (atkTactics.tempo - 50) * 0.00035, 0.02, 0.07)
+      : 0;
+
+    if (defDefs.length > 0 && rand() < interceptionChance) {
+      const interceptor = pick(defDefs, 'interception defenders');
+      const interceptorStat = playerStatsMap.get(interceptor.player.id);
+      if (interceptorStat) {
+        interceptorStat.interceptions++;
+        interceptorStat.rating += 0.10;
+      }
+      currentTotalSeconds += 2;
+      pushEvent({
+        minute: Math.floor(currentTotalSeconds / 60),
+        second: currentTotalSeconds % 60,
+        type: 'interception',
+        team: isHome ? 'away' : 'home',
+        playerId: interceptor.player.id,
+        playerName: interceptor.player.name,
+        targetPlayerId: receiver.player.id,
+        targetPlayerName: receiver.player.name,
+        commentary: `${interceptor.player.name} reads the pass and makes a clean interception before ${receiver.player.name} can collect it.`,
+        ballCoordinates: { x: newBallX, y: newBallY },
+        ballStartCoordinates: { x: startX, y: startY },
+        playerCoordinates: generate22PlayerCoordinates(
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)),
+          awayStarters.filter(s => !sentOffIds.has(s.player.id)),
+          homeManager.formation, awayManager.formation,
+          homeTactics, awayTactics, newBallX, newBallY,
+          isHome ? 'away' : 'home', interceptor.player.id, undefined, 'tackling'
+        ),
+        momentum: isHome ? momentum - 4 : momentum + 4,
+      });
+      ballX = newBallX;
+      ballY = newBallY;
+      currentPossession = isHome ? 'away' : 'home';
+      isCounterAttacking = false;
+      continue;
+    }
+
+    if (offsideChance > 0 && rand() < offsideChance) {
+      atkStats.offsides++;
+      currentTotalSeconds += 2;
+      pushEvent({
+        minute: Math.floor(currentTotalSeconds / 60),
+        second: currentTotalSeconds % 60,
+        type: 'offside',
+        team: isHome ? 'home' : 'away',
+        playerId: receiver.player.id,
+        playerName: receiver.player.name,
+        commentary: `Offside against ${receiver.player.name} as the forward run starts too early.`,
+        ballCoordinates: { x: newBallX, y: newBallY },
+        ballStartCoordinates: { x: startX, y: startY },
+        playerCoordinates: generate22PlayerCoordinates(
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)),
+          awayStarters.filter(s => !sentOffIds.has(s.player.id)),
+          homeManager.formation, awayManager.formation,
+          homeTactics, awayTactics, newBallX, newBallY,
+          isHome ? 'away' : 'home', receiver.player.id, undefined, 'running'
+        ),
+        momentum: isHome ? momentum - 2 : momentum + 2,
+      });
+      ballX = newBallX;
+      ballY = newBallY;
+      currentPossession = isHome ? 'away' : 'home';
+      isCounterAttacking = false;
+      continue;
+    }
+
     ballX = newBallX;
     ballY = newBallY;
+    const wasCounter = isCounterAttacking;
     isCounterAttacking = false; // reset counter flag after initial surge
 
     // Advance 8-16 seconds for the ensuing duel or shot
@@ -979,7 +1186,7 @@ export function simulateMatch(
         0.125 +
           (atkTactics.tempo - 50) * 0.0009 +
           (atkTactics.risk - 50) * 0.0008 +
-          (isCounterAttacking ? 0.035 : 0)
+          (wasCounter ? 0.035 : 0)
       )
     );
     const crossCutoff = Math.min(0.82, turnoverThreshold + crossChance);
@@ -989,7 +1196,9 @@ export function simulateMatch(
 
     // ACTION A: Turnover / Tackle / Foul by Defender
     if (actionRoll < turnoverThreshold) {
-      const defender = pick(defDefs.length > 0 ? defDefs : defendingStarters);
+      const weightedDefenders = [...defDefs, ...defDefs, ...defendingStarters]
+        .filter((player, index, all) => all.findIndex(candidate => candidate.player.id === player.player.id) === index);
+      const defender = pick(weightedDefenders.length > 0 ? weightedDefenders : defendingStarters);
       const foulIntensity = clamp(
         0.13 +
         (defTactics.style === 'Aggressive' ? 0.12 : 0) +
@@ -1002,6 +1211,8 @@ export function simulateMatch(
 
       if (isFoul) {
         defStats.fouls++;
+        const defStatForFoul = playerStatsMap.get(defender.player.id);
+        if (defStatForFoul) { defStatForFoul.fouls++; defStatForFoul.rating -= 0.15; }
         const isCard = rand() < 0.22;
         if (isCard) {
           defStats.yellowCards++;
@@ -1010,6 +1221,18 @@ export function simulateMatch(
             defStat.redCard = true;
             defStats.redCards++;
             sentOffIds.add(defender.player.id);
+            if (defStat) defStat.minutes = actionMin;
+            homePower = calculateTeamPower(homeManager);
+            awayPower = calculateTeamPower(awayManager);
+            const affectedTeamIsHome = !isHome;
+            const missingMultiplier = Math.pow(0.90, [...sentOffIds].filter(id =>
+              (isHome ? awayStarters : homeStarters).some(player => player.player.id === id)
+            ).length);
+            if (affectedTeamIsHome) {
+              homePower = { ...homePower, attack: homePower.attack * missingMultiplier, midfield: homePower.midfield * missingMultiplier, defense: homePower.defense * missingMultiplier, overall: homePower.overall * missingMultiplier };
+            } else {
+              awayPower = { ...awayPower, attack: awayPower.attack * missingMultiplier, midfield: awayPower.midfield * missingMultiplier, defense: awayPower.defense * missingMultiplier, overall: awayPower.overall * missingMultiplier };
+            }
             pushEvent({
               minute: actionMin,
               second: actionSec,
@@ -1021,7 +1244,9 @@ export function simulateMatch(
               ballCoordinates: { x: ballX, y: ballY },
               ballStartCoordinates: { x: ballX, y: ballY },
               playerCoordinates: generate22PlayerCoordinates(
-                homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+                homeStarters.filter(s => !sentOffIds.has(s.player.id) || s.player.id === defender.player.id),
+                awayStarters.filter(s => !sentOffIds.has(s.player.id) || s.player.id === defender.player.id),
+                homeManager.formation, awayManager.formation,
                 homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
               ),
               momentum: isHome ? momentum - 5 : momentum + 5,
@@ -1039,7 +1264,7 @@ export function simulateMatch(
             ballCoordinates: { x: ballX, y: ballY },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
             ),
             momentum: isHome ? momentum + 3 : momentum - 3,
@@ -1057,7 +1282,7 @@ export function simulateMatch(
             ballCoordinates: { x: ballX, y: ballY },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
             ),
             momentum,
@@ -1072,14 +1297,24 @@ export function simulateMatch(
           defStat.rating += 0.15;
         }
 
-        const tackleCommentary = defTactics.style === 'High Press'
-          ? `Gegenpressing success! ${defender.player.name} swarms ${receiver.player.name} and forces an immediate turnover!`
-          : `Superb timing! ${defender.player.name} steps in with a perfectly timed challenge to dispossess ${receiver.player.name}.`;
+        const isInterception = rand() < 0.32;
+        const tackleCommentary = isInterception
+          ? `Interception! ${defender.player.name} reads the pass and cuts out ${receiver.player.name}'s delivery.`
+          : defTactics.style === 'High Press'
+            ? `Gegenpressing success! ${defender.player.name} swarms ${receiver.player.name} and forces an immediate turnover!`
+            : `Superb timing! ${defender.player.name} steps in with a perfectly timed challenge to dispossess ${receiver.player.name}.`;
+
+        if (isInterception) {
+          if (defStat) {
+            defStat.interceptions += 1;
+            defStat.rating += 0.12;
+          }
+        }
 
         pushEvent({
           minute: actionMin,
           second: actionSec,
-          type: 'tackle',
+          type: isInterception ? 'interception' : 'tackle',
           team: isHome ? 'away' : 'home',
           playerId: defender.player.id,
           playerName: defender.player.name,
@@ -1087,7 +1322,7 @@ export function simulateMatch(
           ballCoordinates: { x: ballX, y: ballY },
           ballStartCoordinates: { x: ballX, y: ballY },
           playerCoordinates: generate22PlayerCoordinates(
-            homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+            homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
             homeTactics, awayTactics, ballX, ballY, currentPossession, defender.player.id, receiver.player.id, 'tackling'
           ),
           momentum: isHome ? momentum - 5 : momentum + 5,
@@ -1125,7 +1360,7 @@ export function simulateMatch(
         ballCoordinates: { x: crossTargetX, y: crossTargetY },
         ballStartCoordinates: { x: ballX, y: ballY },
         playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+          homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
           homeTactics, awayTactics, crossTargetX, crossTargetY, currentPossession, winger.player.id, striker.player.id, 'passing'
         ),
         momentum: isHome ? momentum + 6 : momentum - 6,
@@ -1139,7 +1374,7 @@ export function simulateMatch(
       const finishMin = Math.floor(currentTotalSeconds / 60);
       const finishSec = currentTotalSeconds % 60;
 
-      atkStats.shots++;
+      const strikerStat = playerStatsMap.get(striker.player.id);
       let crossGoalProbability = 0.105 + (atkPower.attack - defPower.defense) * 0.0018;
       if (defTactics.style === 'Low Block') crossGoalProbability *= 0.74;
       if (atkTactics.attackWidth > 65) crossGoalProbability *= 1.08;
@@ -1150,12 +1385,8 @@ export function simulateMatch(
       if (isGoal) {
         if (isHome) homeScore++; else awayScore++;
         atkStats.score++;
-        const sStat = playerStatsMap.get(striker.player.id);
-        if (sStat) {
-          sStat.goals++;
-          sStat.shots++;
-          sStat.rating += 1.3;
-        }
+        recordShot(atkStats, strikerStat, true, true);
+        if (strikerStat) strikerStat.rating += -0.1;
         const wStat = playerStatsMap.get(winger.player.id);
         if (wStat) {
           wStat.assists++;
@@ -1179,7 +1410,7 @@ export function simulateMatch(
           ballCoordinates: { x: goalNetX, y: goalNetY },
           ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
           playerCoordinates: generate22PlayerCoordinates(
-            homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+            homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
             homeTactics, awayTactics, goalNetX, goalNetY, currentPossession, striker.player.id, defGK.player.id, 'celebrating'
           ),
           momentum: isHome ? Math.min(100, momentum + 25) : Math.max(-100, momentum - 25),
@@ -1190,21 +1421,29 @@ export function simulateMatch(
         currentPossession = isHome ? 'away' : 'home';
       } else {
         // Keeper Save or Cleared Corner
+        const gkStat = playerStatsMap.get(defGK.player.id);
+        if (gkStat) { gkStat.saves++; gkStat.rating += 0.45; }
         const isCorner = rand() < 0.5;
+        recordShot(atkStats, strikerStat, isCorner, false);
         if (isCorner) {
           atkStats.corners++;
+          const cornerStarters = isHome ? homeStarters : awayStarters;
+          const requestedCornerTakerId = isHome ? homeRoles.cornerTakerId : awayRoles.cornerTakerId;
+          const cornerTaker = cornerStarters.find(p => p.player.id === requestedCornerTakerId && !sentOffIds.has(p.player.id)) ||
+            cornerStarters.find(p => p.player.id === winger.player.id && !sentOffIds.has(p.player.id)) ||
+            pick(cornerStarters.filter(p => !sentOffIds.has(p.player.id)), 'corner takers');
           pushEvent({
             minute: finishMin,
             second: finishSec,
             type: 'corner',
             team: isHome ? 'home' : 'away',
-            playerId: defGK.player.id,
-            playerName: defGK.player.name,
+            playerId: cornerTaker.player.id,
+            playerName: cornerTaker.player.name,
             commentary: `Pushed over the crossbar! Fantastic reaction save by ${defGK.player.name} concedes a corner kick.`,
             ballCoordinates: { x: isHome ? 98 : 2, y: rand() < 0.5 ? 4 : 96 },
             ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, isHome ? 98 : 2, 50, currentPossession, defGK.player.id, undefined, 'diving'
             ),
             momentum,
@@ -1221,7 +1460,7 @@ export function simulateMatch(
             ballCoordinates: { x: isHome ? 99 : 1, y: rand() < 0.5 ? 26 : 74 },
             ballStartCoordinates: { x: crossTargetX, y: crossTargetY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, isHome ? 95 : 5, 50, currentPossession, striker.player.id, defGK.player.id, 'shooting'
             ),
             momentum,
@@ -1238,16 +1477,14 @@ export function simulateMatch(
         ...atkAtts,
         ...atkAtts,
         ...atkMids,
-        ...(isHome ? homeDefs : awayDefs).slice(0, 1),
+        ...(isHome ? homeDefs : awayDefs).filter(player => !sentOffIds.has(player.player.id)).slice(0, 1),
       ];
       const shooter = pick(
         chanceShooters.length > 0 ? chanceShooters : attackingStarters,
         'shot taker'
       );
       const targetGoalX = isHome ? 97 : 3;
-      atkStats.shots++;
       const shooterStat = playerStatsMap.get(shooter.player.id);
-      if (shooterStat) shooterStat.shots++;
 
       const shooterQuality =
         shooter.player.attributes.sho * 0.52 +
@@ -1268,6 +1505,7 @@ export function simulateMatch(
       );
 
       if (!isOnTarget) {
+        recordShot(atkStats, shooterStat, false, false);
         pushEvent({
           minute: actionMin,
           second: actionSec,
@@ -1279,26 +1517,28 @@ export function simulateMatch(
           ballCoordinates: { x: targetGoalX, y: rand() < 0.5 ? 24 : 76 },
           ballStartCoordinates: { x: ballX, y: ballY },
           playerCoordinates: generate22PlayerCoordinates(
-            homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+            homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
             homeTactics, awayTactics, targetGoalX, 50, currentPossession, shooter.player.id, defGK.player.id, 'shooting'
           ),
           momentum: isHome ? momentum + 4 : momentum - 4,
         });
         currentPossession = isHome ? 'away' : 'home';
       } else {
-        atkStats.shotsOnTarget++;
         // Low Block cuts goal probability, Possession/Counter increases chance quality
         // Non-penalty conversion is tuned toward realistic match-level scoring.
+        const shooterGoalMultiplier = clamp(0.85 + (shooterQuality - 70) * 0.0022, 0.85, 1.15);
+        const keeperGoalMultiplier = clamp(1.05 - (gkQuality - 70) * 0.0022, 0.85, 1.15);
         let goalProbability =
-          shotXg *
-          (0.82 + (shooterQuality - 75) * 0.0028) *
-          (1.02 - (gkQuality - 80) * 0.0032);
+          0.10 *
+          clamp(shotXg / 0.06, 0.45, 2.0) *
+          shooterGoalMultiplier *
+          keeperGoalMultiplier;
 
         // Tactical modifiers change chance quality, but cannot turn a bad chance
         // into a free goal.
         if (defTactics.style === 'Low Block') goalProbability *= 0.78;
         if (atkTactics.style === 'Possession') goalProbability *= 1.03;
-        if (atkTactics.style === 'Counter Attack' || isCounterAttacking) goalProbability *= 1.10;
+        if (atkTactics.style === 'Counter Attack' || wasCounter) goalProbability *= 1.10;
         if (atkTactics.mentality === 'Aggressive') goalProbability *= 1.04;
         goalProbability *= isHome ? 1.035 : 0.985;
         if (atkTactics.mentality === 'Defensive') goalProbability *= 0.95;
@@ -1309,13 +1549,13 @@ export function simulateMatch(
         goalProbability = clamp(goalProbability, 0.018, 0.34);
 
         if (rand() < goalProbability) {
+          recordShot(atkStats, shooterStat, true, true);
           // GOAL! A normal open-play goal is not automatically assisted.
           // If it is assisted, the assister must be a different player from the scorer.
           if (isHome) homeScore++; else awayScore++;
           atkStats.score++;
           if (shooterStat) {
-            shooterStat.goals++;
-            shooterStat.rating += 1.4;
+            shooterStat.rating += 0;
           }
 
           const possibleAssisters = [passer, receiver, ...atkMids, ...atkAtts]
@@ -1350,7 +1590,7 @@ export function simulateMatch(
             ballCoordinates: { x: goalNetX, y: goalNetY },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, goalNetX, goalNetY, currentPossession, shooter.player.id, defGK.player.id, 'celebrating'
             ),
             chanceQuality: Number((shotXg * 100).toFixed(1)),
@@ -1379,7 +1619,7 @@ export function simulateMatch(
             ballCoordinates: { x: isHome ? 95 : 5, y: 50 },
             ballStartCoordinates: { x: ballX, y: ballY },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, isHome ? 95 : 5, 50, currentPossession, shooter.player.id, defGK.player.id, 'diving'
             ),
             momentum: isHome ? momentum + 4 : momentum - 4,
@@ -1395,47 +1635,8 @@ export function simulateMatch(
     currentTotalSeconds += Math.floor(rand() * 45) + 45;
   }
 
-  // League matches can finish level. Give close, low-margin matches a modest late
-  // equaliser chance instead of systematically forcing a winner.
-  if (!isKnockout && homeScore !== awayScore && Math.abs(homeScore - awayScore) === 1) {
-    const balance = Math.exp(-Math.abs(diff) / 10);
-    const equaliserChance = Math.max(0.12, Math.min(0.30, 0.15 + balance * 0.12));
-    if (rand() < equaliserChance) {
-      const trailingIsHome = homeScore < awayScore;
-      if (trailingIsHome) homeScore++; else awayScore++;
-      const equaliserTeam = trailingIsHome ? homeManager : awayManager;
-      const equaliserStarters = trailingIsHome ? homeStarters : awayStarters;
-      const equaliserAttackers = trailingIsHome ? homeAtts : awayAtts;
-      const equaliserMids = trailingIsHome ? homeMids : awayMids;
-      const scorerPool = [...equaliserAttackers, ...equaliserMids, ...equaliserStarters]
-        .filter((p, index, arr) => arr.findIndex(x => x.player.id === p.player.id) === index);
-      const equaliserScorer = pick(scorerPool, 'late equaliser');
-      const stat = playerStatsMap.get(equaliserScorer.player.id);
-      if (stat) {
-        stat.goals++;
-        stat.shots++;
-        stat.rating += 1.0;
-      }
-      pushEvent({
-        minute: 88 + Math.floor(rand() * 3),
-        second: Math.floor(rand() * 60),
-        type: 'goal',
-        team: trailingIsHome ? 'home' : 'away',
-        playerId: equaliserScorer.player.id,
-        playerName: equaliserScorer.player.name,
-        playerNumber: getPlayerNumber(equaliserStarters, equaliserScorer.player.id),
-        commentary: `⚽ LATE EQUALISER! ${equaliserTeam.name} refuse to lose their grip on the match. (${homeScore} - ${awayScore})`,
-        ballCoordinates: { x: trailingIsHome ? 98 : 2, y: 50 },
-        ballStartCoordinates: { x: trailingIsHome ? 84 : 16, y: 50 },
-        playerCoordinates: generate22PlayerCoordinates(
-          homeStarters, awayStarters, homeManager.formation, awayManager.formation,
-          homeTactics, awayTactics, trailingIsHome ? 98 : 2, 50, trailingIsHome ? 'home' : 'away',
-          equaliserScorer.player.id, undefined, 'celebrating'
-        ),
-        momentum: 0,
-      });
-    }
-  }
+  // Repair the authoritative event timeline before adding extra time/shootout events.
+  normalizeEventTimeline(events, firstHalfEnd, secondHalfEnd);
 
   // Knockout Extra Time and Penalty Shootout Check (Requirement 17)
   let wentToExtraTime = false;
@@ -1448,11 +1649,11 @@ export function simulateMatch(
   if ((isKnockout && homeScore === awayScore) || forcePenalties) {
     if (!forcePenalties) {
       wentToExtraTime = true;
-      currentTotalSeconds = 5400; // 90:00
+      currentTotalSeconds = secondHalfEnd;
 
     pushEvent({
-      minute: 90,
-      second: 0,
+      minute: Math.floor(secondHalfEnd / 60),
+      second: secondHalfEnd % 60,
       type: 'extra_time_start',
       team: 'home',
       playerId: homeKicker.player.id,
@@ -1461,7 +1662,7 @@ export function simulateMatch(
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
       ),
       momentum,
@@ -1473,8 +1674,8 @@ export function simulateMatch(
         const isEtHome = rand() < 0.5;
         const etAtk = isEtHome ? homePower : awayPower;
         const etDef = isEtHome ? awayPower : homePower;
-        const etAttackers = isEtHome ? homeAtts : awayAtts;
-        const etDefenderGK = isEtHome ? awayGK : homeGK;
+        const etAttackers = (isEtHome ? homeAtts : awayAtts).filter(player => !sentOffIds.has(player.player.id));
+        const etDefenderGK = getAvailableGoalkeeper(isEtHome ? awayGK : homeGK, isEtHome ? awayStarters : homeStarters, sentOffIds);
         const shooter = pick(etAttackers.length ? etAttackers : (isEtHome ? homeStarters : awayStarters));
         const shooterQuality = shooter.player.attributes.sho * 0.55 + shooter.player.attributes.dri * 0.20 + shooter.player.attributes.pac * 0.15 + shooter.player.attributes.phy * 0.10;
         const gkQuality = goalkeeperQuality(etDefenderGK);
@@ -1493,9 +1694,8 @@ export function simulateMatch(
           if (isEtHome) homeScore++; else awayScore++;
           const stat = playerStatsMap.get(shooter.player.id);
           if (stat) {
-            stat.goals++;
-            stat.shots++;
-            stat.rating += 1.2;
+            recordShot(isEtHome ? homeStats : awayStats, stat, true, true);
+            stat.rating += -0.2;
           }
           pushEvent({
             minute,
@@ -1509,14 +1709,14 @@ export function simulateMatch(
             ballCoordinates: { x: etX, y: etY },
             ballStartCoordinates: { x: 50, y: 50 },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, etX, etY, isEtHome ? 'home' : 'away', shooter.player.id, etDefenderGK.player.id, 'celebrating'
             ),
             momentum: isEtHome ? Math.min(100, momentum + 22) : Math.max(-100, momentum - 22),
           });
         } else {
           const stat = playerStatsMap.get(shooter.player.id);
-          if (stat) stat.shots++;
+          recordShot(isEtHome ? homeStats : awayStats, stat, false, false);
           pushEvent({
             minute,
             second: etSec,
@@ -1528,7 +1728,7 @@ export function simulateMatch(
             ballCoordinates: { x: etX, y: etY },
             ballStartCoordinates: { x: 50, y: 50 },
             playerCoordinates: generate22PlayerCoordinates(
-              homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+              homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
               homeTactics, awayTactics, etX, etY, isEtHome ? 'home' : 'away', shooter.player.id, etDefenderGK.player.id, 'shooting'
             ),
             momentum,
@@ -1537,7 +1737,7 @@ export function simulateMatch(
       }
     };
 
-    runExtraTimePeriod(96);
+    runExtraTimePeriod(91);
 
     // Extra Time Halftime (105:00)
     currentTotalSeconds = 6300; // 105:00
@@ -1552,13 +1752,13 @@ export function simulateMatch(
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, 50, 50, 'away', undefined, undefined, 'idle'
       ),
       momentum,
     });
 
-    runExtraTimePeriod(108);
+    runExtraTimePeriod(106);
 
     // Extra Time Full-Time (120:00)
     currentTotalSeconds = 7200; // 120:00
@@ -1575,7 +1775,7 @@ export function simulateMatch(
       ballCoordinates: { x: 50, y: 50 },
       ballStartCoordinates: { x: 50, y: 50 },
       playerCoordinates: generate22PlayerCoordinates(
-        homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
         homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
       ),
       momentum,
@@ -1584,6 +1784,8 @@ export function simulateMatch(
     }
     // PENALTY SHOOTOUT SIMULATION: five kicks each, then sudden death.
     if (forcePenalties || homeScore === awayScore) {
+      const shootoutHomeGK = getAvailableGoalkeeper(homeGK, homeStarters, sentOffIds);
+      const shootoutAwayGK = getAvailableGoalkeeper(awayGK, awayStarters, sentOffIds);
       wentToPenalties = true;
       penaltyShootout = [];
     let hPens = 0;
@@ -1595,12 +1797,12 @@ export function simulateMatch(
       const outfield = starters.filter(
         s => getPositionCategory(s.assignedPosition || s.player.position) !== 'GK'
       );
-      const pool = preferred
-        ? [preferred, ...outfield.filter(s => s.player.id !== preferred.player.id)]
-        : outfield.length > 0
-          ? outfield
-          : starters;
-      return pool.sort((a, b) => penaltyAbility(b) - penaltyAbility(a));
+      const sorted = [...(outfield.length > 0 ? outfield : starters)]
+        .sort((a, b) => penaltyAbility(b) - penaltyAbility(a));
+      if (preferred) {
+        return [preferred, ...sorted.filter(s => s.player.id !== preferred.player.id)];
+      }
+      return sorted;
     };
 
     const homeTakers = sortTakers(homeStarters.filter(s => !sentOffIds.has(s.player.id)), homeRoles.penaltyTakerId);
@@ -1619,6 +1821,41 @@ export function simulateMatch(
       };
     };
 
+    const penaltyCoordinates = (team: 'home' | 'away', takerId: string, keeperId: string): LivePlayerPosition[] => {
+      const coords = generate22PlayerCoordinates(
+        homeStarters.filter(s => !sentOffIds.has(s.player.id)),
+        awayStarters.filter(s => !sentOffIds.has(s.player.id)),
+        homeManager.formation,
+        awayManager.formation,
+        homeTactics,
+        awayTactics,
+        team === 'home' ? 97 : 3,
+        50,
+        team,
+        takerId,
+        keeperId,
+        'shooting'
+      );
+      const taker = coords.find(p => p.id === takerId);
+      const keeper = coords.find(p => p.id === keeperId);
+      if (taker) {
+        taker.x = team === 'home' ? 97 : 3;
+        taker.y = 50;
+        taker.action = 'shooting';
+      }
+      if (keeper) {
+        keeper.x = team === 'home' ? 92 : 8;
+        keeper.y = 50;
+        keeper.action = 'diving';
+      }
+      for (const player of coords) {
+        if (player.id !== takerId && player.id !== keeperId) {
+          player.x = team === 'home' ? Math.min(49, player.x) : Math.max(51, player.x);
+        }
+      }
+      return coords;
+    };
+
     // Push Shootout Start Event
     pushEvent({
       minute: 121,
@@ -1631,6 +1868,7 @@ export function simulateMatch(
       ballCoordinates: { x: 88.5, y: 50 },
       ballStartCoordinates: { x: 88.5, y: 50 },
       momentum,
+      playerCoordinates: penaltyCoordinates('home', homeTakers[0].player.id, shootoutAwayGK.player.id),
     });
 
     // 5 standard rounds
@@ -1638,7 +1876,7 @@ export function simulateMatch(
       // Home kick
       const hTaker = homeTakers[(round - 1) % homeTakers.length];
       const hSho = penaltyAbility(hTaker);
-      const aGkReflex = goalkeeperQuality(awayGK);
+      const aGkReflex = goalkeeperQuality(shootoutAwayGK);
       const hSuccessRate = clamp(0.76 + (hSho - 80) * 0.0032 - (aGkReflex - 80) * 0.0028, 0.62, 0.91);
       const hRoll = rand();
       let hOutcome: 'goal' | 'saved' | 'missed' = 'goal';
@@ -1658,7 +1896,7 @@ export function simulateMatch(
         commentary: hOutcome === 'goal' 
           ? `[PENALTIES] Round ${round}: ${hTaker.player.name} steps up... SCORES! Buries it into the bottom corner!`
           : hOutcome === 'saved'
-          ? `[PENALTIES] Round ${round}: ${hTaker.player.name} shoots... SAVED! ${awayGK.player.name} guesses right and blocks!`
+          ? `[PENALTIES] Round ${round}: ${hTaker.player.name} shoots... SAVED! ${shootoutAwayGK.player.name} guesses right and blocks!`
           : `[PENALTIES] Round ${round}: ${hTaker.player.name} fires wide of the post!`,
       });
 
@@ -1671,13 +1909,16 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
         ballStartCoordinates: { x: 88.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, shootoutAwayGK.player.id),
         momentum,
       });
+
+      if (hPens > aPens + (5 - round)) break;
 
       // Away kick
       const aTaker = awayTakers[(round - 1) % awayTakers.length];
       const aSho = penaltyAbility(aTaker);
-      const hGkReflex = goalkeeperQuality(homeGK);
+      const hGkReflex = goalkeeperQuality(shootoutHomeGK);
       const aSuccessRate = clamp(0.76 + (aSho - 80) * 0.0032 - (hGkReflex - 80) * 0.0028, 0.62, 0.91);
       const aRoll = rand();
       let aOutcome: 'goal' | 'saved' | 'missed' = 'goal';
@@ -1697,7 +1938,7 @@ export function simulateMatch(
         commentary: aOutcome === 'goal' 
           ? `[PENALTIES] Round ${round}: ${aTaker.player.name} steps up... SCORES! Coolly dispatched into the side-netting!`
           : aOutcome === 'saved'
-          ? `[PENALTIES] Round ${round}: ${aTaker.player.name} shoots... DENIED! Heroic save by ${homeGK.player.name}!`
+          ? `[PENALTIES] Round ${round}: ${aTaker.player.name} shoots... DENIED! Heroic save by ${shootoutHomeGK.player.name}!`
           : `[PENALTIES] Round ${round}: ${aTaker.player.name} strikes the crossbar! Missed!`,
       });
 
@@ -1710,8 +1951,10 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, shootoutHomeGK.player.id),
         momentum,
       });
+      if (Math.abs(hPens - aPens) > (5 - round)) break;
     }
 
     // Sudden death: one kick each until the score is no longer level.
@@ -1727,8 +1970,8 @@ export function simulateMatch(
 
       const hSho = penaltyAbility(hTaker);
       const aSho = penaltyAbility(aTaker);
-      const aGkReflex = goalkeeperQuality(awayGK);
-      const hGkReflex = goalkeeperQuality(homeGK);
+      const aGkReflex = goalkeeperQuality(shootoutAwayGK);
+      const hGkReflex = goalkeeperQuality(shootoutHomeGK);
 
       const hSuccessRate = clamp(0.74 + (hSho - 80) * 0.0028 - (aGkReflex - 80) * 0.0025, 0.62, 0.90);
       const aSuccessRate = clamp(0.74 + (aSho - 80) * 0.0028 - (hGkReflex - 80) * 0.0025, 0.62, 0.90);
@@ -1748,7 +1991,7 @@ export function simulateMatch(
         commentary: hOutcome === 'goal'
           ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} SCORES! Ice-cold from the spot.`
           : hOutcome === 'saved'
-            ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} is DENIED by ${awayGK.player.name}!`
+            ? `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} is DENIED by ${shootoutAwayGK.player.name}!`
             : `[SUDDEN DEATH] Round ${sdRound}: ${hTaker.player.name} misses the target!`,
       });
 
@@ -1761,6 +2004,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 97, y: hOutcome === 'goal' ? 49 : 45 },
         ballStartCoordinates: { x: 88.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, shootoutAwayGK.player.id),
         momentum,
       });
 
@@ -1781,7 +2025,7 @@ export function simulateMatch(
         commentary: aOutcome === 'goal'
           ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} SCORES! Pressure handled.`
           : aOutcome === 'saved'
-            ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} is SAVED by ${homeGK.player.name}!`
+            ? `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} is SAVED by ${shootoutHomeGK.player.name}!`
             : `[SUDDEN DEATH] Round ${sdRound}: ${aTaker.player.name} misses!`,
       });
 
@@ -1794,6 +2038,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: aOutcome === 'goal' ? 51 : 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, shootoutHomeGK.player.id),
         momentum,
       });
 
@@ -1838,6 +2083,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 2].commentary,
         ballCoordinates: { x: 97, y: 49 },
         ballStartCoordinates: { x: 88.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('home', hTaker.player.id, shootoutAwayGK.player.id),
         momentum,
       });
 
@@ -1850,6 +2096,7 @@ export function simulateMatch(
         commentary: penaltyShootout[penaltyShootout.length - 1].commentary,
         ballCoordinates: { x: 3, y: 55 },
         ballStartCoordinates: { x: 11.5, y: 50 },
+        playerCoordinates: penaltyCoordinates('away', aTaker.player.id, shootoutHomeGK.player.id),
         momentum,
       });
     }
@@ -1865,10 +2112,20 @@ export function simulateMatch(
     winnerManagerId = homeScore > awayScore ? homeManager.id : awayManager.id;
   }
 
-  // Final Whistle at 90:00 (or after shootout)
+  normalizeEventTimeline(events, firstHalfEnd, secondHalfEnd);
+  const lastTimelineSeconds = events.length > 0
+    ? Math.max(...events.map(event => event.minute * 60 + (event.second || 0)))
+    : secondHalfEnd;
+  const finalWhistleSeconds = wentToPenalties
+    ? Math.max(122 * 60, lastTimelineSeconds + 1)
+    : wentToExtraTime
+      ? 120 * 60
+      : secondHalfEnd;
+
+  // Final Whistle at the actual second-half/extra-time/shootout end.
   pushEvent({
-    minute: wentToExtraTime ? 122 : 90,
-    second: 0,
+    minute: Math.floor(finalWhistleSeconds / 60),
+    second: finalWhistleSeconds % 60,
     type: 'fulltime',
     team: 'home',
     playerId: homeKicker.player.id,
@@ -1879,22 +2136,59 @@ export function simulateMatch(
     ballCoordinates: { x: 50, y: 50 },
     ballStartCoordinates: { x: 50, y: 50 },
     playerCoordinates: generate22PlayerCoordinates(
-      homeStarters, awayStarters, homeManager.formation, awayManager.formation,
+      homeStarters.filter(s => !sentOffIds.has(s.player.id)), awayStarters.filter(s => !sentOffIds.has(s.player.id)), homeManager.formation, awayManager.formation,
       homeTactics, awayTactics, 50, 50, 'home', undefined, undefined, 'idle'
     ),
     momentum,
   });
 
-  // Calculate team possession
-  const totalPasses = Math.max(1, homeStats.passes + awayStats.passes);
-  homeStats.possession = Math.round((homeStats.passes / totalPasses) * 100);
+  // Final timeline safety check: never allow a decreasing timestamp in production.
+  for (let i = 1; i < events.length; i++) {
+    const prev = events[i - 1].minute * 60 + (events[i - 1].second || 0);
+    const current = events[i].minute * 60 + (events[i].second || 0);
+    if (current < prev) {
+      console.warn('[simulation] non-monotonic event timeline repaired', { index: i, prev, current });
+      events[i].minute = events[i - 1].minute;
+      events[i].second = events[i - 1].second;
+    }
+  }
+
+  // Possession is derived from the event timeline, not pass counters.
+  const possessionSeconds = { home: 0, away: 0 };
+  for (let i = 0; i < events.length - 1; i++) {
+    const current = events[i];
+    const next = events[i + 1];
+    const duration = Math.max(0, (next.minute * 60 + (next.second || 0)) - (current.minute * 60 + (current.second || 0)));
+    if (current.team === 'home' || current.team === 'away') possessionSeconds[current.team] += duration;
+  }
+  const totalPossessionSeconds = Math.max(1, possessionSeconds.home + possessionSeconds.away);
+  homeStats.possession = Math.round((possessionSeconds.home / totalPossessionSeconds) * 100);
   awayStats.possession = 100 - homeStats.possession;
+
+  const midfieldQualityHome = homePower.midfield;
+  const midfieldQualityAway = awayPower.midfield;
+  homeStats.passAccuracy = Math.round(clamp(82 + (midfieldQualityHome - midfieldQualityAway) * 0.12 - (awayTactics.pressingIntensity - 50) * 0.12, 72, 92));
+  awayStats.passAccuracy = Math.round(clamp(82 + (midfieldQualityAway - midfieldQualityHome) * 0.12 - (homeTactics.pressingIntensity - 50) * 0.12, 72, 92));
   homeStats.score = homeScore;
   awayStats.score = awayScore;
 
+  // Final player ratings: contributions in both directions, with a 3.0 floor.
+  // Start from a neutral match baseline below 6.0 so poor performances can be
+  // represented instead of every player being pinned at 6.0 or higher.
+  for (const stat of playerStatsMap.values()) {
+    if (!stat.redCard) stat.minutes = wentToExtraTime ? 120 : 90;
+    const conceded = stat.team === 'home' ? awayScore : homeScore;
+    const entry = (stat.team === 'home' ? homeStarters : awayStarters).find(s => s.player.id === stat.playerId);
+    if (stat.team === 'home' && awayScore === 0 && entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating += 0.4;
+    if (stat.team === 'away' && homeScore === 0 && entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating += 0.4;
+    if (entry && ['GK', 'DEF'].includes(getPositionCategory(entry.assignedPosition || entry.player.position))) stat.rating -= conceded * 0.35;
+    stat.rating += stat.tackles * 0.08 + stat.interceptions * 0.10 + stat.saves * 0.18;
+    stat.rating -= (stat.yellowCard ? 0.3 : 0) + (stat.redCard ? 1.5 : 0) + stat.fouls * 0.05;
+  }
+
   const playerStatsList = Array.from(playerStatsMap.values()).map(stat => ({
     ...stat,
-    rating: Math.min(10.0, Math.max(5.0, Number(stat.rating.toFixed(1)))),
+    rating: Math.min(10.0, Math.max(3.0, Number(stat.rating.toFixed(1)))),
   }));
 
   return {

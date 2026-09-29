@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getBidStep, getMinNextBid } from '../constants/auction';
 import { GameRoom, Player } from '../types/football';
 import { FORMATIONS_CONFIG, getFormationStarterCategoryCounts, getFormationSquadCategoryLimits } from '../constants/formations';
 import { PlayerCard } from './PlayerCard';
@@ -13,6 +14,7 @@ interface LiveAuctionViewProps {
   managerId: string;
   onPlaceBid: (amount: number) => void;
   onSubmitBlindBid: (amount: number) => void;
+  secretBidSubmitted: number | null;
   onMarkDone: () => void;
   onLeaveMatch: () => void;
 }
@@ -22,6 +24,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   managerId,
   onPlaceBid,
   onSubmitBlindBid,
+  secretBidSubmitted,
   onMarkDone,
   onLeaveMatch,
 }) => {
@@ -36,37 +39,53 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   // Bid animation tracking
   const prevBidRef = useRef(auction.currentBid);
   const prevBidderRef = useRef(auction.highestBidderId);
+  const prevLotRef = useRef(auction.currentPlayer?.id || null);
+  const prevDisplayedSecondsRef = useRef<number | null>(null);
+  const serverOffsetRef = useRef(0);
   const [bidUpdated, setBidUpdated] = useState(false);
   const [wasOutbid, setWasOutbid] = useState(false);
+
+  useEffect(() => {
+    if (room.serverNow) serverOffsetRef.current = room.serverNow - Date.now();
+  }, [room.serverNow]);
 
   // Render the countdown from the server's absolute deadline. This keeps the
   // UI moving even if a websocket snapshot is only arriving every few seconds.
   const [auctionClock, setAuctionClock] = useState(() => Date.now());
+  const displaySecondsRemaining = auction.auctionEndsAt
+    ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
+    : auction.secondsRemaining;
+  const formatCountdown = (totalSeconds: number) => {
+    const safe = Math.max(0, Math.floor(totalSeconds));
+    return `${Math.floor(safe / 60).toString().padStart(2, '0')}:${(safe % 60).toString().padStart(2, '0')}`;
+  };
+
   useEffect(() => {
     if (!auction.currentPlayer || auction.isSold || auction.isPaused) return;
-    const timer = window.setInterval(() => setAuctionClock(Date.now()), 250);
+    const timer = window.setInterval(() => setAuctionClock(Date.now() + serverOffsetRef.current), 250);
     return () => window.clearInterval(timer);
   }, [auction.currentPlayer?.id, auction.isSold, auction.isPaused, auction.auctionEndsAt]);
 
   // Detect new bid or outbid
   useEffect(() => {
-    if (auction.currentBid !== prevBidRef.current) {
-      setBidUpdated(true);
-      const timer = setTimeout(() => setBidUpdated(false), 900);
+    const lotId = auction.currentPlayer?.id || null;
+    const sameLot = prevLotRef.current === lotId;
+    const wasWinning = sameLot && prevBidderRef.current === managerId;
+    const nowOutbid = wasWinning && auction.highestBidderId !== null && auction.highestBidderId !== managerId && !auction.isSold;
+    const bidChanged = auction.currentBid !== prevBidRef.current;
 
-      // Check if current user was previously winning and got outbid
-      if (prevBidderRef.current === managerId && auction.highestBidderId !== managerId && !auction.isSold) {
-        setWasOutbid(true);
-        sound.playWhistle();
-        const outbidTimer = setTimeout(() => setWasOutbid(false), 3500);
-        return () => clearTimeout(outbidTimer);
-      }
+    prevLotRef.current = lotId;
+    prevBidRef.current = auction.currentBid;
+    prevBidderRef.current = auction.highestBidderId;
 
-      prevBidRef.current = auction.currentBid;
-      prevBidderRef.current = auction.highestBidderId;
-      return () => clearTimeout(timer);
+    if (bidChanged) setBidUpdated(true);
+    if (nowOutbid) {
+      setWasOutbid(true);
+      sound.playWhistle();
+      const outbidTimer = window.setTimeout(() => setWasOutbid(false), 3500);
+      return () => window.clearTimeout(outbidTimer);
     }
-  }, [auction.currentBid, auction.highestBidderId, auction.isSold, managerId]);
+  }, [auction.currentPlayer?.id, auction.currentBid, auction.highestBidderId, auction.isSold, managerId]);
 
   // Audio & confetti on SOLD
   useEffect(() => {
@@ -83,12 +102,20 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     }
   }, [auction.isSold, auction.winnerId, managerId]);
 
-  // Audio tick on last 3 seconds
+  // Audio tick on the displayed countdown, not the stale server integer.
   useEffect(() => {
-    if (displaySecondsRemaining > 0 && auction.secondsRemaining <= 3 && !auction.isSold) {
+    const previous = prevDisplayedSecondsRef.current;
+    if (displaySecondsRemaining !== previous && displaySecondsRemaining > 0 && displaySecondsRemaining <= 3 && !auction.isSold) {
       sound.playTick();
     }
-  }, [auction.secondsRemaining, auction.isSold]);
+    prevDisplayedSecondsRef.current = displaySecondsRemaining;
+  }, [displaySecondsRemaining, auction.isSold]);
+
+  useEffect(() => {
+    prevDisplayedSecondsRef.current = null;
+  }, [auction.currentPlayer?.id]);
+
+
 
   if (!currentManager) return null;
 
@@ -142,8 +169,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
     ? categoryCounts[player.category] >= squadCategoryLimits[player.category]
     : false;
 
-  const bidStep = auction.currentBid >= 250 ? 10 : auction.currentBid >= 100 ? 5 : 2;
-  const minNextBid = auction.highestBidderId ? auction.currentBid + bidStep : auction.currentBid;
+  const bidStep = getBidStep(auction.currentBid);
+  const minNextBid = getMinNextBid(auction.currentBid, Boolean(auction.highestBidderId));
   const canAfford = currentManager.budget >= minNextBid;
   const isSquadFull = currentManager.squad.length >= 11;
   const isWinning = auction.highestBidderId === managerId;
@@ -152,11 +179,9 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const auctionReadyCount = room.managers.filter(m => m.isBot || readyIds.includes(m.id)).length;
   const squadComplete = currentManager.squad.length === 11;
 
-  const displaySecondsRemaining = auction.auctionEndsAt
-    ? Math.max(0, Math.ceil((auction.auctionEndsAt - auctionClock) / 1000))
-    : auction.secondsRemaining;
 
-  const hasSubmittedSecret = Boolean(isBlind && auction.hasSubmittedSecretBid?.[managerId]);
+
+  const hasSubmittedSecret = Boolean(isBlind && (secretBidSubmitted !== null || auction.hasSubmittedSecretBid?.[managerId]));
 
   const handleCustomBid = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +195,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   const handleBlindBid = (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseInt(blindBidInput, 10);
-    if (!isNaN(val) && val >= (player?.startingPrice ?? 0) && val <= currentManager.budget) {
+    if (!secretBidSubmitted && !isNaN(val) && val >= (player?.startingPrice ?? 0) && val <= currentManager.budget) {
       onSubmitBlindBid(val);
       setBlindBidInput('');
     }
@@ -208,7 +233,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
   })();
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#10251f_0%,#040812_42%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto select-none">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#10251f_0%,#040812_42%,#02050b_100%)] text-slate-100 p-3 sm:p-5 md:p-6 flex flex-col justify-between max-w-7xl mx-auto">
 
 
       {/* Top Bar: Live Auction status, User budget, Team metrics */}
@@ -389,7 +414,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                         : 'text-slate-100 bg-slate-950 border-slate-800'
                     }`}
                   >
-                    00:{displaySecondsRemaining < 10 ? `0${displaySecondsRemaining}` : displaySecondsRemaining}
+                    {formatCountdown(displaySecondsRemaining)}
                   </div>
                 </div>
 
@@ -482,8 +507,8 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                     ) : (
                       <div className="space-y-3">
                         <div className="grid grid-cols-4 gap-2">
-                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [0])).map((inc) => {
-                             const targetBid = auction.highestBidderId ? auction.currentBid + inc : auction.currentBid;
+                          {Array.from(new Set(auction.highestBidderId ? [bidStep, 5, 10, 25] : [player.startingPrice])).map((inc) => {
+                             const targetBid = auction.highestBidderId ? auction.currentBid + inc : Math.max(player.startingPrice, auction.currentBid);
                              const possible = currentManager.budget >= targetBid;
                             return (
                               <button
@@ -497,7 +522,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                                     : 'bg-slate-950 text-slate-600 border border-slate-900 cursor-not-allowed'
                                 }`}
                               >
-                                +£{inc}M
+                                {auction.highestBidderId ? `+£${inc}M` : `BID £${targetBid}M`}
                               </button>
                             );
                           })}
@@ -544,7 +569,7 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                       <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/40 text-center">
                         <div className="flex items-center justify-center gap-1.5 text-emerald-400 font-bold text-xs">
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>Secret Bid Submitted!</span>
+                          <span>Secret Bid Submitted{secretBidSubmitted !== null ? ` — £${secretBidSubmitted}M` : ''}!</span>
                         </div>
                       </div>
                     )}
@@ -555,15 +580,15 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
                           type="number"
                           min={player.startingPrice}
                           max={currentManager.budget}
-                          disabled={auction.isSold}
-                          placeholder={`Min Starting Price: £${player.startingPrice}M`}
-                          value={blindBidInput}
+                          disabled={auction.isSold || hasSubmittedSecret}
+                          placeholder={hasSubmittedSecret ? `Submitted £${secretBidSubmitted ?? '?'}M` : `Min Starting Price: £${player.startingPrice}M`}
+                          value={hasSubmittedSecret ? '' : blindBidInput}
                           onChange={(e) => setBlindBidInput(e.target.value)}
                           className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
                         />
                         <button
                           type="submit"
-                          disabled={auction.isSold || !canAfford}
+                          disabled={auction.isSold || !canAfford || hasSubmittedSecret}
                           className="px-5 py-2.5 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-amber-400 hover:bg-amber-300 text-slate-950 transition-all shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
                         >
                           SUBMIT BID
@@ -615,31 +640,6 @@ export const LiveAuctionView: React.FC<LiveAuctionViewProps> = ({
               }} />
             </div>
           </div>
-
-          {/* Current auction lot — kept beside the pitch so mobile users can always see who is being auctioned */}
-          {player && (
-            <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/30 shadow-lg">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-black">NOW AUCTIONING</div>
-                  <div className="text-base font-display font-black text-white truncate">{player.name}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    {isBlind && !auction.isSold ? 'Identity hidden · 2 attributes revealed' : (player.position + ' · ' + player.overall + ' OVR · ' + player.club)}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">CURRENT</div>
-                  <div className="font-mono font-black text-emerald-400">£{auction.currentBid}M</div>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[9px] uppercase tracking-wider font-black">
-                <span className="text-emerald-400">{categoryLabel}</span>
-                {!isBlind && (
-                  <span className="text-slate-500">Stage {activeCategoryIndex + 1}/4 · {activeReadyManagers}/{room.managers.length} squads complete</span>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Mini Pitch with authentic player markers */}
           <PitchGraphic aspectRatio="vertical" className="p-3 shadow-xl">

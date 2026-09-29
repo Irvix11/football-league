@@ -291,7 +291,8 @@ export interface PlayerMatchStat {
   saves: number;
   yellowCard: boolean;
   redCard: boolean;
-  rating: number; // 5.0 to 10.0
+  fouls: number;
+  rating: number; // 3.0 to 10.0
 }
 
 export interface PenaltyKickResult {
@@ -420,4 +421,6 @@ export interface GameRoom {
   awards: SeasonAwards | null;
   createdAt: number;
   updatedAt: number;
+  /** Server clock sample used to correct client timer skew. */
+  serverNow?: number;
 }

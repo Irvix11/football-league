@@ -24,6 +24,8 @@
     background: var(--fal-bg);
     color-scheme: dark;
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
@@ -40,6 +42,8 @@
 
   button, input, select, textarea {
     font: inherit;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   button {
@@ -66,6 +70,7 @@
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
   background: #02040a;
 }
 
@@ -338,5 +343,32 @@ table tbody tr:hover {
   .animate-fal-fade-3,
   .animate-fal-fade-4 {
     animation: none;
+  }
+}
+
+
+/* Mobile Safari/Chrome viewport stability.
+   Inputs smaller than 16px can trigger automatic page zoom on iOS, which
+   looks like the whole game suddenly shrinking/growing while typing.
+   Keep form controls at a stable size and prevent horizontal layout shifts. */
+@media (max-width: 640px) {
+  input:not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+    line-height: 1.35;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    min-height: 100%;
+    -webkit-text-size-adjust: 100%;
   }
 }

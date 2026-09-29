@@ -18,11 +18,15 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, { hasErr
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error) {
-    console.error('[AppErrorBoundary]', error);
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AppErrorBoundary]', error, info.componentStack);
   }
 
   handleRecovery = () => {
+    this.setState({ hasError: false });
+  };
+
+  handleResetSavedGame = () => {
     try {
       localStorage.removeItem('fal_session');
     } catch {}
@@ -41,9 +45,15 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, { hasErr
             </p>
             <button
               onClick={this.handleRecovery}
-              className="mt-5 px-5 py-3 rounded-xl bg-rose-500 text-slate-950 font-black hover:bg-rose-400"
+              className="mt-5 w-full px-5 py-3 rounded-xl bg-emerald-500 text-slate-950 font-black hover:bg-emerald-400"
             >
-              RESET & RECONNECT
+              TRY AGAIN
+            </button>
+            <button
+              onClick={this.handleResetSavedGame}
+              className="mt-3 w-full px-5 py-3 rounded-xl border border-slate-700 bg-slate-950 text-slate-200 font-black hover:bg-slate-800"
+            >
+              RESET SAVED GAME
             </button>
           </div>
         </div>
@@ -58,6 +68,7 @@ function AppContent() {
     room,
     managerId,
     isConnected,
+    isReconnecting,
     errorMessage,
     startSoloGame,
     createLobby,
@@ -74,6 +85,7 @@ function AppContent() {
     skipAuctionSolo,
     placeBid,
     submitBlindBid,
+    secretBidSubmitted,
     updateLineup,
     confirmTeam,
     runMatchday,
@@ -92,12 +104,12 @@ function AppContent() {
     savedSession,
   } = useGameSocket();
 
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [, forceSoundUpdate] = useState(0);
   const [showKickPanel, setShowKickPanel] = useState(false);
 
   const toggleSound = () => {
-    sound.enabled = !soundEnabled;
-    setSoundEnabled(!soundEnabled);
+    sound.enabled = !sound.enabled;
+    forceSoundUpdate(value => value + 1);
   };
 
   const currentManager = room?.managers.find((m) => m.id === managerId);
@@ -128,10 +140,16 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+    <div className="min-h-screen min-h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 pb-[env(safe-area-inset-bottom)]">
+      {isReconnecting && room && (
+        <div className="fixed top-[calc(env(safe-area-inset-top)+8px)] left-1/2 -translate-x-1/2 z-40 max-w-[92vw] rounded-xl border border-amber-400/30 bg-slate-950/95 px-4 py-2 text-xs font-black text-amber-300 shadow-2xl pointer-events-none">
+          Reconnecting to game server…
+        </div>
+      )}
+
       {/* Global Error Banner */}
       {errorMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-rose-500 text-slate-950 font-bold text-xs shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
+        <div className="fixed top-[calc(env(safe-area-inset-top)+8px)] left-1/2 -translate-x-1/2 z-50 w-[min(92vw,42rem)] max-w-[92vw] px-4 py-2.5 rounded-xl bg-rose-500 text-slate-950 font-bold text-xs shadow-2xl flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-4">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
         </div>
@@ -143,7 +161,7 @@ function AppContent() {
           <button
             onClick={() => setShowKickPanel(true)}
             title="Host: remove a manager"
-            className="fixed top-4 right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-rose-500/30 text-rose-300 hover:bg-rose-950/50 hover:border-rose-400/60 shadow-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
+            className="fixed top-[calc(env(safe-area-inset-top)+72px)] right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/95 border border-rose-500/30 text-rose-300 hover:bg-rose-950/50 hover:border-rose-400/60 shadow-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
           >
             <UserX className="w-4 h-4" />
             KICK
@@ -192,14 +210,17 @@ function AppContent() {
         </>
       )}
 
-      {/* Global Audio Toggle (Floating in bottom-right corner) */}
-      <button
-        onClick={toggleSound}
-        title={soundEnabled ? 'Mute Audio' : 'Enable Audio'}
-        className="fixed bottom-4 right-4 z-40 p-2.5 rounded-full bg-slate-900/90 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-xl transition-all"
-      >
-        {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
-      </button>
+      {/* Global Audio Toggle. Live match/knockout screens already have their own
+          playback control, so do not stack a second floating button over it. */}
+      {room?.phase !== 'league' && room?.phase !== 'knockout' && (
+        <button
+          onClick={toggleSound}
+          title={sound.enabled ? 'Mute Audio' : 'Enable Audio'}
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+16px)] right-[max(1rem,env(safe-area-inset-right))] z-40 p-2.5 rounded-full bg-slate-900/95 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50 shadow-xl transition-all"
+        >
+          {sound.enabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
+        </button>
+      )}
 
       {/* Primary Phase Router */}
       {!room || !managerId ? (
@@ -210,7 +231,7 @@ function AppContent() {
           onJoinLobby={(code, name) => joinLobby(code, name)}
           onSoloPlay={(name, formation) => startSoloGame(name, formation)}
           savedSession={savedSession}
-          onResumeSession={(code, name) => resumeLobby({ roomCode: code, managerId: savedSession?.managerId || '', managerName: name })}
+          onResumeSession={(code, name) => savedSession?.reconnectToken && resumeLobby({ ...savedSession, roomCode: code, managerName: name })}
           isConnected={isConnected}
         />
       ) : room.phase === 'lobby' ? (
@@ -238,6 +259,7 @@ function AppContent() {
           managerId={managerId}
           onPlaceBid={placeBid}
           onSubmitBlindBid={submitBlindBid}
+          secretBidSubmitted={secretBidSubmitted}
           onMarkDone={markAuctionDone}
           onLeaveMatch={leaveLobby}
         />
@@ -252,6 +274,7 @@ function AppContent() {
         <LeagueDashboardView
           room={room}
           managerId={managerId}
+          reconnectToken={savedSession?.reconnectToken}
           onRunMatchday={runMatchday}
           onMatchComplete={handleLeagueMatchComplete}
           onProceedNextMatchday={proceedToNextMatchday}
@@ -267,6 +290,7 @@ function AppContent() {
         <KnockoutDashboardView
           room={room}
           managerId={managerId}
+          reconnectToken={savedSession?.reconnectToken}
           onRunMatch={runKnockoutMatch}
           onMatchComplete={completeKnockoutMatch}
           isSimulating={isSimulating}

@@ -9,7 +9,9 @@ import {
 
 interface LiveMatchEngineProps {
   fixture: Fixture;
+  roomCode?: string;
   userTeamId?: string;
+  reconnectToken?: string;
   onMatchComplete?: (fixtureId: string) => void;
   className?: string;
 }
@@ -31,71 +33,6 @@ interface InspectedPlayerState {
   screenY: number;
 }
 
-/**
- * Force-directed anti-overlap pass that prevents player markers from stacking
- * while maintaining tactical shape and keeping the ball-carrier central.
- */
-function separatePlayerPositions(positions: LivePlayerPosition[]): LivePlayerPosition[] {
-  const resolved = positions.map(p => ({ ...p }));
-  const MIN_DIST = 6.0; // Minimum distance in % units (with pitch aspect ratio compensation)
-  const PASSES = 8;     // 8 iterative relaxation passes
-
-  for (let pass = 0; pass < PASSES; pass++) {
-    for (let i = 0; i < resolved.length; i++) {
-      for (let j = i + 1; j < resolved.length; j++) {
-        const p1 = resolved[i];
-        const p2 = resolved[j];
-
-        let dx = p2.x - p1.x;
-        let dy = (p2.y - p1.y) * 1.54; // Aspect ratio adjustment
-        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) {
-          dx = (j % 2 === 0 ? 1 : -1) * 0.5;
-          dy = (i % 2 === 0 ? 1 : -1) * 0.5;
-        }
-        const dist = Math.hypot(dx, dy);
-
-        if (dist < MIN_DIST) {
-          const overlap = (MIN_DIST - dist) / 2;
-          const nx = dx / (dist || 0.001);
-          const ny = (dy / 1.54) / (dist || 0.001);
-
-          if (p1.hasBall && !p2.hasBall) {
-            p2.x += nx * overlap * 2.2;
-            p2.y += ny * overlap * 2.2;
-          } else if (p2.hasBall && !p1.hasBall) {
-            p1.x -= nx * overlap * 2.2;
-            p1.y -= ny * overlap * 2.2;
-          } else {
-            p1.x -= nx * overlap * 1.05;
-            p1.y -= ny * overlap * 1.05;
-            p2.x += nx * overlap * 1.05;
-            p2.y += ny * overlap * 1.05;
-          }
-
-          p1.x = Math.max(4.0, Math.min(96.0, p1.x));
-          p1.y = Math.max(7.0, Math.min(93.0, p1.y));
-          p2.x = Math.max(4.0, Math.min(96.0, p2.x));
-          p2.y = Math.max(7.0, Math.min(93.0, p2.y));
-        }
-      }
-    }
-  }
-
-  // Anchor GKs to their boxes
-  for (const p of resolved) {
-    if (p.number === 1) {
-      if (p.team === 'home') {
-        p.x = Math.max(4.5, Math.min(13.0, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      } else {
-        p.x = Math.max(87.0, Math.min(95.5, p.x));
-        p.y = Math.max(36.0, Math.min(64.0, p.y));
-      }
-    }
-  }
-
-  return resolved;
-}
 
 /**
  * Smooth cubic easing function for realistic player and ball acceleration/deceleration.
@@ -106,15 +43,41 @@ function easeInOutCubic(t: number): number {
 
 export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   fixture,
+  roomCode,
   userTeamId,
+  reconnectToken,
   onMatchComplete,
   className = '',
 }) => {
-  const events = useMemo(() => fixture.events || [], [fixture.events]);
+  const [loadedEvents, setLoadedEvents] = useState<MatchEvent[] | null>(() =>
+    fixture.events?.length ? fixture.events : null
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedEvents(fixture.events?.length ? fixture.events : null);
+    if (fixture.events?.length || !roomCode || !userTeamId) return;
+    const base = (import.meta.env.VITE_GAME_SERVER_URL?.trim() || window.location.origin).replace(/\/$/, '');
+    fetch(`${base}/api/room/${encodeURIComponent(roomCode)}/fixture/${encodeURIComponent(fixture.id)}/events`, {
+      headers: {
+        'X-Manager-Id': userTeamId,
+        ...(reconnectToken ? { Authorization: `Bearer ${reconnectToken}` } : {}),
+      },
+      cache: 'no-store',
+    })
+      .then(response => response.ok ? response.json() : null)
+      .then(payload => {
+        if (!cancelled && Array.isArray(payload?.events)) setLoadedEvents(payload.events as MatchEvent[]);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [fixture.id, fixture.events, roomCode, userTeamId, reconnectToken]);
+
+  const events = useMemo(() => loadedEvents || fixture.events || [], [loadedEvents, fixture.events]);
   const [currentEventIndex, setCurrentEventIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1); // 1x, 2x, 4x
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [, forceSoundUpdate] = useState(0);
 
   // Overlays
   const [goalOverlay, setGoalOverlay] = useState<GoalOverlayState | null>(null);
@@ -131,6 +94,11 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const penaltySequence = fixture.penaltyShootout || [];
   const currentPenalty = penaltySequence[penaltyIndex];
   const completedPenalties = penaltySequence.slice(0, penaltyIndex);
+  const penaltyDiveDirection = useMemo(() => {
+    if (!currentPenalty) return 0;
+    const hash = [...currentPenalty.takerId].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return (hash % 3) - 1;
+  }, [currentPenalty]);
   const penaltyIsOver = penaltyIndex >= penaltySequence.length && penaltySequence.length > 0;
 
   // Keep every penalty slow and tense: walk-up -> strike -> result.
@@ -141,16 +109,16 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     setPenaltyRevealStage('walkup');
     const strikeTimer = window.setTimeout(() => {
       setPenaltyRevealStage('strike');
-    }, 2200);
+    }, playbackSpeed >= 2 ? 900 : 2200);
     const resultTimer = window.setTimeout(() => {
       setPenaltyRevealStage('result');
-    }, 4800);
+    }, playbackSpeed >= 2 ? 2100 : 4800);
 
     return () => {
       window.clearTimeout(strikeTimer);
       window.clearTimeout(resultTimer);
     };
-  }, [showPenaltyShootout, penaltyIndex, penaltyIsOver]);
+  }, [showPenaltyShootout, penaltyIndex, penaltyIsOver, playbackSpeed]);
 
   // Interactive Player Inspection Tooltip (Tap on player)
   const [inspectedPlayer, setInspectedPlayer] = useState<InspectedPlayerState | null>(null);
@@ -206,7 +174,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
     const firstEvent = events[0];
     if (firstEvent) {
-      const initialSeparated = separatePlayerPositions(firstEvent.playerCoordinates || []);
+      const initialSeparated = firstEvent.playerCoordinates || [];
       startPlayersRef.current = initialSeparated;
       targetPlayersRef.current = initialSeparated;
       setAnimatedPlayers(initialSeparated);
@@ -233,6 +201,43 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     away: fixture.played ? (fixture.awayScore || 0) : 0,
   };
 
+  const liveStats = useMemo(() => {
+    const home = { possession: 50, shots: 0, shotsOnTarget: 0, goals: 0 };
+    const away = { possession: 50, shots: 0, shotsOnTarget: 0, goals: 0 };
+    const upto = Math.min(currentEventIndex, Math.max(0, events.length - 1));
+    const included = events.slice(0, upto + 1);
+    for (const event of included) {
+      const stats = event.team === 'home' ? home : away;
+      if (['shot', 'shot_saved', 'shot_missed', 'shot_blocked', 'goal'].includes(event.type)) {
+        stats.shots += 1;
+      }
+      if (['shot_saved', 'goal'].includes(event.type)) {
+        stats.shotsOnTarget += 1;
+      }
+      if (event.type === 'goal') stats.goals += 1;
+    }
+
+    const possessionSeconds = { home: 0, away: 0 };
+    for (let i = 0; i < upto; i++) {
+      const current = events[i];
+      const next = events[i + 1];
+      const duration = Math.max(
+        0,
+        (next.minute * 60 + (next.second || 0)) -
+        (current.minute * 60 + (current.second || 0))
+      );
+      if (current.team === 'home' || current.team === 'away') {
+        possessionSeconds[current.team] += duration;
+      }
+    }
+    const total = possessionSeconds.home + possessionSeconds.away;
+    if (total > 0) {
+      home.possession = Math.round((possessionSeconds.home / total) * 100);
+      away.possession = 100 - home.possession;
+    }
+    return { home, away };
+  }, [events, currentEventIndex]);
+
   // Duration in milliseconds for current event animation
   const getEventDuration = useCallback((ev?: MatchEvent) => {
     if (!ev) return 1200;
@@ -250,7 +255,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     if (!currentEvent) return;
 
     // The target players are separated to guarantee ZERO overlap
-    const targetSeparated = separatePlayerPositions(currentEvent.playerCoordinates || []);
+    const targetSeparated = currentEvent.playerCoordinates?.length
+      ? currentEvent.playerCoordinates
+      : (targetPlayersRef.current.length ? targetPlayersRef.current : animatedPlayers);
 
     // Start from the exact last rendered positions so the next event never teleports.
     startPlayersRef.current = targetSeparated.map(target => {
@@ -298,6 +305,48 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     }
   };
 
+  const advanceToNextEvent = useCallback(() => {
+    if (currentEventIndex >= events.length - 1) {
+      setIsPlaying(false);
+      return;
+    }
+    const nextIndex = currentEventIndex + 1;
+    const nextEvent = events[nextIndex];
+    if (nextEvent.type === 'goal' && sound.enabled) sound.playGoal();
+    if (nextEvent.type === 'penalty_shootout_start') {
+      if (sound.enabled) sound.playWhistle();
+      setCurrentEventIndex(nextIndex);
+      setPenaltyIndex(0);
+      setPenaltyRevealStage('walkup');
+      setShowPenaltyShootout(true);
+      setIsPlaying(false);
+      return;
+    }
+    if (nextEvent.type === 'halftime') {
+      if (sound.enabled) sound.playWhistle();
+      setCurrentEventIndex(nextIndex);
+      setHalfTimeOverlay(true);
+      setIsPlaying(false);
+      return;
+    }
+    if (nextEvent.type === 'fulltime') {
+      if (sound.enabled) sound.playWhistle();
+      setCurrentEventIndex(nextIndex);
+      if (fixture.wentToPenalties && penaltySequence.length > 0) {
+        setPenaltyIndex(0);
+        setPenaltyRevealStage('walkup');
+        setShowPenaltyShootout(true);
+        setFullTimeOverlay(false);
+      } else {
+        setFullTimeOverlay(true);
+      }
+      setIsPlaying(false);
+      return;
+    }
+    setCurrentEventIndex(nextIndex);
+    setIsPlaying(true);
+  }, [currentEventIndex, events, fixture.wentToPenalties, penaltySequence.length]);
+
   // Continuous 60fps RequestAnimationFrame Loop
   useEffect(() => {
     let active = true;
@@ -325,7 +374,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           const node = playerNodesRef.current.get(target.id);
           visualPlayerCoordsRef.current.set(target.id, { x: currX, y: currY });
           if (node && width > 0 && height > 0) {
-            node.style.transform = `translate3d(${(currX / 100) * width}px, ${(currY / 100) * height}px, 0)`;
+            node.style.left = `${currX}%`;
+            node.style.top = `${currY}%`;
+            node.style.transform = 'translate(-50%, -50%)';
           }
         }
       }
@@ -361,7 +412,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       }
 
       // 4. Event completion check (Requirements 4, 5: Goal Pause Mechanic)
-      if (progress >= 1 && isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
+      if (progress >= 1 && isPlaying && !halfTimeOverlay && !fullTimeOverlay && !showPenaltyShootout) {
         // Did the active event just finish a GOAL?
         if (currentEvent?.type === 'goal') {
           // Goal overlay is visual-only. Do not pause the match timeline.
@@ -390,91 +441,15 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             setCameraOffset({ x: 0, y: 0, scale: 1 });
           }, Math.max(500, 1200 / playbackSpeed));
 
-          if (currentEventIndex < events.length - 1) {
-            setCurrentEventIndex(prev => prev + 1);
-            setIsPlaying(true);
-          } else {
-            setIsPlaying(false);
-          }
+          advanceToNextEvent();
           return;
         }
 
-        // Current event animation finished, evaluate next event
-        if (currentEventIndex < events.length - 1) {
-          const nextIndex = currentEventIndex + 1;
-          const nextEvent = events[nextIndex];
-
-          if (nextEvent.type === 'goal') {
-            if (soundEnabled) sound.playGoal();
-            setCurrentEventIndex(nextIndex);
-            return;
-          }
-
-          if (nextEvent.type === 'halftime') {
-            if (soundEnabled) sound.playWhistle();
-            setCurrentEventIndex(nextIndex);
-            setHalfTimeOverlay(true);
-            setIsPlaying(false);
-            return;
-          }
-
-          if (nextEvent.type === 'fulltime') {
-            if (soundEnabled) sound.playWhistle();
-            setCurrentEventIndex(nextIndex);
-            if (fixture.wentToPenalties && penaltySequence.length > 0) {
-              // Knockout shootouts should flow straight into the visual spot-kick
-              // sequence instead of hiding it behind another confirmation screen.
-              setPenaltyIndex(0);
-              setPenaltyRevealStage('walkup');
-              setShowPenaltyShootout(true);
-              setFullTimeOverlay(false);
-            } else {
-              setFullTimeOverlay(true);
-            }
-            setIsPlaying(false);
-            return;
-          }
-
-          if (soundEnabled) {
-            switch (nextEvent.type) {
-              case 'pass':
-              case 'carry':
-              case 'cross':
-                sound.playPass();
-                break;
-              case 'shot':
-              case 'shot_saved':
-              case 'shot_missed':
-              case 'shot_blocked':
-              case 'penalty_shot':
-                sound.playShot();
-                break;
-              case 'tackle':
-              case 'interception':
-                sound.playTackle();
-                break;
-              case 'yellow_card':
-              case 'red_card':
-                sound.playCard();
-                break;
-              case 'foul':
-                sound.playWhistle();
-                break;
-              case 'corner':
-                sound.playTick();
-                break;
-            }
-          }
-
-          setCurrentEventIndex(nextIndex);
-        } else {
-          // Reached end of events
-          setIsPlaying(false);
-          setFullTimeOverlay(true);
-        }
+        // Current event animation finished; one advance path handles every event boundary.
+        advanceToNextEvent();
       }
 
-      if (isPlaying && !halfTimeOverlay && !fullTimeOverlay) {
+      if (isPlaying && !halfTimeOverlay && !fullTimeOverlay && !showPenaltyShootout) {
         animationFrameRef.current = requestAnimationFrame(animateFrame);
       }
     };
@@ -491,8 +466,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     };
   }, [
     isPlaying, currentEventIndex, events, playbackSpeed, 
-    goalOverlay, halfTimeOverlay, fullTimeOverlay, getEventDuration,
-    fixture, soundEnabled, onMatchComplete, currentScore, currentEvent
+    goalOverlay, halfTimeOverlay, fullTimeOverlay, showPenaltyShootout, getEventDuration,
+    fixture, advanceToNextEvent, onMatchComplete, currentScore, currentEvent
   ]);
 
   const handleTogglePlay = () => {
@@ -512,11 +487,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   };
 
   const handleSkipToNextEvent = () => {
-    if (currentEventIndex < events.length - 1) {
-      setGoalOverlay(null);
-      setCurrentEventIndex(prev => prev + 1);
-      phaseStartTimeRef.current = performance.now();
-    }
+    setGoalOverlay(null);
+    advanceToNextEvent();
+    phaseStartTimeRef.current = performance.now();
   };
 
   const handleSkipToFullTime = () => {
@@ -536,7 +509,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
       const lastEv = events[lastIndex];
       const endSecs = (lastEv.minute || 90) * 60 + (lastEv.second || 0);
       setDisplaySeconds(endSecs);
-      if (soundEnabled) sound.playWhistle();
+      if (sound.enabled) sound.playWhistle();
       // Keep the match engine mounted at full-time. The CONTINUE button
       // below is the single action that advances the server-side competition.
     }
@@ -561,15 +534,47 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
   const clockMin = Math.floor(displaySeconds / 60);
   const clockSec = displaySeconds % 60;
   const formattedTime = `${String(clockMin).padStart(2, '0')}:${String(clockSec).padStart(2, '0')}`;
-
   const isHalfTime = currentEvent?.type === 'halftime' || (clockMin === 45 && clockSec === 0 && halfTimeOverlay);
-  const isFullTime = currentEvent?.type === 'fulltime' || clockMin >= 90 || currentEventIndex === events.length - 1;
+  // Only a real full-time timeline event is full time. Extra-time events can
+  // legitimately reach 120:xx without disabling the full-time control early.
+  const isFullTime = currentEvent?.type === 'fulltime' || (
+    currentEventIndex >= events.length - 1 && currentEvent?.type !== 'halftime'
+  );
+  const isExtraTime = fixture.wentToExtraTime && clockMin > 90 && !isFullTime;
+  const clockLabel = isExtraTime ? `ET ${formattedTime}` : isFullTime ? `FT ${formattedTime}` : formattedTime;
 
   // Active ball carrier identification for glowing possession ring
   const activeCarrierId = useMemo(() => {
     if (currentEvent?.type === 'pass') return currentEvent.targetPlayerId || currentEvent.playerId;
     return currentEvent?.playerId;
   }, [currentEvent]);
+  const inspectedVisual = inspectedPlayer ? visualPlayerCoordsRef.current.get(inspectedPlayer.player.id) : null;
+  const inspectedRect = pitchRef.current?.getBoundingClientRect();
+  const inspectedScreenX = inspectedRect && inspectedVisual ? inspectedRect.left + (inspectedVisual.x / 100) * inspectedRect.width : inspectedPlayer?.screenX;
+  const inspectedScreenY = inspectedRect && inspectedVisual ? inspectedRect.top + (inspectedVisual.y / 100) * inspectedRect.height : inspectedPlayer?.screenY;
+
+  // Recalculate the inspected player's screen position after rotation/resize.
+  // The pitch uses percentage coordinates, so the tooltip must not retain stale
+  // pixel coordinates from before the viewport changed.
+  useEffect(() => {
+    if (!inspectedPlayer || typeof ResizeObserver === 'undefined') return;
+    const pitch = pitchRef.current;
+    if (!pitch) return;
+    const refreshTooltip = () => setInspectedPlayer(current => current ? { ...current } : current);
+    const observer = new ResizeObserver(refreshTooltip);
+    observer.observe(pitch);
+    window.addEventListener('orientationchange', refreshTooltip);
+    window.addEventListener('resize', refreshTooltip);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('orientationchange', refreshTooltip);
+      window.removeEventListener('resize', refreshTooltip);
+    };
+  }, [inspectedPlayer?.player.id]);
+
+  useEffect(() => {
+    setInspectedPlayer(null);
+  }, [currentEventIndex]);
 
   return (
     <div className={`flex flex-col space-y-3 ${className}`}>
@@ -608,7 +613,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           <div className="col-span-2 flex flex-col items-center justify-center">
             <div className="px-2.5 py-1 rounded-full bg-slate-950 border border-slate-700 text-[11px] sm:text-xs font-mono font-black text-amber-400 shadow-inner flex items-center gap-1.5 tracking-wider whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
-              <span>{isFullTime ? 'FT 90:00' : isHalfTime ? 'HT 45:00' : formattedTime}</span>
+              <span>{isFullTime ? clockLabel : isHalfTime ? `HT ${formattedTime}` : clockLabel}</span>
             </div>
           </div>
 
@@ -641,18 +646,18 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
         {/* Possession & Momentum Bar */}
         <div className="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-          <span className="text-emerald-400 font-semibold">{fixture.homeStats?.possession || 50}% Possession</span>
+          <span className="text-emerald-400 font-semibold">{liveStats.home.possession}% Possession</span>
           <div className="w-24 sm:w-44 h-1 bg-slate-950 rounded-full overflow-hidden flex mx-2 border border-slate-800/60">
             <div 
               className="bg-emerald-500 h-full transition-all duration-300" 
-              style={{ width: `${fixture.homeStats?.possession || 50}%` }}
+              style={{ width: `${liveStats.home.possession}%` }}
             />
             <div 
               className="bg-sky-500 h-full transition-all duration-300" 
-              style={{ width: `${100 - (fixture.homeStats?.possession || 50)}%` }}
+              style={{ width: `${100 - (liveStats.home.possession)}%` }}
             />
           </div>
-          <span className="text-sky-400 font-semibold">{100 - (fixture.homeStats?.possession || 50)}% Possession</span>
+          <span className="text-sky-400 font-semibold">{100 - (liveStats.home.possession)}% Possession</span>
         </div>
       </div>
 
@@ -736,7 +741,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           {/* 3. 22 PLAYERS (ONLY JERSEY NUMBERS - NO PERMANENT NAMES ON PITCH!) */}
           {animatedPlayers.map((player) => {
             const isHome = player.team === 'home';
-            const isGK = player.number === 1;
+            const isGK = player.category === 'GK' || player.position === 'GK';
             const hasBall = player.hasBall || player.id === activeCarrierId;
             const isScorer = currentEvent?.type === 'goal' && player.id === currentEvent?.playerId;
 
@@ -764,9 +769,11 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   if (node) playerNodesRef.current.set(player.id, node);
                   else playerNodesRef.current.delete(player.id);
                 }}
-                className="absolute left-0 top-0 z-10 cursor-pointer will-change-transform"
+                className="absolute z-10 min-w-11 min-h-11 cursor-pointer will-change-transform flex items-center justify-center"
                 style={{
-                  transform: `translate3d(0, 0, 0)`,
+                  left: `${player.x}%`,
+                  top: `${player.y}%`,
+                  transform: 'translate(-50%, -50%)',
                 }}
               >
                 <div className="relative flex flex-col items-center -translate-x-1/2 -translate-y-1/2">
@@ -782,7 +789,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
                   {/* Circular Player Kit Marker: ONLY JERSEY NUMBER DISPLAYED */}
                   <div
-                    className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-display font-black text-[9px] sm:text-[10.5px] shadow-lg border ${kitStyle} ${
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-display font-black text-[9px] sm:text-[10.5px] shadow-lg border ${kitStyle} ${
                       hasBall ? 'scale-110 ring-2 ring-amber-300/80' : ''
                     } transition-transform`}
                   >
@@ -863,7 +870,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
               <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
                 <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-400 text-xs font-mono font-black uppercase tracking-widest">
-                  ⏸ HALF TIME (45:00)
+                  ⏸ HALF TIME ({formattedTime})
                 </div>
 
                 {/* Score Display */}
@@ -883,12 +890,12 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono py-1">
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Possession</div>
-                    <div className="font-bold text-slate-100">{fixture.homeStats?.possession || 50}% - {fixture.awayStats?.possession || 50}%</div>
+                    <div className="font-bold text-slate-100">{liveStats.home.possession}% - {liveStats.away.possession}%</div>
                   </div>
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Shots (On Target)</div>
                     <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
+                      {liveStats.home.shots}({liveStats.home.shotsOnTarget}) - {liveStats.away.shots}({liveStats.away.shotsOnTarget})
                     </div>
                   </div>
                 </div>
@@ -924,7 +931,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
               <div className="w-full max-w-sm p-5 rounded-2xl bg-slate-900/90 border border-slate-700/80 shadow-2xl text-center space-y-3.5">
                 <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-black uppercase tracking-widest">
-                  🏁 FULL TIME ({fixture.wentToExtraTime ? '120:00' : '90:00'})
+                  🏁 FULL TIME ({formattedTime})
                 </div>
 
                 {/* Score Display */}
@@ -952,7 +959,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
                     <div>Shots (Target)</div>
                     <div className="font-bold text-slate-100">
-                      {fixture.homeStats?.shots || 0}({fixture.homeStats?.shotsOnTarget || 0}) - {fixture.awayStats?.shots || 0}({fixture.awayStats?.shotsOnTarget || 0})
+                      {liveStats.home.shots}({liveStats.home.shotsOnTarget}) - {liveStats.away.shots}({liveStats.away.shotsOnTarget})
                     </div>
                   </div>
                   <div className="p-1.5 rounded bg-slate-950/80 border border-slate-800/80">
@@ -970,15 +977,21 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                   >
                     MATCH STATS
                   </button>
-                  <button
-                    onClick={() => {
-                      setFullTimeOverlay(false);
-                      if (onMatchComplete) onMatchComplete(fixture.id);
-                    }}
-                    className="flex-1 py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
-                  >
-                    CONTINUE
-                  </button>
+                  {onMatchComplete ? (
+                    <button
+                      onClick={() => {
+                        setFullTimeOverlay(false);
+                        onMatchComplete(fixture.id);
+                      }}
+                      className="flex-1 py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider bg-emerald-400 hover:bg-emerald-300 text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95"
+                    >
+                      CONTINUE
+                    </button>
+                  ) : (
+                    <div className="flex-1 py-2 rounded-xl border border-slate-700 bg-slate-950 text-slate-400 text-center text-xs font-black uppercase tracking-wider">
+                      WAITING FOR HOST TO CONTINUE...
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1061,7 +1074,14 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                     {penaltyRevealStage === 'walkup' ? 'THE KICKER STEPS UP' : penaltyRevealStage === 'strike' ? 'THE STRIKE' : 'THE VERDICT'}
                   </div>
 
-                  <div className="absolute left-1/2 top-10 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] transition-transform duration-1000">
+                  <div
+                    className="absolute left-1/2 top-10 -translate-x-1/2 text-4xl drop-shadow-[0_4px_8px_rgba(0,0,0,.7)] transition-transform duration-1000"
+                    style={{
+                      transform: penaltyRevealStage === 'result' && currentPenalty?.outcome === 'saved'
+                        ? `translateX(calc(-50% + ${penaltyDiveDirection * 42}px)) rotate(${penaltyDiveDirection * 8}deg)`
+                        : 'translateX(0)',
+                    }}
+                  >
                     🧤
                   </div>
 
@@ -1110,6 +1130,17 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
 
                       <button
                         type="button"
+                        onClick={() => {
+                          setPenaltyIndex(penaltySequence.length);
+                          setPenaltyRevealStage('result');
+                        }}
+                        className="w-full mt-2 py-2 rounded-xl bg-slate-800 text-slate-200 border border-slate-700 font-display font-black text-[10px] uppercase tracking-wider"
+                      >
+                        SKIP SHOOTOUT
+                      </button>
+
+                      <button
+                        type="button"
                         disabled={penaltyRevealStage !== 'result'}
                         onClick={() => {
                           setPenaltyRevealStage('walkup');
@@ -1128,10 +1159,17 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
                       </div>
                       <button
                         type="button"
-                        onClick={() => { setShowPenaltyShootout(false); setPenaltyRevealStage("walkup"); if (onMatchComplete) onMatchComplete(fixture.id); }}
+                        onClick={() => {
+                          setShowPenaltyShootout(false);
+                          setPenaltyRevealStage('walkup');
+                          const fulltimeIndex = events.findIndex(event => event.type === 'fulltime');
+                          setCurrentEventIndex(fulltimeIndex >= 0 ? fulltimeIndex : events.length - 1);
+                          setFullTimeOverlay(true);
+                          setIsPlaying(false);
+                        }}
                         className="mt-4 px-6 py-2.5 rounded-xl bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase"
                       >
-                        CONTINUE
+                        CONTINUE TO FULL TIME
                       </button>
                     </div>
                   )}
@@ -1149,8 +1187,8 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         <div 
           className="fixed z-50 p-3 rounded-xl bg-slate-950/95 border border-slate-700 shadow-2xl text-xs flex items-center gap-3 animate-in fade-in zoom-in-95 duration-150"
           style={{
-            left: `${Math.min(window.innerWidth - 180, Math.max(16, inspectedPlayer.screenX - 80))}px`,
-            top: `${Math.max(20, inspectedPlayer.screenY - 70)}px`,
+            left: `${Math.min(window.innerWidth - 180, Math.max(16, (inspectedScreenX || 80) - 80))}px`,
+            top: `${Math.max(20, (inspectedScreenY || 80) - 70)}px`,
           }}
         >
           <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 font-display font-black flex items-center justify-center text-sm border border-emerald-500/40">
@@ -1201,8 +1239,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
         {/* Playback Primary Buttons */}
         <div className="flex items-center gap-1.5">
           <button
+            disabled={halfTimeOverlay || fullTimeOverlay || showPenaltyShootout}
             onClick={handleTogglePlay}
-            className={`p-2.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 ${
+            className={`p-2.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 ${
               isPlaying
                 ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
                 : 'bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
@@ -1258,13 +1297,13 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           ))}
 
           <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
+            onClick={() => { sound.enabled = !sound.enabled; forceSoundUpdate(v => v + 1); }}
             className={`p-2 rounded-lg transition-colors cursor-pointer active:scale-95 ${
-              soundEnabled ? 'text-emerald-400 bg-slate-900 border border-slate-800' : 'text-slate-500 bg-slate-950'
+              sound.enabled ? 'text-emerald-400 bg-slate-900 border border-slate-800' : 'text-slate-500 bg-slate-950'
             }`}
-            title={soundEnabled ? 'Mute Audio' : 'Enable Audio'}
+            title={sound.enabled ? 'Mute Audio' : 'Enable Audio'}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            {sound.enabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -1293,9 +1332,9 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
             <div className="space-y-3 text-xs font-mono">
               {[
                 { label: 'Score', home: currentScore.home, away: currentScore.away },
-                { label: 'Possession', home: `${fixture.homeStats?.possession || 50}%`, away: `${fixture.awayStats?.possession || 50}%` },
-                { label: 'Total Shots', home: fixture.homeStats?.shots || 0, away: fixture.awayStats?.shots || 0 },
-                { label: 'Shots on Target', home: fixture.homeStats?.shotsOnTarget || 0, away: fixture.awayStats?.shotsOnTarget || 0 },
+                { label: 'Possession', home: `${liveStats.home.possession}%`, away: `${liveStats.away.possession}%` },
+                { label: 'Total Shots', home: liveStats.home.shots, away: liveStats.away.shots },
+                { label: 'Shots on Target', home: liveStats.home.shotsOnTarget, away: liveStats.away.shotsOnTarget },
                 { label: 'Passes Completed', home: fixture.homeStats?.passes || 0, away: fixture.awayStats?.passes || 0 },
                 { label: 'Corners', home: fixture.homeStats?.corners || 0, away: fixture.awayStats?.corners || 0 },
                 { label: 'Fouls', home: fixture.homeStats?.fouls || 0, away: fixture.awayStats?.fouls || 0 },
