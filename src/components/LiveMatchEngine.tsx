@@ -713,7 +713,7 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
           {/* 3. 22 PLAYERS (ONLY JERSEY NUMBERS - NO PERMANENT NAMES ON PITCH!) */}
           {animatedPlayers.map((player) => {
             const isHome = player.team === 'home';
-            const isGK = player.number === 1;
+            const isGK = player.category === 'GK' || player.position === 'GK';
             const hasBall = player.hasBall || player.id === activeCarrierId;
             const isScorer = currentEvent?.type === 'goal' && player.id === currentEvent?.playerId;
 
