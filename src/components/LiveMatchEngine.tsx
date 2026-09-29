@@ -556,12 +556,15 @@ export const LiveMatchEngine: React.FC<LiveMatchEngineProps> = ({
     if (!inspectedPlayer || typeof ResizeObserver === 'undefined') return;
     const pitch = pitchRef.current;
     if (!pitch) return;
-    const observer = new ResizeObserver(() => setInspectedPlayer(current => current ? { ...current } : current));
+    const refreshTooltip = () => setInspectedPlayer(current => current ? { ...current } : current);
+    const observer = new ResizeObserver(refreshTooltip);
     observer.observe(pitch);
-    window.addEventListener('orientationchange', () => setInspectedPlayer(current => current ? { ...current } : current));
+    window.addEventListener('orientationchange', refreshTooltip);
+    window.addEventListener('resize', refreshTooltip);
     return () => {
       observer.disconnect();
-      window.removeEventListener('orientationchange', () => setInspectedPlayer(current => current ? { ...current } : current));
+      window.removeEventListener('orientationchange', refreshTooltip);
+      window.removeEventListener('resize', refreshTooltip);
     };
   }, [inspectedPlayer?.player.id]);
 
