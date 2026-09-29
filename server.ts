@@ -14,7 +14,6 @@ import {
   Fixture, 
   LeagueTableRow, 
   TransferOffer, 
-  SeasonAwards,
   PositionCategory,
   Position,
   KnockoutRound,
