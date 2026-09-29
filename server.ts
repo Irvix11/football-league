@@ -245,61 +245,18 @@ setInterval(() => {
 }, 10 * 60 * 1000).unref();
 void cleanupOldRoomSnapshots().catch(error => console.error('[persistence] initial cleanup failed:', error));
 
-const SUPPORTED_FORMATIONS = new Set(Object.keys(FORMATIONS_CONFIG) as Formation[]);
-const SUPPORTED_PLAYER_POOLS = new Set(['Global', 'Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Brasileirão', 'Champions League', 'World Cup'] as const);
-const SUPPORTED_ERAS = new Set(['Current', 'All-Time'] as const);
-const SUPPORTED_AUCTION_MODES = new Set(['Classic', 'Blind', 'Quick'] as const);
-const SUPPORTED_LEAGUE_TYPES = new Set(['Double Round Robin'] as const);
-const SUPPORTED_COMPETITIONS = new Set(['League'] as const);
-
-function clampFiniteNumber(value: unknown, fallback: number, min: number, max: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
-}
-
-function sanitizeManagerName(value: unknown, fallback = 'Manager') {
-  const clean = String(value ?? '')
-    .replace(/[\u0000-\u001F\u007F]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 24);
-  return clean || fallback;
-}
-
-function sanitizeLobbySettings(raw: Partial<LobbySettings> | null | undefined, base?: LobbySettings): LobbySettings {
-  const fallback: LobbySettings = base || {
-    maxManagers: 8,
-    startingBudget: 500,
-    playerPool: 'Global',
-    era: 'Current',
-    auctionMode: 'Classic',
-    transfersEnabled: true,
-    leagueType: 'Double Round Robin',
-    competitionFormat: 'League',
-  };
-
-  const maxManagers = Math.round(clampFiniteNumber(raw?.maxManagers, fallback.maxManagers, 2, 16));
-  const startingBudget = Math.round(clampFiniteNumber(raw?.startingBudget, fallback.startingBudget, 100, 5000));
-  const playerPool = SUPPORTED_PLAYER_POOLS.has(raw?.playerPool as any) ? raw!.playerPool! : fallback.playerPool;
-  const era = SUPPORTED_ERAS.has(raw?.era as any) ? raw!.era! : fallback.era;
-  const auctionMode = SUPPORTED_AUCTION_MODES.has(raw?.auctionMode as any) ? raw!.auctionMode! : fallback.auctionMode;
-  // There is only one competition now: a double round-robin league.
-  // Keep accepting legacy room snapshots, but normalize them immediately.
-  const competitionFormat = 'League' as const;
-  const leagueType = 'Double Round Robin' as const;
-
-  return {
-    maxManagers,
-    startingBudget,
-    playerPool,
-    era,
-    auctionMode,
-    transfersEnabled: typeof raw?.transfersEnabled === 'boolean' ? raw.transfersEnabled : fallback.transfersEnabled,
-    leagueType,
-    competitionFormat,
-  };
-}
-
+import {
+  SUPPORTED_FORMATIONS,
+  SUPPORTED_PLAYER_POOLS,
+  SUPPORTED_ERAS,
+  SUPPORTED_AUCTION_MODES,
+  SUPPORTED_LEAGUE_TYPES,
+  SUPPORTED_COMPETITIONS,
+  clampFiniteNumber,
+  sanitizeManagerName,
+  sanitizeLobbySettings,
+  createBotManager,
+} from './server/lobby.js';
 // Secret bids for blind auction: roomCode -> Record<managerId, number>
 const blindSecretBids = new Map<string, Record<string, number>>();
 
