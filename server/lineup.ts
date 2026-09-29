@@ -1,6 +1,6 @@
 import type { SquadPlayerEntry, TeamRoles } from '../src/types/football.js';
 
-function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
+export function setupManagerRoles(starters: SquadPlayerEntry[]): TeamRoles {
   if (starters.length === 0) {
     return { captainId: '', penaltyTakerId: '', freeKickTakerId: '', cornerTakerId: '' };
   }
