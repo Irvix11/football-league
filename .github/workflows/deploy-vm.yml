@@ -55,6 +55,7 @@ jobs:
           # previous tree to avoid npm ENOTEMPTY after interrupted installs.
           rm -rf node_modules
           npm ci
+          node scripts/check-deps.mjs
           npm run lint
           npm audit --audit-level=high
           npm run smoke
