@@ -54,7 +54,9 @@ jobs:
           # Dependencies are disposable on the authoritative VM. Remove the
           # previous tree to avoid npm ENOTEMPTY after interrupted installs.
           rm -rf node_modules
-          npm ci
+          npm cache clean --force
+          npm ci --prefer-online
+          node scripts/check-deps.mjs
           node scripts/check-deps.mjs
           npm run lint
           npm audit --audit-level=high
