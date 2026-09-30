@@ -47,7 +47,9 @@ jobs:
             # Dependencies are disposable on the authoritative VM. Removing the
             # previous tree avoids npm ENOTEMPTY failures after interrupted installs.
             rm -rf node_modules
-            npm ci
+            npm cache clean --force
+            npm ci --prefer-online
+            node scripts/check-deps.mjs
             npm run build:full
             if command -v pm2 >/dev/null 2>&1 && pm2 describe football-auction-league >/dev/null 2>&1; then
               pm2 restart football-auction-league --update-env
