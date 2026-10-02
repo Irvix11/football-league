@@ -57,7 +57,6 @@ jobs:
           rm -rf "$HOME/.npm/_cacache"
           npm ci --prefer-online
           node scripts/check-deps.mjs
-          node scripts/check-deps.mjs
           npm run lint
           npm audit --audit-level=high
           npm run smoke
@@ -205,11 +204,19 @@ jobs:
           NGINX
 
           sudo nginx -t
-          sudo systemctl reload nginx
+          sudo systemctl restart nginx
 
-          # Verify HTTPS locally on the VM. Resolving the hostname to loopback avoids
-          # NAT/hairpin routing failures when the public IP is not reachable from itself.
-          curl -fsS --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health"
+          # Verify that Nginx actually bound HTTPS before declaring the deployment successful.
+          # Force IPv4 because --resolve alone can still prefer the IPv6 listener on some hosts.
+          if ! sudo ss -lntp | grep -Eq 'LISTEN[[:space:]].*:443([[:space:]]|$)'; then
+            echo "Nginx is not listening on TCP port 443 after restart."
+            sudo systemctl status nginx --no-pager || true
+            sudo journalctl -u nginx -n 80 --no-pager || true
+            exit 1
+          fi
+
+          # Verify HTTPS locally on the VM without relying on public-IP hairpin routing.
+          curl -4 -fsS --connect-timeout 10 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health"
           echo
 
           echo "Deployment successful: https://$DOMAIN"
